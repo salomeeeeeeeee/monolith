@@ -156,8 +156,10 @@ ob_end_clean();
         }
 
         /* ═══ LAYOUT ═══ */
-        .containerCatalog { display:flex; padding:18px; gap:16px; }
-
+        .containerCatalog {
+    display: flex; padding: 18px; gap: 16px;
+    align-items: flex-start;  
+}
         /* ═══ FILTER SIDEBAR ═══ */
         #filterContainer {
             width: 215px; flex-shrink: 0;
@@ -289,7 +291,7 @@ ob_end_clean();
         #apsDisplayWrapper {
             background:var(--bg2); border:1px solid var(--border);
             border-radius:var(--radius2); padding:14px;
-            overflow:hidden; max-width:calc(100vw - 270px);
+            overflow:hidden; max-width: 100%;
             box-shadow: var(--shadow);
         }
         #apsDisplay {
@@ -351,16 +353,24 @@ ob_end_clean();
         }
         #saveBtn:hover { background:var(--accent2); box-shadow:0 4px 14px var(--accent-glow); transform:translateY(-1px); }
 
-        /* ═══ POPUP ═══ */
         #apartmentPopup {
-            position:fixed; top:0; right:-380px; width:300px; height:100vh;
-            background:var(--bg2); border-left:1px solid var(--border);
-            box-shadow: -4px 0 40px rgba(26,29,46,.12);
-            overflow-y:auto; overflow-x:hidden;
-            transition:right .35s cubic-bezier(.4,0,.2,1); z-index:2000;
-            display:flex; flex-direction:column;
-        }
-        #apartmentPopup.active { right:0; }
+    width: 0; min-width: 0; flex-shrink: 0;
+    height: calc(100vh - 36px);
+    background: var(--bg2); border-left: 0px solid var(--border);
+    box-shadow: none;
+    overflow-y: auto; overflow-x: hidden;
+    transition: width .35s cubic-bezier(.4,0,.2,1),
+                min-width .35s cubic-bezier(.4,0,.2,1),
+                border-left-width .35s,
+                box-shadow .35s;
+    display: flex; flex-direction: column;
+    position: sticky; top: 18px;
+}
+#apartmentPopup.active {
+    width: 300px; min-width: 300px;
+    border-left-width: 1px;
+    box-shadow: -4px 0 40px rgba(26,29,46,.12);
+}
         #apartmentPopup::-webkit-scrollbar { width:8px; }
         #apartmentPopup::-webkit-scrollbar-track { background:var(--bg3); }
         #apartmentPopup::-webkit-scrollbar-thumb { background:var(--border2); border-radius:4px; }
@@ -674,8 +684,8 @@ function badgeCls(s) { return STATUS_MAP[s]?.badge || ""; }
 const productsBoxWrapper = document.getElementById("productsBoxWrapper");
 if (openedOnDeal) {
     document.getElementById("apsDisplay").style.maxWidth = "93%";
-    document.getElementById("apartmentPopup").style.position = "absolute";
-    document.getElementById("apartmentPopup").style.height   = "576px";
+    // document.getElementById("apartmentPopup").style.position = "absolute";
+    // document.getElementById("apartmentPopup").style.height   = "576px";
     document.querySelector(".containerCatalog").style.paddingLeft = "0";
     productsBoxWrapper.style.display = "flex";
     productsBoxWrapper.innerHTML += `<span class="border-text">დილზე დამატებული ბინები</span>`;
@@ -1173,7 +1183,7 @@ document.addEventListener("click", e => {
 
 function openPopup(aptId, fromBox=false) {
     document.getElementById("apartmentPopup").classList.add("active");
-    document.getElementById("apsDisplay").style.maxWidth = openedOnDeal?"49%":"63%";
+    // document.getElementById("apsDisplay").style.maxWidth = openedOnDeal?"49%":"63%";
 
     const apt = fromBox
         ? products.find(p=>p["ID"]==aptId)
@@ -1342,7 +1352,7 @@ function closePopup() {
     const id=document.getElementById("popupTitle").dataset.id;
     const el=document.querySelector(`#apsDisplay .apt[data-id="${id}"]`);
     if (el){el.style.transform="";el.style.border="";}
-    document.getElementById("apsDisplay").style.maxWidth=openedOnDeal?"93%":"94%";
+    // document.getElementById("apsDisplay").style.maxWidth=openedOnDeal?"93%":"94%";
 }
 document.getElementById("toggleDetailsBtn").addEventListener("click",function(){
     const w=document.getElementById("popupDetailsWrapper");
