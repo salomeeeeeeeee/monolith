@@ -1468,31 +1468,82 @@ async function exportToExcel() {
         visibleIds.forEach(id=>{const a=all.find(p=>p["ID"]==id);if(a&&!seen.has(id)){seen.add(id);apts.push(a);}});
 
         const skipExport=new Set([...SKIP_CODES,"~ID","~NAME","~IBLOCK_ID","~IBLOCK_SECTION_ID","MORE_PHOTO","PREVIEW_PICTURE","DETAIL_PICTURE","~DETAIL_PICTURE","image","image2","image3","image4","image5","binis_gegmareba","render_3D","sartulis2D","binisNaxazi2D","erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo"]);
-        const priorityKeys=["ID","_P64GYD","Number","__X1GCRZ","_L24CUB","FLOOR","TOTAL_AREA","PRICE","PRICE_GEL",F_KVM_USD];
-        const allKeys=new Set(); apts.forEach(a=>Object.keys(a).forEach(k=>allKeys.add(k)));
-        const orderedKeys=[...priorityKeys,...Object.keys(propertyMap),...allKeys].filter((k,i,arr)=>!skipExport.has(k)&&!k.startsWith("~")&&arr.indexOf(k)===i);
+        const priorityKeys = ["ID","_P64GYD","Number","__X1GCRZ","_L24CUB","FLOOR","TOTAL_AREA","PRICE","PRICE_GEL", F_KVM_USD];
+
+        // Only use keys that actually exist in the data
+        const dataKeys = new Set();
+        apts.forEach(a => Object.keys(a).forEach(k => dataKeys.add(k)));
+
+        // Build ordered, deduplicated, filtered key list
+        const seen_keys = new Set();
+        const orderedKeys = [];
+        [...priorityKeys, ...Object.keys(propertyMap)].forEach(k => {
+            if (!seen_keys.has(k) && !skipExport.has(k) && !k.startsWith("~") && dataKeys.has(k)) {
+                seen_keys.add(k);
+                orderedKeys.push(k);
+            }
+        });
+        // Add any remaining data keys not yet included
+        dataKeys.forEach(k => {
+            if (!seen_keys.has(k) && !skipExport.has(k) && !k.startsWith("~")) {
+                seen_keys.add(k);
+                orderedKeys.push(k);
+            }
+        });
+
+        console.log("Total columns:", orderedKeys.length);
         const getName=code=>propertyMap[code]?.name||code;
 
         const wb=new ExcelJS.Workbook(), ws=wb.addWorksheet("ბინები");
-        ws.columns=orderedKeys.map(k=>({header:getName(k),key:k,width:Math.max(getName(k).length+4,14)}));
+        ws.columns = orderedKeys.map((k, i) => ({
+    header: getName(k) || k,
+    key: k,
+    width: Math.max((getName(k) || k).length + 4, 14)
+}));
         const hdr=ws.getRow(1);
-        hdr.eachCell(cell=>{cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF1A1A2E"}};cell.font={bold:true,color:{argb:"FFFFFFFF"},size:10};cell.alignment={vertical:"middle",horizontal:"center",wrapText:true};cell.border={bottom:{style:"medium",color:{argb:"FF00D4AA"}}};});
+        for (let i = 1; i <= orderedKeys.length; i++) {
+    const cell = hdr.getCell(i);
+    cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:"FF1A1A2E"} };
+    cell.font = { bold:true, color:{argb:"FFFFFFFF"}, size:10 };
+    cell.alignment = { vertical:"middle", horizontal:"center", wrapText:true };
+    cell.border = { bottom:{style:"medium", color:{argb:"FF00D4AA"}} };
+}
         hdr.height=28;
 
         const statusColors={"თავისუფალი":"FF28C7A9","დაჯავშნილი":"FFF9C74F","გაყიდული":"FFE63946","ჯავშნის რიგში":"FF4D79FF","NFS":"FF9B59B6"};
-        apts.forEach((apt,i)=>{
-            const rd={};
-            orderedKeys.forEach(k=>{let v=apt[k];if(v===undefined||v===null)v="";if(Array.isArray(v))v=v.join(", ");rd[k]=String(v);});
-            const row=ws.addRow(rd);
-            const bg=i%2===0?"FFF7F8FC":"FFFFFFFF";
-            row.eachCell({includeEmpty:true},cell=>{cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:bg}};cell.alignment={vertical:"middle"};cell.font={size:10};});
-            const sc=statusColors[apt["_P64GYD"]];
-            if(sc){const c=row.getCell("_P64GYD");c.fill={type:"pattern",pattern:"solid",fgColor:{argb:sc+"33"}};c.font={bold:true,size:10};}
-            row.height=18;
-        });
+        apts.forEach((apt, i) => {
+    const rd = {};
+    orderedKeys.forEach(k => {
+        let v = apt[k];
+        if (v === undefined || v === null) v = "";
+        if (Array.isArray(v)) v = v.join(", ");
+        rd[k] = String(v);
+    });
+    const row = ws.addRow(rd);
+    const bg = i % 2 === 0 ? "FFF7F8FC" : "FFFFFFFF";
+    
+    for (let ci = 1; ci <= orderedKeys.length; ci++) {
+        const cell = row.getCell(ci);
+        cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:bg} };
+        cell.alignment = { vertical:"middle" };
+        cell.font = { size:10 };
+    }
+    
+    const statusCol = orderedKeys.indexOf("_P64GYD") + 1;
+    const sc = statusColors[apt["_P64GYD"]];
+    if (sc && statusCol > 0) {
+        const c = row.getCell(statusCol);
+        c.fill = { type:"pattern", pattern:"solid", fgColor:{argb:sc+"33"} };
+        c.font = { bold:true, size:10 };
+    }
+    row.height = 18;
+});
         ws.views=[{state:"frozen",ySplit:1}];
-        ws.autoFilter={from:"A1",to:{row:1,column:orderedKeys.length}};
-
+        try {
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: orderedKeys.length } };
+} catch(e) {
+    console.warn("AutoFilter skipped:", e.message);
+}
         const buf=await wb.xlsx.writeBuffer();
         const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
         const url=URL.createObjectURL(blob);
