@@ -18,6 +18,7 @@ define('F_TOTAL_AREA', '__173JA5');
 define('F_TYPE',       '__X1GCRZ');
 define('F_PRICE_USD',  '__9YCWGZ');
 define('F_KVM_USD',    '__6ZWTER');
+define('F_SALE',       '_UQIM2I');  
 
 // ------------------------------ FUNCTIONS ------------------------------
 function getNBG($date) {
@@ -638,6 +639,7 @@ const F_TOTAL_AREA = '__173JA5';
 const F_TYPE       = '__X1GCRZ';
 const F_PRICE_USD  = '__9YCWGZ';
 const F_KVM_USD    = '__6ZWTER';
+const F_SALE =       '_UQIM2I';
 
 // ── Runtime state ──
 let openedOnDeal    = Array.isArray(deal) && deal.length > 0;
@@ -956,10 +958,16 @@ function makeAptTile(apt, prefix="") {
     tile.dataset.status = s;
 
     if (apt["aqcia"]) {
-        const b = document.createElement("span");
-        b.style.cssText = "position:absolute;top:-5px;right:-5px;font-size:9px;line-height:1;z-index:5;";
-        b.textContent = "🎁"; tile.appendChild(b);
-    }
+    const b = document.createElement("span");
+    b.style.cssText = "position:absolute;top:-5px;right:-5px;font-size:9px;line-height:1;z-index:5;";
+    b.textContent = "🎁"; tile.appendChild(b);
+}
+if (apt[F_SALE] === "Yes") {
+    const fire = document.createElement("span");
+    fire.style.cssText = "position:absolute;top:-7px;left:-5px;font-size:11px;line-height:1;z-index:5;filter:drop-shadow(0 0 3px rgba(255,100,0,.6));";
+    fire.textContent = "🔥";
+    tile.appendChild(fire);
+}
 
     const num = document.createElement("div");
     num.style.fontSize = "8px";
