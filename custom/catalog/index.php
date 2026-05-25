@@ -328,11 +328,12 @@ ob_end_clean();
         .apt:hover { transform:translateY(-3px) scale(1.14); z-index:10; box-shadow:var(--shadow2); }
         .dimmed { opacity:.22; filter:grayscale(70%); pointer-events:none; }
 
-        .status-active     { background:#d3f9ee; border-color:#0ca678; color:#087a58; }
-        .status-reserved   { background:#fff3cd; border-color:#e67700; color:#b35900; }
-        .status-queue      { background:#dde8ff; border-color:#3b5bdb; color:#2c4bc4; }
-        .status-sold       { background:#ffe0e3; border-color:#d92b3a; color:#a8202c; }
-        .status-notforsale { background:#ece5ff; border-color:#7048e8; color:#5433c1; }
+        .status-active     { background:#7cdf9c; border-color:#0ca678; color:#087a58; }
+        .status-reserved   { background:#ffcf37; border-color:#e67700; color:#b35900; }
+        .status-queue { background:#b69bff; border-color:#7048e8; color:#5433c1; }
+
+        .status-sold       { background:#f67581; border-color:#d92b3a; color:#a8202c; }
+        .status-notforsale { background:#c0c0c0; border-color:#4e4046; color:#4e3f45; }
         .status-unknown    { background:var(--bg3); border-color:var(--border2); color:var(--text2); }
 
         /* ═══ PRODUCTS BOX ═══ */
@@ -439,7 +440,8 @@ ob_end_clean();
         .field-row.is-main.apt-active     { background:#edfdf5; border-color:#b2f0d8; }
         .field-row.is-main.apt-reserved   { background:#fff8e6; border-color:#ffd580; }
         .field-row.is-main.apt-sold       { background:#fff0f1; border-color:#ffa8ae; }
-        .field-row.is-main.apt-queue      { background:#eef2ff; border-color:#c5d0fa; }
+        .field-row.is-main.apt-queue { background:#fdf2f8; border-color:#f9a8d4; }
+
         .field-row.is-main.apt-notforsale { background:#f3f0ff; border-color:#c4b5fd; }
 
         .field-label {
@@ -462,7 +464,8 @@ ob_end_clean();
         .badge-active   { background:var(--green-dim); color:var(--green); border-color:rgba(12,166,120,.3); }
         .badge-reserved { background:var(--amber-dim); color:var(--amber); border-color:rgba(230,119,0,.3); }
         .badge-sold     { background:var(--red-dim); color:var(--red); border-color:rgba(217,43,58,.3); }
-        .badge-queue    { background:var(--accent-dim); color:var(--accent); border-color:rgba(59,91,219,.3); }
+        .badge-queue  { background:rgba(219,39,119,.10); color:#db2777; border-color:rgba(219,39,119,.3); }
+
         .badge-nfs      { background:rgba(112,72,232,.08); color:var(--purple); border-color:rgba(112,72,232,.3); }
         .badge-no-info  { background:var(--bg3); color:var(--text3); border-color:var(--border); font-style:italic; }
 
@@ -511,12 +514,10 @@ ob_end_clean();
         .carousel-dots { position:absolute; bottom:-32px; left:50%; transform:translateX(-50%); display:flex; gap:6px; }
         .carousel-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.3); cursor:pointer; transition:all .3s; }
         .carousel-dot.active { background:#fff; width:20px; border-radius:3px; }
-
-
         .legend-item.legend-active.status-queue-frame { 
-    background: var(--accent-dim); 
-    border-color: var(--accent); 
-    color: var(--accent); 
+    background: rgba(219,39,119,.08); 
+    border-color: #4e4046; 
+    color: #db2777; 
 }
     </style>
 </head>
@@ -623,6 +624,10 @@ ob_end_clean();
 </div>
 
 <script>
+
+const fmt = n => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+
+    
 // ── PHP → JS ──
 let dealID      = <?php echo json_encode($dealID); ?>;
 let deal        = <?php echo json_encode($deal ?? []); ?>;
@@ -673,7 +678,7 @@ const STATUS_MAP = {
     "თავისუფალი":   { tile:"active",     apt:"apt-active",     badge:"badge-active" },
     "დაჯავშნილი":   { tile:"reserved",   apt:"apt-reserved",   badge:"badge-reserved" },
     "გაყიდული":     { tile:"sold",       apt:"apt-sold",       badge:"badge-sold" },
-    "ჯავშნის რიგში": { tile:"queue",      apt:"apt-queue",      badge:"badge-queue" },
+    "ჯავშნის რიგში": { tile:"queue", apt:"apt-queue", badge:"badge-queue" },
     "NFS":          { tile:"notforsale", apt:"apt-notforsale", badge:"badge-nfs" },
 };
 function tileCls(s)  { return "status-" + (STATUS_MAP[s]?.tile  || "unknown"); }
@@ -1079,11 +1084,7 @@ function applyFilters() {
             el.classList.toggle("dimmed", !matchesFilters(apt,f));
         });
     });
-    const visible = productsCache.filter(p => {
-        const el = document.querySelector(`#apsDisplay .apt[data-id="${p["ID"]}"]`);
-        return el && !el.classList.contains("dimmed");
-    });
-    updateLegendCounts(visible);
+    updateLegendCounts(productsCache); // ← always full dataset
 }
 
 function matchesFilters(apt, f) {
@@ -1306,26 +1307,26 @@ function appendImageSection(container, imgFields, apt) {
 }
 
 function appendPriceSection(container, apt) {
-    const price    = parseFloat(apt["PRICE"]    || apt[F_PRICE_USD] || 0) || 0;
-    const priceGel = parseFloat(apt["PRICE_GEL"] || 0) || 0;
-    const kvmUsd   = parseFloat(apt[F_KVM_USD]  || 0) || 0;
+    const price    = parseFloat(String(apt["__9YCWGZ"] || apt[F_PRICE_USD] || "0").replace(/[^0-9.]/g, "")) || 0;
+    const priceGel = price ? Math.round(price * nbg) : 0;
+    const kvmUsd   = parseFloat(String(apt[F_KVM_USD] || "0").replace(/[^0-9.]/g, "")) || 0;
     const kvmGel   = kvmUsd ? Math.round(kvmUsd * nbg) : 0;
     if (!price && !priceGel && !kvmUsd) return;
 
-    const sec=document.createElement("div"); sec.className="block-section";
-    sec.innerHTML=`
+    const sec = document.createElement("div"); sec.className = "block-section";
+    sec.innerHTML = `
         <div class="block-header">
             <div class="block-header-icon"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#00d4aa" stroke-width="1.2"/><path d="M8 4.5v1M8 10.5v1M6 7c0-.83.9-1.5 2-1.5s2 .67 2 1.5S9.1 8.5 8 8.5 6 9.17 6 10s.9 1.5 2 1.5 2-.67 2-1.5" stroke="#00d4aa" stroke-width="1.1" stroke-linecap="round"/></svg></div>
             <span class="block-header-title">ფასი</span>
         </div>
         <div style="background:linear-gradient(135deg,#f0fdf9,#e6fff8);border:1px solid #a7f3d0;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;margin-top:8px;">
-            ${kvmUsd?`<div style="display:flex;gap:6px;">
-                <div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:6px 8px;"><div style="font-size:9px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">მ² ფასი $</div><div style="font-size:13px;font-weight:700;color:#047857;font-family:'DM Mono',monospace;">$${kvmUsd}</div></div>
-                <div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:6px 8px;"><div style="font-size:9px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">მ² ფასი ₾</div><div style="font-size:13px;font-weight:700;color:#047857;font-family:'DM Mono',monospace;">₾${kvmGel}</div></div>
-            </div>`:""}
+            ${kvmUsd ? `<div style="display:flex;gap:6px;">
+                <div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:6px 8px;"><div style="font-size:9px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">მ² ფასი $</div><div style="font-size:13px;font-weight:700;color:#047857;font-family:'DM Mono',monospace;">$${fmt(kvmUsd)}</div></div>
+                <div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:6px 8px;"><div style="font-size:9px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">მ² ფასი ₾</div><div style="font-size:13px;font-weight:700;color:#047857;font-family:'DM Mono',monospace;">₾${fmt(kvmGel)}</div></div>
+            </div>` : ""}
             <div style="display:flex;gap:6px;">
-                ${price?`<div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:6px 8px;"><div style="font-size:9px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">სრული ფასი $</div><div style="font-size:13px;font-weight:700;color:#047857;font-family:'DM Mono',monospace;">$${price}</div></div>`:""}
-                ${priceGel?`<div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:6px 8px;"><div style="font-size:9px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">სრული ფასი ₾</div><div style="font-size:13px;font-weight:700;color:#047857;font-family:'DM Mono',monospace;">₾${priceGel}</div></div>`:""}
+                ${price ? `<div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:6px 8px;"><div style="font-size:9px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">სრული ფასი $</div><div style="font-size:13px;font-weight:700;color:#047857;font-family:'DM Mono',monospace;">$${fmt(price)}</div></div>` : ""}
+                ${priceGel ? `<div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:6px 8px;"><div style="font-size:9px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">სრული ფასი ₾</div><div style="font-size:13px;font-weight:700;color:#047857;font-family:'DM Mono',monospace;">₾${fmt(priceGel)}</div></div>` : ""}
             </div>
             <div style="text-align:right;font-size:9px;color:#6b7280;padding-top:2px;border-top:1px solid #d1fae5;">NBG კურსი: <span style="font-weight:700;color:#047857;">${nbg} ₾</span></div>
         </div>`;
@@ -1528,7 +1529,7 @@ async function exportToExcel() {
 }
         hdr.height=28;
 
-        const statusColors={"თავისუფალი":"FF28C7A9","დაჯავშნილი":"FFF9C74F","გაყიდული":"FFE63946","ჯავშნის რიგში":"FF4D79FF","NFS":"FF9B59B6"};
+        const statusColors={"თავისუფალი":"FF28C7A9","დაჯავშნილი":"FFF9C74F","გაყიდული":"FFE63946","ჯავშნის რიგში":"FFDB2777","NFS":"FF9B59B6"};
         apts.forEach((apt, i) => {
     const rd = {};
     orderedKeys.forEach(k => {
