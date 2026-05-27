@@ -18,8 +18,9 @@ define('F_TOTAL_AREA', '__173JA5');
 define('F_TYPE',       '__X1GCRZ');
 define('F_PRICE_USD',  '__9YCWGZ');
 define('F_KVM_USD',    '__6ZWTER');
-define('F_SALE',       '_UQIM2I');  
-define('F_CADASTRAL',      '__51MODL');
+define('F_SALE',       '_UQIM2I');
+define('F_CADASTRAL',  '__51MODL');
+define('F_SECTOR',     '_3BU0JH');
 
 
 // ------------------------------ FUNCTIONS ------------------------------
@@ -69,14 +70,15 @@ function getDealProds($dealID) {
             $cp = CPrice::GetBasePrice($item["ID"]);
             if (isset($cp["PRICE"]) && $cp["PRICE"] > 0) $priceUsd = (float)$cp["PRICE"];
         }
-        $item["PRICE"]        = round($priceUsd, 2);
-        $item["PRICE_GEL"]    = round($priceUsd * $nbg, 2);
-        $item["_P64GYD"]       = $item["_P64GYD"]       ?? "";
-        $item["Number"]       = $item[F_NUMBER]       ?? "";
-        $item["FLOOR"]        = $item[F_FLOOR]        ?? "";
-        $item["TOTAL_AREA"]   = $item[F_TOTAL_AREA]   ?? "";
-        $item["__X1GCRZ"] = $item[F_TYPE]         ?? "";
-        $item["_L24CUB"]      = $item[F_BLOCK]        ?? "";
+        $item["PRICE"]      = round($priceUsd, 2);
+        $item["PRICE_GEL"]  = round($priceUsd * $nbg, 2);
+        $item["_P64GYD"]    = $item["_P64GYD"]    ?? "";
+        $item["Number"]     = $item[F_NUMBER]      ?? "";
+        $item["FLOOR"]      = $item[F_FLOOR]       ?? "";
+        $item["TOTAL_AREA"] = $item[F_TOTAL_AREA]  ?? "";
+        $item["__X1GCRZ"]   = $item[F_TYPE]        ?? "";
+        $item["_L24CUB"]    = $item[F_BLOCK]       ?? "";
+        $item["_3BU0JH"]    = $item[F_SECTOR]      ?? "";
 
         $products[] = $item;
     }
@@ -160,9 +162,10 @@ ob_end_clean();
 
         /* ═══ LAYOUT ═══ */
         .containerCatalog {
-    display: flex; padding: 18px; gap: 16px;
-    align-items: flex-start;  
-}
+            display: flex; padding: 18px; gap: 16px;
+            align-items: flex-start;
+        }
+
         /* ═══ FILTER SIDEBAR ═══ */
         #filterContainer {
             width: 215px; flex-shrink: 0;
@@ -226,6 +229,15 @@ ob_end_clean();
         .dropdown-content label:hover { background:var(--accent-dim); color:var(--accent); }
         .dropdown-content input[type=checkbox] { accent-color:var(--accent); width:13px; height:13px; flex-shrink:0; }
 
+        /* Sector group header inside block dropdown */
+        .block-dropdown-sector-header {
+            font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+            text-transform: uppercase; color: var(--accent);
+            padding: 6px 7px 3px; margin-top: 4px;
+            border-top: 1px solid var(--border);
+        }
+        .block-dropdown-sector-header:first-child { margin-top: 0; border-top: none; }
+
         .range-filter label { font-size:10px; letter-spacing:.5px; color:var(--text3); text-transform:uppercase; }
         .range-row { display:flex; align-items:center; gap:6px; margin-top:5px; }
         .range-row span { color:var(--text3); font-size:11px; }
@@ -282,6 +294,7 @@ ob_end_clean();
         .legend-item.legend-active.status-reserved-frame { background:var(--amber-dim); border-color:var(--amber); color:var(--amber); }
         .legend-item.legend-active.status-sold-frame     { background:var(--red-dim); border-color:var(--red); color:var(--red); }
         .legend-item.legend-active.status-nfs-frame      { background:rgba(112,72,232,.08); border-color:var(--purple); color:var(--purple); }
+        .legend-item.legend-active.status-queue-frame    { background:rgba(219,39,119,.08); border-color:#db2777; color:#db2777; }
         .legend-count {
             font-family:var(--mono); font-size:11px; font-weight:700;
             padding:1px 7px; border-radius:4px; background:var(--bg3);
@@ -319,6 +332,98 @@ ob_end_clean();
         }
         .blockOnFloor { display:flex; gap:4px; height:30px; flex-shrink:0; }
 
+        /* ═══ SECTOR DISPLAY ═══ */
+        .sector-grid-wrapper {
+            display: flex;
+            flex-direction: row;
+            gap: 16px;
+            align-items: flex-start;
+            overflow-x: auto;
+            padding-bottom: 6px;
+        }
+        .sector-grid-wrapper::-webkit-scrollbar { height:5px; }
+        .sector-grid-wrapper::-webkit-scrollbar-track { background:var(--bg3); border-radius:3px; }
+        .sector-grid-wrapper::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
+
+        .sector-container {
+            border-radius: 12px;
+            padding: 8px 10px 10px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .sector-label {
+            font-family: var(--display);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            padding: 4px 6px 6px;
+            border-bottom-width: 1px;
+            border-bottom-style: solid;
+        }
+        .sector-blocks-row {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        .sector-block-col {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+        .sector-block-label {
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text2);
+            text-align: center;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 4px;
+        }
+        .sector-floor-row {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 4px;
+            min-height: 30px;
+            align-items: flex-start;
+            align-content: flex-start;
+        }
+        .sector-floor-labels {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex-shrink: 0;
+            padding-top: 0;
+        }
+        .sector-floor-labels-spacer {
+            height: 40px;
+        }
+
+        .sector-inline-floor-label {
+            font-family: var(--mono);
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text2);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 8px;
+            min-height: 30px;
+            border-right: 2px solid var(--accent);
+            flex-shrink: 0;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
         /* ═══ APT TILES ═══ */
         .apt {
             width:30px; height:30px; border-radius:6px;
@@ -332,8 +437,7 @@ ob_end_clean();
 
         .status-active     { background:#7cdf9c; border-color:#0ca678; color:#087a58; }
         .status-reserved   { background:#ffcf37; border-color:#e67700; color:#b35900; }
-        .status-queue { background:#b69bff; border-color:#7048e8; color:#5433c1; }
-
+        .status-queue      { background:#b69bff; border-color:#7048e8; color:#5433c1; }
         .status-sold       { background:#f67581; border-color:#d92b3a; color:#a8202c; }
         .status-notforsale { background:#c0c0c0; border-color:#4e4046; color:#4e3f45; }
         .status-unknown    { background:var(--bg3); border-color:var(--border2); color:var(--text2); }
@@ -358,23 +462,23 @@ ob_end_clean();
         #saveBtn:hover { background:var(--accent2); box-shadow:0 4px 14px var(--accent-glow); transform:translateY(-1px); }
 
         #apartmentPopup {
-    width: 0; min-width: 0; flex-shrink: 0;
-    height: calc(100vh - 36px);
-    background: var(--bg2); border-left: 0px solid var(--border);
-    box-shadow: none;
-    overflow-y: auto; overflow-x: hidden;
-    transition: width .35s cubic-bezier(.4,0,.2,1),
-                min-width .35s cubic-bezier(.4,0,.2,1),
-                border-left-width .35s,
-                box-shadow .35s;
-    display: flex; flex-direction: column;
-    position: sticky; top: 18px;
-}
-#apartmentPopup.active {
-    width: 300px; min-width: 300px;
-    border-left-width: 1px;
-    box-shadow: -4px 0 40px rgba(26,29,46,.12);
-}
+            width: 0; min-width: 0; flex-shrink: 0;
+            height: calc(100vh - 36px);
+            background: var(--bg2); border-left: 0px solid var(--border);
+            box-shadow: none;
+            overflow-y: auto; overflow-x: hidden;
+            transition: width .35s cubic-bezier(.4,0,.2,1),
+                        min-width .35s cubic-bezier(.4,0,.2,1),
+                        border-left-width .35s,
+                        box-shadow .35s;
+            display: flex; flex-direction: column;
+            position: sticky; top: 18px;
+        }
+        #apartmentPopup.active {
+            width: 300px; min-width: 300px;
+            border-left-width: 1px;
+            box-shadow: -4px 0 40px rgba(26,29,46,.12);
+        }
         #apartmentPopup::-webkit-scrollbar { width:8px; }
         #apartmentPopup::-webkit-scrollbar-track { background:var(--bg3); }
         #apartmentPopup::-webkit-scrollbar-thumb { background:var(--border2); border-radius:4px; }
@@ -442,8 +546,7 @@ ob_end_clean();
         .field-row.is-main.apt-active     { background:#edfdf5; border-color:#b2f0d8; }
         .field-row.is-main.apt-reserved   { background:#fff8e6; border-color:#ffd580; }
         .field-row.is-main.apt-sold       { background:#fff0f1; border-color:#ffa8ae; }
-        .field-row.is-main.apt-queue { background:#fdf2f8; border-color:#f9a8d4; }
-
+        .field-row.is-main.apt-queue      { background:#fdf2f8; border-color:#f9a8d4; }
         .field-row.is-main.apt-notforsale { background:#f3f0ff; border-color:#c4b5fd; }
 
         .field-label {
@@ -466,8 +569,7 @@ ob_end_clean();
         .badge-active   { background:var(--green-dim); color:var(--green); border-color:rgba(12,166,120,.3); }
         .badge-reserved { background:var(--amber-dim); color:var(--amber); border-color:rgba(230,119,0,.3); }
         .badge-sold     { background:var(--red-dim); color:var(--red); border-color:rgba(217,43,58,.3); }
-        .badge-queue  { background:rgba(219,39,119,.10); color:#db2777; border-color:rgba(219,39,119,.3); }
-
+        .badge-queue    { background:rgba(219,39,119,.10); color:#db2777; border-color:rgba(219,39,119,.3); }
         .badge-nfs      { background:rgba(112,72,232,.08); color:var(--purple); border-color:rgba(112,72,232,.3); }
         .badge-no-info  { background:var(--bg3); color:var(--text3); border-color:var(--border); font-style:italic; }
 
@@ -516,11 +618,6 @@ ob_end_clean();
         .carousel-dots { position:absolute; bottom:-32px; left:50%; transform:translateX(-50%); display:flex; gap:6px; }
         .carousel-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.3); cursor:pointer; transition:all .3s; }
         .carousel-dot.active { background:#fff; width:20px; border-radius:3px; }
-        .legend-item.legend-active.status-queue-frame { 
-    background: rgba(219,39,119,.08); 
-    border-color: #4e4046; 
-    color: #db2777; 
-}
     </style>
 </head>
 <body>
@@ -573,16 +670,13 @@ ob_end_clean();
             <div class="legend-item status-reserved-frame"><span class="legend-color status-reserved"></span> დაჯავშნილი <span class="legend-count" id="count-reserved">0</span></div>
             <div class="legend-item status-sold-frame"><span class="legend-color status-sold"></span> გაყიდული <span class="legend-count" id="count-sold">0</span></div>
             <div class="legend-item status-nfs-frame"><span class="legend-color status-notforsale"></span> NFS <span class="legend-count" id="count-nfs">0</span></div>
-            <div class="legend-item status-queue-frame">
-    <span class="legend-color status-queue"></span> ჯავშნის რიგში
-    <span class="legend-count" id="count-queue">0</span>
-</div>
+            <div class="legend-item status-queue-frame"><span class="legend-color status-queue"></span> ჯავშნის რიგში <span class="legend-count" id="count-queue">0</span></div>
             <button id="exportExcelBtn" onclick="exportToExcel()">⬇ Excel</button>
         </div>
 
         <div id="productsBoxWrapper" style="display:none;position:relative;align-items:center;gap:0;">
             <div id="productsBox"></div>
-            <button id="saveBtn" >შენახვა</button>
+            <button id="saveBtn">შენახვა</button>
         </div>
 
         <div id="apsDisplayWrapper">
@@ -629,7 +723,6 @@ ob_end_clean();
 
 const fmt = n => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
-    
 // ── PHP → JS ──
 let dealID      = <?php echo json_encode($dealID); ?>;
 let deal        = <?php echo json_encode($deal ?? []); ?>;
@@ -646,9 +739,9 @@ const F_TOTAL_AREA = '__173JA5';
 const F_TYPE       = '__X1GCRZ';
 const F_PRICE_USD  = '__9YCWGZ';
 const F_KVM_USD    = '__6ZWTER';
-const F_SALE =       '_UQIM2I';
-const F_CADASTRAL =       '__51MODL';
-
+const F_SALE       = '_UQIM2I';
+const F_CADASTRAL  = '__51MODL';
+const F_SECTOR     = '_3BU0JH';
 
 // ── Runtime state ──
 let openedOnDeal    = Array.isArray(deal) && deal.length > 0;
@@ -656,7 +749,8 @@ let stage_id        = openedOnDeal ? deal[0].STAGE_ID : "";
 let allowedStages   = ["PREPARATION","PREPAYMENT_INVOICE","EXECUTING"];
 let inAllowedStages = true;
 let productsCache   = [];
-let propertyMap     = {};  // CODE → { name, type }
+let propertyMap     = {};
+let isDeletingOnly  = false;
 
 // Image fields resolved to URLs by PHP
 const IMAGE_CODES = new Set(["erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo"]);
@@ -670,24 +764,33 @@ const SKIP_CODES = new Set([
     "erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo",
     "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME","DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","QUEUE",
     "PRICE","PRICE_GEL",
-    // normalised aliases added by PHP
     "_P64GYD","Number","FLOOR","TOTAL_AREA","__X1GCRZ","_L24CUB",
 ]);
 
-// Fields shown as "key info" at top of popup (use normalised alias names)
-const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","FLOOR","TOTAL_AREA"];
+const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA"];
 
 // ── Status helpers ──
 const STATUS_MAP = {
-    "თავისუფალი":   { tile:"active",     apt:"apt-active",     badge:"badge-active" },
-    "დაჯავშნილი":   { tile:"reserved",   apt:"apt-reserved",   badge:"badge-reserved" },
-    "გაყიდული":     { tile:"sold",       apt:"apt-sold",       badge:"badge-sold" },
-    "ჯავშნის რიგში": { tile:"queue", apt:"apt-queue", badge:"badge-queue" },
-    "NFS":          { tile:"notforsale", apt:"apt-notforsale", badge:"badge-nfs" },
+    "თავისუფალი":    { tile:"active",     apt:"apt-active",     badge:"badge-active" },
+    "დაჯავშნილი":    { tile:"reserved",   apt:"apt-reserved",   badge:"badge-reserved" },
+    "გაყიდული":      { tile:"sold",       apt:"apt-sold",       badge:"badge-sold" },
+    "ჯავშნის რიგში": { tile:"queue",      apt:"apt-queue",      badge:"badge-queue" },
+    "NFS":           { tile:"notforsale", apt:"apt-notforsale", badge:"badge-nfs" },
 };
 function tileCls(s)  { return "status-" + (STATUS_MAP[s]?.tile  || "unknown"); }
 function aptCls(s)   { return STATUS_MAP[s]?.apt   || ""; }
 function badgeCls(s) { return STATUS_MAP[s]?.badge || ""; }
+
+// ── Sector color palette ──
+const SECTOR_COLORS = [
+    { bg: "rgba(59,91,219,.06)",   border: "rgba(59,91,219,.22)",   label: "#3b5bdb" },
+    { bg: "rgba(12,166,120,.06)",  border: "rgba(12,166,120,.22)",  label: "#0ca678" },
+    { bg: "rgba(112,72,232,.06)",  border: "rgba(112,72,232,.22)",  label: "#7048e8" },
+    { bg: "rgba(230,119,0,.06)",   border: "rgba(230,119,0,.22)",   label: "#e67700" },
+    { bg: "rgba(217,43,58,.06)",   border: "rgba(217,43,58,.22)",   label: "#d92b3a" },
+    { bg: "rgba(0,152,199,.06)",   border: "rgba(0,152,199,.22)",   label: "#0098c7" },
+    { bg: "rgba(148,96,13,.06)",   border: "rgba(148,96,13,.22)",   label: "#94600d" },
+];
 
 // ══════════════════════════════════════════
 //  DEAL INIT
@@ -695,8 +798,6 @@ function badgeCls(s) { return STATUS_MAP[s]?.badge || ""; }
 const productsBoxWrapper = document.getElementById("productsBoxWrapper");
 if (openedOnDeal) {
     document.getElementById("apsDisplay").style.maxWidth = "93%";
-    // document.getElementById("apartmentPopup").style.position = "absolute";
-    // document.getElementById("apartmentPopup").style.height   = "576px";
     document.querySelector(".containerCatalog").style.paddingLeft = "0";
     productsBoxWrapper.style.display = "flex";
     productsBoxWrapper.innerHTML += `<span class="border-text">დილზე დამატებული ბინები</span>`;
@@ -704,12 +805,6 @@ if (openedOnDeal) {
     if (Array.isArray(products) && products.length > 0) {
         const pb = document.getElementById("productsBox");
         products.forEach(apt => pb.appendChild(makeDealTile(apt)));
-        const pp = parseInt(products[0]["IBLOCK_SECTION_ID"]);
-        if (pp) {
-            const ps = document.getElementById("projects");
-            ps.value = pp;
-            setTimeout(() => ps.dispatchEvent(new Event("change",{bubbles:true})), 0);
-        }
     }
 }
 
@@ -740,62 +835,81 @@ function makeDealTile(apt) {
 //  PROJECT SELECT → FETCH
 // ══════════════════════════════════════════
 const projectSelect = document.getElementById("projects");
+let _fetchController = null;
+
+// Populate project options
 if (Array.isArray(projects) && projects.length > 0) {
     projects.forEach(p => {
         const o = document.createElement("option");
         o.value = p["ID"]; o.textContent = p["NAME"];
         projectSelect.appendChild(o);
     });
-    projectSelect.value = projects[0]["ID"];
-    setTimeout(() => projectSelect.dispatchEvent(new Event("change",{bubbles:true})), 100);
+}
+
+// Determine which project to auto-load
+let projectToLoad = null;
+
+if (openedOnDeal && Array.isArray(products) && products.length > 0) {
+    const pp = parseInt(products[0]["IBLOCK_SECTION_ID"]);
+    if (pp) projectToLoad = pp;
+}
+
+if (!projectToLoad && Array.isArray(projects) && projects.length > 0) {
+    projectToLoad = projects[0]["ID"];
+}
+
+if (projectToLoad) {
+    projectSelect.value = projectToLoad;
+    setTimeout(() => projectSelect.dispatchEvent(new Event("change", { bubbles: true })), 100);
 }
 
 projectSelect.addEventListener("change", function() {
     const projId = this.value;
     if (!projId) return;
+
+    // Cancel any in-flight fetch for a previous project
+    if (_fetchController) _fetchController.abort();
+    _fetchController = new AbortController();
+
     document.getElementById("apsDisplay").innerHTML = "იტვირთება...";
 
-    fetch(`/rest/local/api/projects/get.php?projId=${projId}`)
+    fetch(`/rest/local/api/projects/get.php?projId=${projId}`, { signal: _fetchController.signal })
         .then(r => r.json())
         .then(data => {
             productsCache = data.products || [];
 
-            // console.log("properties:", data.properties?.slice(0, 3));
-
             if (data.nbg) nbg = data.nbg;
 
             const FIELD_NAMES = {
-    "__9YCWGZ":  "ჯამური ღირებულება $",
-    "__6ZWTER":  "კვ/მ ღირებულება $",
-    "__VO9RG4":  "პროექტის დასახელება",
-    "_L24CUB":   "ბლოკი",
-    "__X1GCRZ":  "უძრავი ქონების ტიპი",
-    "_D599QA":   "სადარბაზო",
-    "_FTRIDL":   "სართული",
- "__51MODL":   "საკადასტრო კოდი",
-
-    "__6KWOWZ":  "უძრავი ქონების №",
-    "__173JA5":  "სრული ფართი",
-    "__US58ND":  "შიდა ფართი",
-    "__BL1XXK":  "საზაფხულო ფართი",
-    "__WX6YWZ":  "ოთახების რაოდენობა",
-    "__KYRP1L":  "საძინებლების რაოდენობა",
-    "__9H8XS9":  "სველი წერტილის რაოდენობა",
-    "_P64GYD":   "სტატუსი",
-    // normalised aliases
-    "Number":      "უძრავი ქონების №",
-    "FLOOR":       "სართული",
-    "TOTAL_AREA":  "სრული ფართი",
-    "_MVA3NL":     "ბლოკი",
-};
-propertyMap = {};
-Object.entries(FIELD_NAMES).forEach(([code, name]) => {
-    propertyMap[code] = { name, type: "S" };
-});
-(data.properties || []).forEach(p => {
-    propertyMap[p.CODE] = { name: p.NAME, type: p.TYPE };
-});
-
+                "__9YCWGZ":  "ჯამური ღირებულება $",
+                "__6ZWTER":  "კვ/მ ღირებულება $",
+                "__VO9RG4":  "პროექტის დასახელება",
+                "_L24CUB":   "ბლოკი",
+                "__X1GCRZ":  "უძრავი ქონების ტიპი",
+                "_D599QA":   "სადარბაზო",
+                "_FTRIDL":   "სართული",
+                "__51MODL":  "საკადასტრო კოდი",
+                "_3BU0JH":   "სექტორი",
+                "__6KWOWZ":  "უძრავი ქონების №",
+                "__173JA5":  "სრული ფართი",
+                "__US58ND":  "შიდა ფართი",
+                "__BL1XXK":  "საზაფხულო ფართი",
+                "__WX6YWZ":  "ოთახების რაოდენობა",
+                "__KYRP1L":  "საძინებლების რაოდენობა",
+                "__9H8XS9":  "სველი წერტილის რაოდენობა",
+                "_P64GYD":   "სტატუსი",
+                "Number":    "უძრავი ქონების №",
+                "FLOOR":     "სართული",
+                "TOTAL_AREA":"სრული ფართი",
+                "_MVA3NL":   "ბლოკი",
+            };
+            propertyMap = {};
+            Object.entries(FIELD_NAMES).forEach(([code, name]) => {
+                propertyMap[code] = { name, type: "S" };
+            });
+            (data.properties || []).forEach(p => {
+                propertyMap[p.CODE] = { name: p.NAME, type: p.TYPE };
+            });
 
             buildBlockCheckboxes(data.blocks || []);
             renderProductsByBlock(productsCache, data.blocks || []);
@@ -807,27 +921,67 @@ Object.entries(FIELD_NAMES).forEach(([code, name]) => {
                 if (el) { el.classList.add("dimmed"); el.style.outline="2px solid #ff343a"; el.style.transform="scale(1.2)"; }
             });
         })
-        .catch(err => console.error("Fetch error:", err));
+        .catch(err => { if (err.name !== "AbortError") console.error("Fetch error:", err); });
 });
 
+// ══════════════════════════════════════════
+//  BLOCK CHECKBOXES (sector-aware)
+// ══════════════════════════════════════════
 function buildBlockCheckboxes(blocks) {
     const c = document.querySelector("#blockFilter .dropdown-content");
     c.innerHTML = "";
-    blocks.sort((a,b) => {
-        const na = parseInt(a.match(/\d+/)?.[0] ?? "9999");
-        const nb = parseInt(b.match(/\d+/)?.[0] ?? "9999");
-        return na !== nb ? na - nb : (a.match(/[A-Z]+/)?.[0]||a).localeCompare(b.match(/[A-Z]+/)?.[0]||b);
-    }).forEach(block => {
-        const lbl = document.createElement("label");
-        lbl.innerHTML = block === "P"
-            ? `<input type="checkbox" value="${block}"> გარე ავტოსადგომები`
-            : `<input type="checkbox" value="${block}"> ${block}`;
-        c.appendChild(lbl);
-    });
+
+    const hasSectors = productsCache.some(p => p[F_SECTOR] && p[F_SECTOR] !== "");
+
+    if (hasSectors) {
+        const sectorBlockMap = {};
+        productsCache.forEach(p => {
+            const sec = p[F_SECTOR] || "–";
+            const blk = p[F_BLOCK]  || "";
+            if (!blk) return;
+            if (!sectorBlockMap[sec]) sectorBlockMap[sec] = new Set();
+            sectorBlockMap[sec].add(blk);
+        });
+        if (blocks.includes("P")) {
+            if (!sectorBlockMap["P"]) sectorBlockMap["P"] = new Set();
+            sectorBlockMap["P"].add("P");
+        }
+
+        Object.keys(sectorBlockMap).sort().forEach(sec => {
+            const hdr = document.createElement("div");
+            hdr.className = "block-dropdown-sector-header";
+            hdr.textContent = sec === "P" ? "გარე ავტოსადგომები" : "სექტ. " + sec;
+            c.appendChild(hdr);
+
+            [...sectorBlockMap[sec]].sort((a, b) => {
+                const na = parseInt(a.match(/\d+/)?.[0] ?? "9999");
+                const nb = parseInt(b.match(/\d+/)?.[0] ?? "9999");
+                return na !== nb ? na - nb : a.localeCompare(b);
+            }).forEach(block => {
+                const lbl = document.createElement("label");
+                lbl.innerHTML = block === "P"
+                    ? `<input type="checkbox" value="${block}"> გარე ავტოსადგომები`
+                    : `<input type="checkbox" value="${block}"> ${block}`;
+                c.appendChild(lbl);
+            });
+        });
+    } else {
+        blocks.sort((a, b) => {
+            const na = parseInt(a.match(/\d+/)?.[0] ?? "9999");
+            const nb = parseInt(b.match(/\d+/)?.[0] ?? "9999");
+            return na !== nb ? na - nb : (a.match(/[A-Z]+/)?.[0]||a).localeCompare(b.match(/[A-Z]+/)?.[0]||b);
+        }).forEach(block => {
+            const lbl = document.createElement("label");
+            lbl.innerHTML = block === "P"
+                ? `<input type="checkbox" value="${block}"> გარე ავტოსადგომები`
+                : `<input type="checkbox" value="${block}"> ${block}`;
+            c.appendChild(lbl);
+        });
+    }
 }
 
 // ══════════════════════════════════════════
-//  RENDER APARTMENTS
+//  RENDER ROUTER
 // ══════════════════════════════════════════
 function renderProductsByBlock(allProducts, selectedBlocks) {
     const container = document.getElementById("apsDisplay");
@@ -839,12 +993,33 @@ function renderProductsByBlock(allProducts, selectedBlocks) {
         return;
     }
 
-    // Split apartments vs parking
+    const hasSectors = allProducts.some(p => p[F_SECTOR] && p[F_SECTOR] !== "");
+
+    if (hasSectors) {
+        renderBySectors(allProducts, selectedBlocks, container);
+    } else {
+        renderByBlocks(allProducts, selectedBlocks, container);
+    }
+
+    updateLegendCounts(allProducts);
+}
+
+// ══════════════════════════════════════════
+//  RENDER: BLOCK MODE (original logic)
+// ══════════════════════════════════════════
+function renderByBlocks(allProducts, selectedBlocks, container) {
+    const seenIds  = new Set();
+    const products = allProducts.filter(p => {
+        if (seenIds.has(p["ID"])) return false;
+        seenIds.add(p["ID"]);
+        return true;
+    });
+
     const apartments = [];
     const parking    = {};
     const blockPList = [];
 
-    allProducts.forEach(apt => {
+    products.forEach(apt => {
         const pt = apt["__X1GCRZ"] || apt[F_TYPE] || "";
         if (pt === "ავტოსადგომი" || pt === "დამხმარე") {
             const b = apt["_L24CUB"] || apt[F_BLOCK] || "";
@@ -856,9 +1031,8 @@ function renderProductsByBlock(allProducts, selectedBlocks) {
         }
     });
 
-    const blocksToShow = selectedBlocks.filter(b => b !== "P");
+    const blocksToShow = [...new Set(selectedBlocks.filter(b => b !== "P"))];
 
-    // Calc column widths
     const byFloor = {};
     apartments.forEach(apt => {
         const f = parseInt(apt["FLOOR"] || apt[F_FLOOR] || 0);
@@ -889,6 +1063,7 @@ function renderProductsByBlock(allProducts, selectedBlocks) {
 
     // Floor labels
     const floorsContainer = document.getElementById("floors");
+    floorsContainer.style.display = "";
     floorsContainer.innerHTML = "";
     const uniqueFloors = [...new Set(apartments.map(a => parseInt(a["FLOOR"]||a[F_FLOOR]||0)))].sort((a,b)=>b-a);
     uniqueFloors.forEach(f => {
@@ -918,7 +1093,7 @@ function renderProductsByBlock(allProducts, selectedBlocks) {
         container.appendChild(row);
     });
 
-    // Parking row
+    // Internal parking row
     floorsContainer.innerHTML += `<div class="floor-label" style="margin-top:10px;border-right:3px solid #9b59b6;visibility:hidden;"><div style="font-size:11px;">P/S</div></div>`;
     const parkRow = document.createElement("div");
     parkRow.className = "floor-row"; parkRow.style.marginTop = "10px";
@@ -941,7 +1116,7 @@ function renderProductsByBlock(allProducts, selectedBlocks) {
     });
     container.appendChild(parkRow);
 
-    // Block P outdoor
+    // Outdoor parking (Block P)
     const outdoorEl = document.getElementById("gareAvtosadgomebi");
     outdoorEl.innerHTML = "";
     if (selectedBlocks.includes("P") && blockPList.length > 0) {
@@ -957,10 +1132,216 @@ function renderProductsByBlock(allProducts, selectedBlocks) {
         wrap.appendChild(grid);
         outdoorEl.appendChild(wrap);
     }
-
-    updateLegendCounts(allProducts);
 }
 
+// ══════════════════════════════════════════
+//  RENDER: SECTOR MODE
+// ══════════════════════════════════════════
+function renderBySectors(allProducts, selectedBlocks, container) {
+    const seenIds   = new Set();
+    const products  = allProducts.filter(p => {
+        if (seenIds.has(p["ID"])) return false;
+        seenIds.add(p["ID"]);
+        return true;
+    });
+
+    const apartments      = [];
+    const nonAptBySector  = {};
+    const blockPList      = [];
+
+    products.forEach(apt => {
+        const pt  = apt["__X1GCRZ"] || apt[F_TYPE] || "";
+        const b   = apt[F_BLOCK]    || apt["_L24CUB"]  || "";
+        const sec = apt[F_SECTOR]   || apt["_3BU0JH"]  || "–";
+
+        if (pt === "ავტოსადგომი" || pt === "დამხმარე") {
+            if (b === "P") { blockPList.push(apt); return; }
+            if (!nonAptBySector[sec])       nonAptBySector[sec]     = {};
+            if (!nonAptBySector[sec][b])    nonAptBySector[sec][b]  = [];
+            nonAptBySector[sec][b].push(apt);
+        } else {
+            apartments.push(apt);
+        }
+    });
+
+    const sectorMap = {};
+    apartments.forEach(apt => {
+        const sec   = apt[F_SECTOR] || apt["_3BU0JH"] || "–";
+        const block = apt[F_BLOCK]  || apt["_L24CUB"]  || "–";
+        const floor = parseInt(apt["FLOOR"] || apt[F_FLOOR] || 0);
+        if (!sectorMap[sec]) sectorMap[sec] = {};
+        if (!sectorMap[sec][block]) sectorMap[sec][block] = {};
+        if (!sectorMap[sec][block][floor]) sectorMap[sec][block][floor] = [];
+        sectorMap[sec][block][floor].push(apt);
+    });
+
+    const allFloors = [...new Set(apartments.map(a =>
+        parseInt(a["FLOOR"] || a[F_FLOOR] || 0)
+    ))].sort((a, b) => b - a);
+
+    const TILE_STEP = 34;
+    const MAX_TILES_PER_ROW = 10;
+    const blockWidths = {};
+    Object.values(sectorMap).forEach(blocks => {
+        Object.entries(blocks).forEach(([block, floors]) => {
+            let maxInRow = 0;
+            Object.values(floors).forEach(fa => {
+                const rowTiles = Math.min(fa.length, MAX_TILES_PER_ROW);
+                if (rowTiles > maxInRow) maxInRow = rowTiles;
+            });
+            blockWidths[block] = Math.max(maxInRow * TILE_STEP, 68);
+        });
+    });
+
+    const floorsContainer = document.getElementById("floors");
+    floorsContainer.innerHTML = "";
+    floorsContainer.style.display = "none";
+
+    const sectorsWrapper = document.createElement("div");
+    sectorsWrapper.className = "sector-grid-wrapper";
+
+    const sectorNames = Object.keys(sectorMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+    sectorNames.forEach((sectorName, si) => {
+        const col = SECTOR_COLORS[si % SECTOR_COLORS.length];
+        const blocksInSector = Object.keys(sectorMap[sectorName]).sort((a, b) => {
+            const na = parseInt(a.match(/\d+/)?.[0] ?? "9999");
+            const nb = parseInt(b.match(/\d+/)?.[0] ?? "9999");
+            return na !== nb ? na - nb : a.localeCompare(b);
+        });
+
+        const activeBlocks = selectedBlocks.length > 0
+            ? blocksInSector.filter(b => selectedBlocks.includes(b))
+            : blocksInSector;
+        if (activeBlocks.length === 0) return;
+
+        const sectorEl = document.createElement("div");
+        sectorEl.className = "sector-container";
+        sectorEl.style.cssText = `background:${col.bg};border:1px solid ${col.border};`;
+
+        const sectorLbl = document.createElement("div");
+        sectorLbl.className = "sector-label";
+        sectorLbl.style.cssText = `color:${col.label};border-bottom-color:${col.border};`;
+        sectorLbl.textContent = "სექტ. " + sectorName;
+        sectorEl.appendChild(sectorLbl);
+
+        const blocksRow = document.createElement("div");
+        blocksRow.className = "sector-blocks-row";
+
+        if (si === 0) {
+            const floorLabelCol = document.createElement("div");
+            floorLabelCol.className = "sector-block-col";
+            floorLabelCol.style.cssText = "width:28px;flex-shrink:0;";
+
+            const lblSpacer = document.createElement("div");
+            lblSpacer.style.cssText = "height:33px;margin-bottom:4px;";
+            floorLabelCol.appendChild(lblSpacer);
+
+            allFloors.forEach(floorNum => {
+                const floorLbl = document.createElement("div");
+                floorLbl.className = "sector-inline-floor-label";
+                floorLbl.textContent = floorNum;
+                floorLbl.dataset.floor = floorNum;
+                floorLabelCol.appendChild(floorLbl);
+            });
+
+            blocksRow.appendChild(floorLabelCol);
+        }
+
+        activeBlocks.forEach((blockName, blockIdx) => {
+            const bw = blockWidths[blockName] || 68;
+            const blockCol = document.createElement("div");
+            blockCol.className = "sector-block-col";
+            blockCol.style.width = bw + "px";
+
+            const blkLbl = document.createElement("div");
+            blkLbl.className = "sector-block-label";
+            blkLbl.style.borderBottomColor = col.border;
+            blkLbl.textContent = blockName;
+            blockCol.appendChild(blkLbl);
+
+            allFloors.forEach(floorNum => {
+                const floorRow = document.createElement("div");
+                floorRow.className = "sector-floor-row";
+                floorRow.dataset.sectorFloor = `${sectorName}-${floorNum}`;
+
+                const aptsOnFloor = (sectorMap[sectorName][blockName] || {})[floorNum] || [];
+                if (aptsOnFloor.length > 0) {
+                    aptsOnFloor.forEach(apt => floorRow.appendChild(makeAptTile(apt)));
+                } else {
+                    const ph = document.createElement("div");
+                    ph.style.cssText = `height:30px;width:${bw}px;`;
+                    floorRow.appendChild(ph);
+                }
+
+                blockCol.appendChild(floorRow);
+            });
+
+            const nonAptItems = (nonAptBySector[sectorName] || {})[blockName] || [];
+            if (nonAptItems.length > 0) {
+                const byType = {};
+                nonAptItems.forEach(item => {
+                    const t = item["__X1GCRZ"] || item[F_TYPE] || "სხვა";
+                    if (!byType[t]) byType[t] = [];
+                    byType[t].push(item);
+                });
+                Object.entries(byType).forEach(([typeName, items]) => {
+                    const pSep = document.createElement("div");
+                    pSep.style.cssText = `margin-top:6px;border-top:1px dashed ${col.border};padding-top:5px;`;
+                    const pLbl = document.createElement("div");
+                    pLbl.style.cssText = "font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;font-family:var(--mono);font-weight:700;letter-spacing:.5px;text-transform:uppercase;";
+                    pLbl.textContent = typeName === "ავტოსადგომი" ? "P/S" : typeName === "დამხმარე" ? "დამხმარე" : typeName;
+                    pSep.appendChild(pLbl);
+                    const pWrap = document.createElement("div");
+                    pWrap.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;";
+                    items.forEach(item => pWrap.appendChild(makeAptTile(item, typeName === "ავტოსადგომი" ? "P" : typeName === "დამხმარე" ? "S" : "")));
+                    pSep.appendChild(pWrap);
+                    blockCol.appendChild(pSep);
+                });
+            }
+
+            blocksRow.appendChild(blockCol);
+        });
+
+        sectorEl.appendChild(blocksRow);
+        sectorsWrapper.appendChild(sectorEl);
+    });
+
+    container.appendChild(sectorsWrapper);
+
+    requestAnimationFrame(() => {
+        const firstSector = sectorNames[0];
+        if (!firstSector) return;
+
+        allFloors.forEach(floorNum => {
+            const anyRow = container.querySelector(`.sector-floor-row[data-sector-floor="${firstSector}-${floorNum}"]`);
+            const lbl    = container.querySelector(`.sector-inline-floor-label[data-floor="${floorNum}"]`);
+            if (anyRow && lbl) {
+                lbl.style.height = anyRow.offsetHeight + "px";
+            }
+        });
+    });
+
+    const outdoorEl = document.getElementById("gareAvtosadgomebi");
+    outdoorEl.innerHTML = "";
+    if (selectedBlocks.includes("P") && blockPList.length > 0) {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "max-width:1000px;background:rgba(240,240,245,.6);border-radius:8px;padding:8px 14px;";
+        const h = document.createElement("div");
+        h.style.cssText = "font-size:13px;font-weight:600;color:#555;margin-bottom:6px;";
+        h.textContent = "გარე ავტოსადგომები";
+        wrap.appendChild(h);
+        const grid = document.createElement("div");
+        grid.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;";
+        blockPList.forEach(item => grid.appendChild(makeAptTile(item)));
+        wrap.appendChild(grid);
+        outdoorEl.appendChild(wrap);
+    }
+}
+
+// ══════════════════════════════════════════
+//  APT TILE FACTORY
+// ══════════════════════════════════════════
 function makeAptTile(apt, prefix="") {
     const tile = document.createElement("div");
     const s    = apt["_P64GYD"] || "";
@@ -969,16 +1350,16 @@ function makeAptTile(apt, prefix="") {
     tile.dataset.status = s;
 
     if (apt["aqcia"]) {
-    const b = document.createElement("span");
-    b.style.cssText = "position:absolute;top:-5px;right:-5px;font-size:9px;line-height:1;z-index:5;";
-    b.textContent = "🎁"; tile.appendChild(b);
-}
-if (apt[F_SALE] === "Yes") {
-    const fire = document.createElement("span");
-    fire.style.cssText = "position:absolute;top:-7px;left:-5px;font-size:11px;line-height:1;z-index:5;filter:drop-shadow(0 0 3px rgba(255,100,0,.6));";
-    fire.textContent = "🔥";
-    tile.appendChild(fire);
-}
+        const b = document.createElement("span");
+        b.style.cssText = "position:absolute;top:-5px;right:-5px;font-size:9px;line-height:1;z-index:5;";
+        b.textContent = "🎁"; tile.appendChild(b);
+    }
+    if (apt[F_SALE] === "Yes") {
+        const fire = document.createElement("span");
+        fire.style.cssText = "position:absolute;top:-7px;left:-5px;font-size:11px;line-height:1;z-index:5;filter:drop-shadow(0 0 3px rgba(255,100,0,.6));";
+        fire.textContent = "🔥";
+        tile.appendChild(fire);
+    }
 
     const num = document.createElement("div");
     num.style.fontSize = "8px";
@@ -1000,10 +1381,10 @@ function updateLegendCounts(prods) {
     const c = {active:0, reserved:0, sold:0, nfs:0, queue:0};
     (prods||[]).forEach(p => {
         switch(p["_P64GYD"]) {
-            case "თავისუფალი":   c.active++;   break;
-            case "დაჯავშნილი":   c.reserved++; break;
-            case "გაყიდული":     c.sold++;     break;
-            case "NFS":          c.nfs++;      break;
+            case "თავისუფალი":    c.active++;   break;
+            case "დაჯავშნილი":    c.reserved++; break;
+            case "გაყიდული":      c.sold++;     break;
+            case "NFS":           c.nfs++;      break;
             case "ჯავშნის რიგში": c.queue++;    break;
         }
     });
@@ -1013,6 +1394,7 @@ function updateLegendCounts(prods) {
     document.getElementById("count-nfs").textContent      = c.nfs;
     document.getElementById("count-queue").textContent    = c.queue;
 }
+
 // ══════════════════════════════════════════
 //  FILTERS
 // ══════════════════════════════════════════
@@ -1020,7 +1402,7 @@ function updateDynamicFilters(prods) {
     if (!prods||prods.length===0) return;
     const statusSet=new Set(), typeSet=new Set();
     prods.forEach(p => {
-        if (p["_P64GYD"])       statusSet.add(p["_P64GYD"]);
+        if (p["_P64GYD"])  statusSet.add(p["_P64GYD"]);
         if (p["__X1GCRZ"]) typeSet.add(p["__X1GCRZ"]);
     });
     buildDropdown("#statusFilter",        statusSet, "სტატუსი");
@@ -1083,20 +1465,33 @@ function getExtraFilterValues() {
 
 function applyFilters() {
     const f = getAllFilters();
+
+    const hasSectors = productsCache.some(p => p[F_SECTOR] && p[F_SECTOR] !== "");
+    const container  = document.getElementById("apsDisplay");
+
+    if (hasSectors) {
+        container.innerHTML = "";
+        renderBySectors(productsCache, f.blocks, container);
+    } else {
+        container.innerHTML = "";
+        renderByBlocks(productsCache, f.blocks, container);
+    }
+
     ["#apsDisplay .apt","#gareAvtosadgomebi .apt"].forEach(sel => {
         document.querySelectorAll(sel).forEach(el => {
             const apt = productsCache.find(p=>p["ID"]==el.dataset.id);
             if (!apt) return;
-            el.classList.toggle("dimmed", !matchesFilters(apt,f));
+            el.classList.toggle("dimmed", !matchesFilters(apt, f));
         });
     });
-    updateLegendCounts(productsCache); // ← always full dataset
+
+    updateLegendCounts(productsCache);
 }
 
 function matchesFilters(apt, f) {
     if (f.status.length>0  && !f.status.includes(apt["_P64GYD"]))        return false;
-    if (f.aptType.length>0 && !f.aptType.includes(apt["__X1GCRZ"])) return false;
-    if (f.blocks.length>0  && !f.blocks.includes(apt["_L24CUB"]))       return false;
+    if (f.aptType.length>0 && !f.aptType.includes(apt["__X1GCRZ"]))      return false;
+    if (f.blocks.length>0  && !f.blocks.includes(apt["_L24CUB"]))        return false;
     const area=parseFloat(apt["TOTAL_AREA"]);
     if (f.aptRange.min!==""&&area<parseFloat(f.aptRange.min)) return false;
     if (f.aptRange.max!==""&&area>parseFloat(f.aptRange.max)) return false;
@@ -1120,17 +1515,18 @@ function matchesFilters(apt, f) {
 document.getElementById("search").addEventListener("click", applyFilters);
 
 $("#clean").on("click", function() {
-    $("#statusFilter input,#apartmentTypeFilter input").prop("checked",false);
+    $("#statusFilter input,#apartmentTypeFilter input,#blockFilter input").prop("checked",false);
     $("#aptMin,#aptMax").val("");
     $("#statusFilter .dropdown-header").text("სტატუსი");
     $("#apartmentTypeFilter .dropdown-header").text("ფართის ტიპი");
+    $("#blockFilter .dropdown-header").text("ბლოკი");
     document.querySelectorAll("#extraFilterChips .filter-chip").forEach(chip => {
         const btn=chip._sourceButton;
         if(btn){btn.disabled=false;btn.classList.remove("disabled-button");btn.style.background="";}
         chip.remove();
     });
     document.querySelectorAll("#legendBar .legend-item").forEach(i=>i.classList.remove("legend-active"));
-    document.querySelectorAll("#apsDisplay .apt.dimmed").forEach(a=>a.classList.remove("dimmed"));
+    renderProductsByBlock(productsCache, []);
     $(".dropdown-content").slideUp(150);
 });
 
@@ -1198,7 +1594,6 @@ document.addEventListener("click", e => {
 
 function openPopup(aptId, fromBox=false) {
     document.getElementById("apartmentPopup").classList.add("active");
-    // document.getElementById("apsDisplay").style.maxWidth = openedOnDeal?"49%":"63%";
 
     const apt = fromBox
         ? products.find(p=>p["ID"]==aptId)
@@ -1219,7 +1614,6 @@ function openPopup(aptId, fromBox=false) {
     const isInBox = fromBox || !!document.querySelector(`#productsBox .apt[data-id="${aptId}"]`);
 
     if (isInBox && openedOnDeal) {
-        // Show DELETE button
         selectBtn.style.display = "flex";
         selectBtn.textContent   = "წაშლა";
         selectBtn.style.background = "var(--red)";
@@ -1242,27 +1636,22 @@ function renderBlockSections(apt) {
     container.innerHTML = "";
     const sc = aptCls(apt["_P64GYD"]||"");
 
-    // 1. Key info
     const keyFields = MAIN_CODES
         .filter(code => apt[code]!==undefined&&apt[code]!==null&&apt[code]!=="")
         .map(code  => ({ code, name:propertyMap[code]?.name||code, main:["_P64GYD","Number","TOTAL_AREA"].includes(code) }));
     if (keyFields.length>0) appendSection(container,"ძირითადი ინფორმაცია",keyFields,apt,sc);
 
-    // 2. Images
     const imgFields = Object.keys(apt).filter(code=>IMAGE_CODES.has(code)&&apt[code]);
     if (imgFields.length>0) appendImageSection(container,imgFields,apt);
 
-    // 3. Price
     appendPriceSection(container,apt);
 
-    // 4. All other props
     const shown = new Set([...MAIN_CODES,...IMAGE_CODES,...SKIP_CODES]);
     const rest  = Object.keys(apt)
         .filter(code => !shown.has(code)&&!code.startsWith("~")&&apt[code]!==undefined&&apt[code]!==null&&apt[code]!=="")
         .map(code  => ({ code, name:propertyMap[code]?.name||code, main:false }));
     if (rest.length>0) appendSection(container,"დეტალური ინფორმაცია",rest,apt,"");
 
-    // 5. Links
     appendLinksSection(container,apt);
 }
 
@@ -1367,7 +1756,6 @@ function closePopup() {
     const id=document.getElementById("popupTitle").dataset.id;
     const el=document.querySelector(`#apsDisplay .apt[data-id="${id}"]`);
     if (el){el.style.transform="";el.style.border="";}
-    // document.getElementById("apsDisplay").style.maxWidth=openedOnDeal?"93%":"94%";
 }
 document.getElementById("toggleDetailsBtn").addEventListener("click",function(){
     const w=document.getElementById("popupDetailsWrapper");
@@ -1376,7 +1764,7 @@ document.getElementById("toggleDetailsBtn").addEventListener("click",function(){
 });
 
 // ══════════════════════════════════════════
-//  DEAL: ADD / SAVE
+//  DEAL: ADD / DELETE / SAVE
 // ══════════════════════════════════════════
 document.getElementById("popupSelectBtn")?.addEventListener("click", () => {
     const mode = document.getElementById("popupSelectBtn").dataset.mode;
@@ -1389,23 +1777,19 @@ document.getElementById("popupSelectBtn")?.addEventListener("click", () => {
 });
 
 function deleteSelectedApartment() {
+    isDeletingOnly = true;
     const aptId = document.getElementById("popupTitle").dataset.id;
     const sb    = document.getElementById("saveBtn");
-
-    // Remove from productsBox
-    const tile = document.querySelector(`#productsBox .apt[data-id="${aptId}"]`);
+    const tile  = document.querySelector(`#productsBox .apt[data-id="${aptId}"]`);
     if (tile) tile.remove();
-
-    // Un-dim in grid
     const el = document.querySelector(`#apsDisplay .apt[data-id="${aptId}"]`);
     if (el) { el.classList.remove("dimmed"); el.style.outline = ""; el.style.transform = ""; }
-
-    // Show save button
     if (allowedStages.includes(stage_id)) sb.style.display = "";
-
     closePopup();
 }
+
 function addSelectedApartment() {
+    isDeletingOnly = false;
     const pb=document.getElementById("productsBox");
     const pt=document.getElementById("popupTitle");
     const aptId=pt.dataset.id, status=pt.dataset.status;
@@ -1420,18 +1804,39 @@ function addSelectedApartment() {
     if (el) el.classList.add("dimmed");
     document.getElementById("popupSelectBtn").style.display="none";
 }
-document.getElementById("saveBtn")?.addEventListener("click",()=>{
-    const sb=document.getElementById("saveBtn");
-    const ids=[...document.getElementById("productsBox").children].map(el=>Number(el.dataset.id));
-    sb.disabled=true;sb.textContent="...";sb.style.opacity=".6";
-    fetch(`/rest/local/api/projects/saveApartment.php?deal_id=${dealID}&productIds=${ids}`)
-        .then(r=>r.json())
-        .then(data=>{if(data.status===200){alert(data.message);location.reload();}else{alert(data.error);sb.disabled=false;sb.textContent="💾";sb.style.opacity="1";}})
-        .catch(err=>{console.error(err);sb.disabled=false;sb.textContent="💾";sb.style.opacity="1";});
+
+document.getElementById("saveBtn")?.addEventListener("click", () => {
+    const sb  = document.getElementById("saveBtn");
+    const ids = [...document.getElementById("productsBox").children]
+                    .map(el => Number(el.dataset.id))
+                    .filter(Boolean);
+
+    sb.disabled = true; sb.textContent = "..."; sb.style.opacity = ".6";
+
+    fetch(`/rest/local/api/projects/saveApartment.php?deal_id=${dealID}&productIds=${ids.join(",")}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 200) {
+                if (isDeletingOnly) {
+                    location.reload();
+                } else {
+                    showReservationPopup();
+                }
+            } else {
+                alert(data.error || "შეცდომა");
+                sb.disabled = false; sb.textContent = "შენახვა"; sb.style.opacity = "1";
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            sb.disabled = false; sb.textContent = "შენახვა"; sb.style.opacity = "1";
+        });
 });
 
+document.getElementById("sendButton")?.addEventListener("click", submitReservation);
+
 // ══════════════════════════════════════════
-//  LEGEND CLICK
+//  LEGEND CLICK FILTER
 // ══════════════════════════════════════════
 const legendStatusMap = {
     "count-active":   "თავისუფალი",
@@ -1493,13 +1898,11 @@ async function exportToExcel() {
         visibleIds.forEach(id=>{const a=all.find(p=>p["ID"]==id);if(a&&!seen.has(id)){seen.add(id);apts.push(a);}});
 
         const skipExport=new Set([...SKIP_CODES,"~ID","~NAME","~IBLOCK_ID","~IBLOCK_SECTION_ID","MORE_PHOTO","PREVIEW_PICTURE","DETAIL_PICTURE","~DETAIL_PICTURE","image","image2","image3","image4","image5","binis_gegmareba","render_3D","sartulis2D","binisNaxazi2D","erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo"]);
-        const priorityKeys = ["ID","_P64GYD","Number","__X1GCRZ","_L24CUB","FLOOR","TOTAL_AREA","PRICE","PRICE_GEL", F_KVM_USD];
+        const priorityKeys = ["ID","_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA","PRICE","PRICE_GEL", F_KVM_USD];
 
-        // Only use keys that actually exist in the data
         const dataKeys = new Set();
         apts.forEach(a => Object.keys(a).forEach(k => dataKeys.add(k)));
 
-        // Build ordered, deduplicated, filtered key list
         const seen_keys = new Set();
         const orderedKeys = [];
         [...priorityKeys, ...Object.keys(propertyMap)].forEach(k => {
@@ -1508,7 +1911,6 @@ async function exportToExcel() {
                 orderedKeys.push(k);
             }
         });
-        // Add any remaining data keys not yet included
         dataKeys.forEach(k => {
             if (!seen_keys.has(k) && !skipExport.has(k) && !k.startsWith("~")) {
                 seen_keys.add(k);
@@ -1516,59 +1918,56 @@ async function exportToExcel() {
             }
         });
 
-        console.log("Total columns:", orderedKeys.length);
         const getName=code=>propertyMap[code]?.name||code;
 
         const wb=new ExcelJS.Workbook(), ws=wb.addWorksheet("ბინები");
-        ws.columns = orderedKeys.map((k, i) => ({
-    header: getName(k) || k,
-    key: k,
-    width: Math.max((getName(k) || k).length + 4, 14)
-}));
+        ws.columns = orderedKeys.map((k) => ({
+            header: getName(k) || k,
+            key: k,
+            width: Math.max((getName(k) || k).length + 4, 14)
+        }));
         const hdr=ws.getRow(1);
         for (let i = 1; i <= orderedKeys.length; i++) {
-    const cell = hdr.getCell(i);
-    cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:"FF1A1A2E"} };
-    cell.font = { bold:true, color:{argb:"FFFFFFFF"}, size:10 };
-    cell.alignment = { vertical:"middle", horizontal:"center", wrapText:true };
-    cell.border = { bottom:{style:"medium", color:{argb:"FF00D4AA"}} };
-}
+            const cell = hdr.getCell(i);
+            cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:"FF1A1A2E"} };
+            cell.font = { bold:true, color:{argb:"FFFFFFFF"}, size:10 };
+            cell.alignment = { vertical:"middle", horizontal:"center", wrapText:true };
+            cell.border = { bottom:{style:"medium", color:{argb:"FF00D4AA"}} };
+        }
         hdr.height=28;
 
         const statusColors={"თავისუფალი":"FF28C7A9","დაჯავშნილი":"FFF9C74F","გაყიდული":"FFE63946","ჯავშნის რიგში":"FFDB2777","NFS":"FF9B59B6"};
         apts.forEach((apt, i) => {
-    const rd = {};
-    orderedKeys.forEach(k => {
-        let v = apt[k];
-        if (v === undefined || v === null) v = "";
-        if (Array.isArray(v)) v = v.join(", ");
-        rd[k] = String(v);
-    });
-    const row = ws.addRow(rd);
-    const bg = i % 2 === 0 ? "FFF7F8FC" : "FFFFFFFF";
-    
-    for (let ci = 1; ci <= orderedKeys.length; ci++) {
-        const cell = row.getCell(ci);
-        cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:bg} };
-        cell.alignment = { vertical:"middle" };
-        cell.font = { size:10 };
-    }
-    
-    const statusCol = orderedKeys.indexOf("_P64GYD") + 1;
-    const sc = statusColors[apt["_P64GYD"]];
-    if (sc && statusCol > 0) {
-        const c = row.getCell(statusCol);
-        c.fill = { type:"pattern", pattern:"solid", fgColor:{argb:sc+"33"} };
-        c.font = { bold:true, size:10 };
-    }
-    row.height = 18;
-});
+            const rd = {};
+            orderedKeys.forEach(k => {
+                let v = apt[k];
+                if (v === undefined || v === null) v = "";
+                if (Array.isArray(v)) v = v.join(", ");
+                rd[k] = String(v);
+            });
+            const row = ws.addRow(rd);
+            const bg = i % 2 === 0 ? "FFF7F8FC" : "FFFFFFFF";
+            for (let ci = 1; ci <= orderedKeys.length; ci++) {
+                const cell = row.getCell(ci);
+                cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:bg} };
+                cell.alignment = { vertical:"middle" };
+                cell.font = { size:10 };
+            }
+            const statusCol = orderedKeys.indexOf("_P64GYD") + 1;
+            const sc = statusColors[apt["_P64GYD"]];
+            if (sc && statusCol > 0) {
+                const c = row.getCell(statusCol);
+                c.fill = { type:"pattern", pattern:"solid", fgColor:{argb:sc+"33"} };
+                c.font = { bold:true, size:10 };
+            }
+            row.height = 18;
+        });
         ws.views=[{state:"frozen",ySplit:1}];
         try {
-    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: orderedKeys.length } };
-} catch(e) {
-    console.warn("AutoFilter skipped:", e.message);
-}
+            ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: orderedKeys.length } };
+        } catch(e) {
+            console.warn("AutoFilter skipped:", e.message);
+        }
         const buf=await wb.xlsx.writeBuffer();
         const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
         const url=URL.createObjectURL(blob);
@@ -1577,6 +1976,261 @@ async function exportToExcel() {
     } catch(err){console.error(err);alert("შეცდომა: "+err.message);}
     finally{btn.textContent="⬇ Excel";btn.disabled=false;}
 }
+</script>
+
+<!-- ═══ RESERVATION POPUP ═══ -->
+<div id="reservationOverlay" style="display:none;position:fixed;inset:0;background:rgba(10,12,20,.55);backdrop-filter:blur(6px);z-index:4000;justify-content:center;align-items:center;">
+<div id="reservationPopup" style="position:relative;width:520px;max-width:95vw;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.22);border:.5px solid #d0d0d0;font-family:'Noto Sans Georgian',sans-serif;">
+
+  <!-- header -->
+  <div style="background:#7db84a;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;">
+    <span style="font-size:14px;font-weight:600;color:#fff;letter-spacing:.01em;">რეზერვაცია</span>
+    <span onclick="closeReservationPopup()" style="cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.85;">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><line x1="2" y1="2" x2="12" y2="12" stroke="#fff" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="2" x2="2" y2="12" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+    </span>
+  </div>
+
+  <!-- body -->
+  <div style="padding:18px;background:#f4f6f8;">
+    <div style="background:#fff;border:.5px solid #e0e0e0;border-radius:10px;padding:18px;">
+
+      <!-- type -->
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ტიპი</label>
+        <select id="resUserSelect" onchange="resToggleFields()" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;background:#fff;color:#333;font-family:'Noto Sans Georgian',sans-serif;">
+          <option value="">აირჩიეთ რეზერვაციის ტიპი</option>
+          <option value="24hr">უფასო</option>
+          <option value="paid">ფასიანი</option>
+        </select>
+      </div>
+
+      <!-- deadline -->
+      <div id="resDateWrap" style="margin-bottom:14px;display:none;">
+        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ვადა</label>
+        <input type="datetime-local" id="resDate" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;background:#f4f6f8;color:#555;cursor:default;" readonly />
+      </div>
+
+      <!-- payment type -->
+      <div id="resPayTypeWrap" style="margin-bottom:14px;display:none;">
+        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> სასურველი გადახდის ტიპი</label>
+        <select id="resPayType" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;background:#fff;color:#333;font-family:'Noto Sans Georgian',sans-serif;">
+          <option value="">აირჩიეთ გადახდის ტიპი</option>
+          <option value="ნაღდი">ნაღდი</option>
+          <option value="ჩარიცხვა">ჩარიცხვა</option>
+          <option value="ტერმინალი">ტერმინალი</option>
+        </select>
+      </div>
+
+      <!-- price -->
+      <div id="resAmountWrap" style="margin-bottom:14px;display:none;">
+        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ფასი</label>
+        <input type="text" id="resAmount" placeholder="0.00" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
+      </div>
+
+      <!-- passport upload -->
+      <div style="margin-bottom:4px;">
+        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;">ატვირთეთ პირადობა ან პასპორტი</label>
+        <input id="resPassportInput" type="file" style="display:none;" onchange="resHandleFile()" />
+        <div id="resDropZone" onclick="document.getElementById('resPassportInput').click()"
+          style="border:1.5px dashed #97c459;border-radius:7px;padding:14px 12px;text-align:center;cursor:pointer;background:#f5fced;transition:background .15s;">
+          <svg width="22" height="22" viewBox="0 0 28 28" fill="none" style="margin:0 auto 6px;display:block;">
+            <rect x="2" y="6" width="24" height="18" rx="3" stroke="#7db84a" stroke-width="1.5" fill="none"/>
+            <path d="M9 6V5a5 5 0 0 1 10 0v1" stroke="#7db84a" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M14 12v6M11 15l3-3 3 3" stroke="#7db84a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p style="margin:0;font-size:12px;color:#3b6d11;font-weight:500;">Click to upload</p>
+          <p style="margin:3px 0 0;font-size:11px;color:#6b7280;">ID card or passport — JPG, PNG, PDF</p>
+        </div>
+        <div id="resFileChosen" style="display:none;margin-top:6px;background:#eaf3de;border:.5px solid #97c459;border-radius:7px;padding:7px 10px;align-items:center;gap:8px;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="10" height="13" rx="2" stroke="#3b6d11" stroke-width="1.2"/><path d="M5 5h5M5 8h5M5 11h3" stroke="#3b6d11" stroke-width="1.2" stroke-linecap="round"/></svg>
+          <span id="resFileName" style="font-size:12px;color:#3b6d11;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="resMsgSuccess" style="display:none;color:#3b6d11;background:#eaf3de;border:.5px solid #97c459;border-radius:7px;text-align:center;padding:8px 14px;margin-top:12px;font-size:13px;">მოთხოვნა გაიგზავნა წარმატებით</div>
+    <div id="resMsgError"   style="display:none;color:#993c1d;background:#faece7;border:.5px solid #f0997b;border-radius:7px;text-align:center;padding:8px 14px;margin-top:12px;font-size:13px;">შეცდომა გაგზავნისას</div>
+    <div id="resMsgWarn"    style="display:none;color:#854f0b;background:#faeeda;border:.5px solid #ef9f27;border-radius:7px;text-align:center;padding:8px 14px;margin-top:12px;font-size:13px;">გთხოვთ შეავსოთ ყველა სავალდებულო ველი</div>
+  </div>
+
+  <!-- footer buttons -->
+  <div id="resFooter" style="display:none;padding:10px 18px;background:#fff;border-top:.5px solid #e0e0e0;justify-content:flex-end;gap:8px;align-items:center;">
+    <span onclick="closeReservationPopup()" style="cursor:pointer;font-size:12px;padding:5px 14px;border-radius:6px;border:1px solid #f0997b;color:#f1361b;line-height:22px;">გაუქმება</span>
+    <span id="sendButton" style="cursor:pointer;font-size:12px;padding:5px 14px;border-radius:6px;background:#7db84a;color:#fff;font-weight:500;line-height:22px;border:none;">გაგზავნა</span>
+  </div>
+</div>
+</div>
+
+<canvas id="confettiCanvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10001;display:none;"></canvas>
+
+<script>
+// ── Reservation popup helpers ──
+function showReservationPopup() {
+    document.getElementById("resUserSelect").value = "";
+    document.getElementById("resDateWrap").style.display    = "none";
+    document.getElementById("resPayTypeWrap").style.display = "none";
+    document.getElementById("resAmountWrap").style.display  = "none";
+    document.getElementById("resFooter").style.display      = "none";
+    document.getElementById("resMsgSuccess").style.display  = "none";
+    document.getElementById("resMsgError").style.display    = "none";
+    document.getElementById("resMsgWarn").style.display     = "none";
+    document.getElementById("resDropZone").style.display    = "";
+    document.getElementById("resFileChosen").style.display  = "none";
+    document.getElementById("resFileName").textContent      = "";
+    document.getElementById("resPassportInput").value       = "";
+    if (document.getElementById("resAmount")) document.getElementById("resAmount").value = "";
+
+    const overlay = document.getElementById("reservationOverlay");
+    overlay.style.display = "flex";
+    requestAnimationFrame(() => { overlay.style.opacity = "0"; requestAnimationFrame(() => { overlay.style.transition = "opacity .25s"; overlay.style.opacity = "1"; }); });
+}
+
+function closeReservationPopup() {
+    const overlay = document.getElementById("reservationOverlay");
+    overlay.style.opacity = "0";
+    setTimeout(() => { overlay.style.display = "none"; location.reload(); }, 250);
+}
+
+function resAddWorkingDays(date, days) {
+    var r = new Date(date), added = 0;
+    while (added < days) { r.setDate(r.getDate()+1); var d=r.getDay(); if(d!==0&&d!==6) added++; }
+    return r;
+}
+function resToDatetimeLocal(date) {
+    var p = n => String(n).padStart(2,"0");
+    return date.getFullYear()+"-"+p(date.getMonth()+1)+"-"+p(date.getDate())+"T"+p(date.getHours())+":"+p(date.getMinutes());
+}
+
+function resToggleFields() {
+    var choice = document.getElementById("resUserSelect").value;
+    var now    = new Date();
+    document.getElementById("resDateWrap").style.display    = "none";
+    document.getElementById("resPayTypeWrap").style.display = "none";
+    document.getElementById("resAmountWrap").style.display  = "none";
+    document.getElementById("resFooter").style.display      = "none";
+
+    if (choice === "24hr") {
+        document.getElementById("resDate").value = resToDatetimeLocal(new Date(now.getTime() + 24*60*60*1000));
+        document.getElementById("resDateWrap").style.display = "block";
+        document.getElementById("resFooter").style.display   = "flex";
+    }
+    if (choice === "paid") {
+        var dl = resAddWorkingDays(now, 10);
+        dl.setHours(now.getHours(), now.getMinutes());
+        document.getElementById("resDate").value = resToDatetimeLocal(dl);
+        document.getElementById("resDateWrap").style.display    = "block";
+        document.getElementById("resPayTypeWrap").style.display = "block";
+        document.getElementById("resAmountWrap").style.display  = "block";
+        document.getElementById("resFooter").style.display      = "flex";
+    }
+}
+
+function resHandleFile() {
+    var inp  = document.getElementById("resPassportInput");
+    var file = inp.files[0];
+    if (!file) return;
+    document.getElementById("resFileName").textContent    = file.name;
+    document.getElementById("resDropZone").style.display  = "none";
+    document.getElementById("resFileChosen").style.display = "flex";
+}
+
+(function() {
+    var dz = document.getElementById("resDropZone");
+    if (!dz) return;
+    dz.addEventListener("dragover",  e => { e.preventDefault(); dz.style.background="#dff0c8"; });
+    dz.addEventListener("dragleave", () => { dz.style.background="#f5fced"; });
+    dz.addEventListener("drop", e => {
+        e.preventDefault(); dz.style.background="#f5fced";
+        var file = e.dataTransfer.files[0]; if (!file) return;
+        var inp = document.getElementById("resPassportInput");
+        var dt  = new DataTransfer(); dt.items.add(file); inp.files = dt.files;
+        resHandleFile();
+    });
+})();
+
+function submitReservation() {
+    var type    = document.getElementById("resUserSelect").value;
+    var date    = document.getElementById("resDate").value;
+    var payType = document.getElementById("resPayType")?.value || "";
+    var amount  = document.getElementById("resAmount")?.value  || "";
+    var fileInp = document.getElementById("resPassportInput");
+
+    if (!type || !date) { showResMsg("warn"); return; }
+    if (type === "paid" && (!payType || !amount)) { showResMsg("warn"); return; }
+
+    var formData = new FormData();
+    formData.append("deal_id",          dealID);
+    formData.append("userSelect",       type);
+    formData.append("reserveDate",      date);
+    formData.append("reservationPrice", amount);
+    formData.append("paymentType",      payType);
+    formData.append("passport",         fileInp.files[0]);
+
+    var btn = document.getElementById("sendButton");
+    btn.style.opacity = ".6"; btn.style.pointerEvents = "none";
+
+    fetch("/rest/local/api/projects/saveReservation.php", { method: "POST", body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 200) {
+                showResMsg("success");
+                launchConfetti();
+                setTimeout(closeReservationPopup, 2200);
+            } else {
+                showResMsg("error");
+                btn.style.opacity = "1"; btn.style.pointerEvents = "";
+            }
+        })
+        .catch(() => {
+            showResMsg("error");
+            btn.style.opacity = "1"; btn.style.pointerEvents = "";
+        });
+}
+
+function showResMsg(type) {
+    ["resMsgSuccess","resMsgError","resMsgWarn"].forEach(id => document.getElementById(id).style.display="none");
+    var map = { success:"resMsgSuccess", error:"resMsgError", warn:"resMsgWarn" };
+    if (map[type]) document.getElementById(map[type]).style.display="block";
+}
+
+function launchConfetti() {
+    var canvas = document.getElementById("confettiCanvas");
+    canvas.style.display = "block";
+    var ctx    = canvas.getContext("2d");
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    var pieces = Array.from({length:120}, () => ({
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height - canvas.height,
+        r: Math.random()*6+3,
+        d: Math.random()*120,
+        color: ["#7db84a","#3b5bdb","#ffd43b","#f03e3e","#ae3ec9","#1c7ed6"][Math.floor(Math.random()*6)],
+        tilt: Math.random()*10-10,
+        tiltSpeed: Math.random()*.07+.05,
+        angle: 0, speed: Math.random()*2+1
+    }));
+    var frame = 0;
+    function draw() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        pieces.forEach(p => {
+            p.angle += p.tiltSpeed; p.y += p.speed; p.x += Math.sin(p.angle)*2;
+            p.tilt = Math.sin(p.angle-frame/3)*12;
+            ctx.beginPath(); ctx.lineWidth=p.r; ctx.strokeStyle=p.color;
+            ctx.moveTo(p.x+p.tilt+p.r/3, p.y);
+            ctx.lineTo(p.x+p.tilt, p.y+p.tilt+p.r/5);
+            ctx.stroke();
+            if (p.y > canvas.height) { p.y=-10; p.x=Math.random()*canvas.width; }
+        });
+        frame++;
+        if (frame < 140) requestAnimationFrame(draw);
+        else { ctx.clearRect(0,0,canvas.width,canvas.height); canvas.style.display="none"; }
+    }
+    draw();
+}
+
+document.getElementById("reservationOverlay").addEventListener("click", function(e) {
+    if (e.target === this) closeReservationPopup();
+});
 </script>
 </body>
 </html>
