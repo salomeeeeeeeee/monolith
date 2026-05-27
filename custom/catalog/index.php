@@ -19,6 +19,8 @@ define('F_TYPE',       '__X1GCRZ');
 define('F_PRICE_USD',  '__9YCWGZ');
 define('F_KVM_USD',    '__6ZWTER');
 define('F_SALE',       '_UQIM2I');  
+define('F_CADASTRAL',      '__51MODL');
+
 
 // ------------------------------ FUNCTIONS ------------------------------
 function getNBG($date) {
@@ -645,6 +647,8 @@ const F_TYPE       = '__X1GCRZ';
 const F_PRICE_USD  = '__9YCWGZ';
 const F_KVM_USD    = '__6ZWTER';
 const F_SALE =       '_UQIM2I';
+const F_CADASTRAL =       '__51MODL';
+
 
 // ── Runtime state ──
 let openedOnDeal    = Array.isArray(deal) && deal.length > 0;
@@ -768,6 +772,8 @@ projectSelect.addEventListener("change", function() {
     "__X1GCRZ":  "უძრავი ქონების ტიპი",
     "_D599QA":   "სადარბაზო",
     "_FTRIDL":   "სართული",
+ "__51MODL":   "საკადასტრო კოდი",
+
     "__6KWOWZ":  "უძრავი ქონების №",
     "__173JA5":  "სრული ფართი",
     "__US58ND":  "შიდა ფართი",
