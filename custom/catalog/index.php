@@ -315,7 +315,7 @@ ob_end_clean();
             overflow-x:auto; overflow-y:auto; max-width:94%;
             padding:4px 12px 4px 4px; transition:max-width .3s;
         }
-        #apsDisplay::-webkit-scrollbar { height:5px; }
+        #apsDisplay::-webkit-scrollbar { height:15px; }
         #apsDisplay::-webkit-scrollbar-track { background:var(--bg3); border-radius:3px; }
         #apsDisplay::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
         #apsDisplay::-webkit-scrollbar-thumb:hover { background:var(--accent); }
@@ -341,7 +341,7 @@ ob_end_clean();
             overflow-x: auto;
             padding-bottom: 6px;
         }
-        .sector-grid-wrapper::-webkit-scrollbar { height:5px; }
+        .sector-grid-wrapper::-webkit-scrollbar { height:15px; }
         .sector-grid-wrapper::-webkit-scrollbar-track { background:var(--bg3); border-radius:3px; }
         .sector-grid-wrapper::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
 
