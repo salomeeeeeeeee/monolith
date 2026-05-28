@@ -1138,60 +1138,54 @@ function renderByBlocks(allProducts, selectedBlocks, container) {
 //  RENDER: SECTOR MODE
 // ══════════════════════════════════════════
 function renderBySectors(allProducts, selectedBlocks, container) {
-    const seenIds   = new Set();
-    const products  = allProducts.filter(p => {
+    const seenIds  = new Set();
+    const products = allProducts.filter(p => {
         if (seenIds.has(p["ID"])) return false;
-        seenIds.add(p["ID"]);
-        return true;
+        seenIds.add(p["ID"]); return true;
     });
 
-    const apartments      = [];
-    const nonAptBySector  = {};
-    const blockPList      = [];
+    const apartments     = [];
+    const nonAptBySector = {}; // [sector][block][floor] = [items]
+    const blockPList     = [];
 
     products.forEach(apt => {
-        const pt  = apt["__X1GCRZ"] || apt[F_TYPE] || "";
-        const b   = apt[F_BLOCK]    || apt["_L24CUB"]  || "";
-        const sec = apt[F_SECTOR]   || apt["_3BU0JH"]  || "–";
+        const pt    = apt["__X1GCRZ"] || apt[F_TYPE]   || "";
+        const b     = apt[F_BLOCK]    || apt["_L24CUB"] || "";
+        const sec   = apt[F_SECTOR]   || apt["_3BU0JH"] || "–";
+        const floor = String(apt["FLOOR"] || apt[F_FLOOR] || "0");
 
         if (pt === "ავტოსადგომი" || pt === "დამხმარე") {
             if (b === "P") { blockPList.push(apt); return; }
-            if (!nonAptBySector[sec])       nonAptBySector[sec]     = {};
-            if (!nonAptBySector[sec][b])    nonAptBySector[sec][b]  = [];
-            nonAptBySector[sec][b].push(apt);
+            if (!nonAptBySector[sec])           nonAptBySector[sec]           = {};
+            if (!nonAptBySector[sec][b])         nonAptBySector[sec][b]        = {};
+            if (!nonAptBySector[sec][b][floor])  nonAptBySector[sec][b][floor] = [];
+            nonAptBySector[sec][b][floor].push(apt);
         } else {
             apartments.push(apt);
         }
     });
 
+    // sectorMap[sector][block][floor] = [apt, ...]
     const sectorMap = {};
     apartments.forEach(apt => {
         const sec   = apt[F_SECTOR] || apt["_3BU0JH"] || "–";
         const block = apt[F_BLOCK]  || apt["_L24CUB"]  || "–";
         const floor = parseInt(apt["FLOOR"] || apt[F_FLOOR] || 0);
-        if (!sectorMap[sec]) sectorMap[sec] = {};
-        if (!sectorMap[sec][block]) sectorMap[sec][block] = {};
+        if (!sectorMap[sec])              sectorMap[sec]               = {};
+        if (!sectorMap[sec][block])        sectorMap[sec][block]        = {};
         if (!sectorMap[sec][block][floor]) sectorMap[sec][block][floor] = [];
         sectorMap[sec][block][floor].push(apt);
     });
 
-    const allFloors = [...new Set(apartments.map(a =>
-        parseInt(a["FLOOR"] || a[F_FLOOR] || 0)
-    ))].sort((a, b) => b - a);
+    const allFloors = [...new Set(
+        apartments.map(a => parseInt(a["FLOOR"] || a[F_FLOOR] || 0))
+    )].sort((a, b) => b - a);
 
-    const TILE_STEP = 34;
-    const MAX_TILES_PER_ROW = 10;
-    const blockWidths = {};
-    Object.values(sectorMap).forEach(blocks => {
-        Object.entries(blocks).forEach(([block, floors]) => {
-            let maxInRow = 0;
-            Object.values(floors).forEach(fa => {
-                const rowTiles = Math.min(fa.length, MAX_TILES_PER_ROW);
-                if (rowTiles > maxInRow) maxInRow = rowTiles;
-            });
-            blockWidths[block] = Math.max(maxInRow * TILE_STEP, 68);
-        });
-    });
+    // Fixed column width — tiles wrap inside, column never grows horizontally
+    const MAX_PER_ROW = 8;
+    const TILE_W      = 30;
+    const TILE_GAP    = 4;
+    const COL_W       = MAX_PER_ROW * TILE_W + (MAX_PER_ROW - 1) * TILE_GAP; // 268px
 
     const floorsContainer = document.getElementById("floors");
     floorsContainer.innerHTML = "";
@@ -1200,11 +1194,73 @@ function renderBySectors(allProducts, selectedBlocks, container) {
     const sectorsWrapper = document.createElement("div");
     sectorsWrapper.className = "sector-grid-wrapper";
 
-    const sectorNames = Object.keys(sectorMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    const sectorNames = Object.keys(sectorMap).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+    );
+
+    // ── helpers ───────────────────────────────────────────────────────
+
+    function makeHeaderRow(activeBlocks, col) {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;flex-direction:row;align-items:stretch;margin-bottom:3px;";
+        const sp = document.createElement("div");
+        sp.style.cssText = "width:36px;min-width:36px;flex-shrink:0;";
+        row.appendChild(sp);
+        activeBlocks.forEach((blockName, bi) => {
+            const cell = document.createElement("div");
+            cell.className = "sector-block-label";
+            cell.style.cssText = `width:${COL_W}px;flex-shrink:0;border-bottom-color:${col.border};${bi < activeBlocks.length - 1 ? "margin-right:8px;" : ""}`;
+            cell.textContent = blockName;
+            row.appendChild(cell);
+        });
+        return row;
+    }
+
+    function makeFloorBand(floorNum, activeBlocks, dataByBlock, accentColor, tilePrefix) {
+        const band = document.createElement("div");
+        band.style.cssText = "display:flex;flex-direction:row;align-items:stretch;margin-bottom:3px;";
+
+        const numEl = document.createElement("div");
+        numEl.style.cssText = `
+            font-family:var(--mono);font-size:10px;font-weight:700;
+            color:var(--text2);
+            width:28px;min-width:28px;flex-shrink:0;
+            display:flex;align-items:center;justify-content:flex-end;
+            padding-right:6px;
+            border-right:2px solid ${accentColor};
+            margin-right:8px;
+        `;
+        numEl.textContent = floorNum;
+        band.appendChild(numEl);
+
+        activeBlocks.forEach((blockName, bi) => {
+            const cell = document.createElement("div");
+            cell.style.cssText = `
+                display:flex;flex-direction:row;flex-wrap:wrap;
+                gap:${TILE_GAP}px;align-items:flex-start;align-content:flex-start;
+                width:${COL_W}px;min-height:${TILE_W}px;flex-shrink:0;
+                ${bi < activeBlocks.length - 1 ? "margin-right:8px;" : ""}
+            `;
+            const items = (dataByBlock[blockName] || {})[floorNum] || [];
+            if (items.length > 0) {
+                items.forEach(apt => cell.appendChild(makeAptTile(apt, tilePrefix || "")));
+            } else {
+                const ph = document.createElement("div");
+                ph.style.cssText = `width:${COL_W}px;height:${TILE_W}px;`;
+                cell.appendChild(ph);
+            }
+            band.appendChild(cell);
+        });
+
+        return band;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
 
     sectorNames.forEach((sectorName, si) => {
         const col = SECTOR_COLORS[si % SECTOR_COLORS.length];
-        const blocksInSector = Object.keys(sectorMap[sectorName]).sort((a, b) => {
+
+        const blocksInSector = Object.keys(sectorMap[sectorName] || {}).sort((a, b) => {
             const na = parseInt(a.match(/\d+/)?.[0] ?? "9999");
             const nb = parseInt(b.match(/\d+/)?.[0] ?? "9999");
             return na !== nb ? na - nb : a.localeCompare(b);
@@ -1225,103 +1281,75 @@ function renderBySectors(allProducts, selectedBlocks, container) {
         sectorLbl.textContent = "სექტ. " + sectorName;
         sectorEl.appendChild(sectorLbl);
 
-        const blocksRow = document.createElement("div");
-        blocksRow.className = "sector-blocks-row";
-
-        if (si === 0) {
-            const floorLabelCol = document.createElement("div");
-            floorLabelCol.className = "sector-block-col";
-            floorLabelCol.style.cssText = "width:28px;flex-shrink:0;";
-
-            const lblSpacer = document.createElement("div");
-            lblSpacer.style.cssText = "height:33px;margin-bottom:4px;";
-            floorLabelCol.appendChild(lblSpacer);
-
-            allFloors.forEach(floorNum => {
-                const floorLbl = document.createElement("div");
-                floorLbl.className = "sector-inline-floor-label";
-                floorLbl.textContent = floorNum;
-                floorLbl.dataset.floor = floorNum;
-                floorLabelCol.appendChild(floorLbl);
-            });
-
-            blocksRow.appendChild(floorLabelCol);
-        }
-
-        activeBlocks.forEach((blockName, blockIdx) => {
-            const bw = blockWidths[blockName] || 68;
-            const blockCol = document.createElement("div");
-            blockCol.className = "sector-block-col";
-            blockCol.style.width = bw + "px";
-
-            const blkLbl = document.createElement("div");
-            blkLbl.className = "sector-block-label";
-            blkLbl.style.borderBottomColor = col.border;
-            blkLbl.textContent = blockName;
-            blockCol.appendChild(blkLbl);
-
-            allFloors.forEach(floorNum => {
-                const floorRow = document.createElement("div");
-                floorRow.className = "sector-floor-row";
-                floorRow.dataset.sectorFloor = `${sectorName}-${floorNum}`;
-
-                const aptsOnFloor = (sectorMap[sectorName][blockName] || {})[floorNum] || [];
-                if (aptsOnFloor.length > 0) {
-                    aptsOnFloor.forEach(apt => floorRow.appendChild(makeAptTile(apt)));
-                } else {
-                    const ph = document.createElement("div");
-                    ph.style.cssText = `height:30px;width:${bw}px;`;
-                    floorRow.appendChild(ph);
-                }
-
-                blockCol.appendChild(floorRow);
-            });
-
-            const nonAptItems = (nonAptBySector[sectorName] || {})[blockName] || [];
-            if (nonAptItems.length > 0) {
-                const byType = {};
-                nonAptItems.forEach(item => {
-                    const t = item["__X1GCRZ"] || item[F_TYPE] || "სხვა";
-                    if (!byType[t]) byType[t] = [];
-                    byType[t].push(item);
-                });
-                Object.entries(byType).forEach(([typeName, items]) => {
-                    const pSep = document.createElement("div");
-                    pSep.style.cssText = `margin-top:6px;border-top:1px dashed ${col.border};padding-top:5px;`;
-                    const pLbl = document.createElement("div");
-                    pLbl.style.cssText = "font-size:9px;color:var(--text3);text-align:center;margin-bottom:4px;font-family:var(--mono);font-weight:700;letter-spacing:.5px;text-transform:uppercase;";
-                    pLbl.textContent = typeName === "ავტოსადგომი" ? "P/S" : typeName === "დამხმარე" ? "დამხმარე" : typeName;
-                    pSep.appendChild(pLbl);
-                    const pWrap = document.createElement("div");
-                    pWrap.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;";
-                    items.forEach(item => pWrap.appendChild(makeAptTile(item, typeName === "ავტოსადგომი" ? "P" : typeName === "დამხმარე" ? "S" : "")));
-                    pSep.appendChild(pWrap);
-                    blockCol.appendChild(pSep);
-                });
-            }
-
-            blocksRow.appendChild(blockCol);
+        // ── Apartments ────────────────────────────────────────────────
+        sectorEl.appendChild(makeHeaderRow(activeBlocks, col));
+        allFloors.forEach(floorNum => {
+            sectorEl.appendChild(makeFloorBand(
+                floorNum,
+                activeBlocks,
+                sectorMap[sectorName],
+                "var(--accent)",
+                ""
+            ));
         });
 
-        sectorEl.appendChild(blocksRow);
+        // ── Non-apartment types (parking, storage…) ───────────────────
+        const typeMap = {}; // typeMap[typeName][block][floor] = [items]
+        activeBlocks.forEach(blockName => {
+            const blockFloors = (nonAptBySector[sectorName] || {})[blockName] || {};
+            Object.entries(blockFloors).forEach(([floor, items]) => {
+                items.forEach(item => {
+                    const typeName = item["__X1GCRZ"] || item[F_TYPE] || "სხვა";
+                    if (!typeMap[typeName])                    typeMap[typeName]                    = {};
+                    if (!typeMap[typeName][blockName])          typeMap[typeName][blockName]         = {};
+                    if (!typeMap[typeName][blockName][floor])   typeMap[typeName][blockName][floor]  = [];
+                    typeMap[typeName][blockName][floor].push(item);
+                });
+            });
+        });
+
+        Object.entries(typeMap).forEach(([typeName, blockData]) => {
+            const isPark  = typeName === "ავტოსადგომი";
+            const isStore = typeName === "დამხმარე";
+            const prefix  = isPark ? "P" : isStore ? "S" : "";
+            const accent  = isPark ? "var(--purple)" : isStore ? "var(--amber)" : "var(--text3)";
+            const label   = isPark ? "ავტოსადგომი / P/S" : isStore ? "დამხმარე" : typeName;
+
+            const typeFloors = [...new Set(
+                activeBlocks.flatMap(b => Object.keys(blockData[b] || {}))
+            )].sort((a, b) => parseInt(b) - parseInt(a));
+
+            if (typeFloors.length === 0) return;
+
+            const sep = document.createElement("div");
+            sep.style.cssText = `margin-top:8px;padding-top:6px;border-top:1px dashed ${col.border};`;
+
+            const sepLbl = document.createElement("div");
+            sepLbl.style.cssText = "font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text3);margin-bottom:4px;font-family:var(--mono);";
+            sepLbl.textContent = label;
+            sep.appendChild(sepLbl);
+
+            sep.appendChild(makeHeaderRow(activeBlocks, col));
+
+            typeFloors.forEach(floorNum => {
+                sep.appendChild(makeFloorBand(
+                    floorNum,
+                    activeBlocks,
+                    blockData,
+                    accent,
+                    prefix
+                ));
+            });
+
+            sectorEl.appendChild(sep);
+        });
+
         sectorsWrapper.appendChild(sectorEl);
     });
 
     container.appendChild(sectorsWrapper);
 
-    requestAnimationFrame(() => {
-        const firstSector = sectorNames[0];
-        if (!firstSector) return;
-
-        allFloors.forEach(floorNum => {
-            const anyRow = container.querySelector(`.sector-floor-row[data-sector-floor="${firstSector}-${floorNum}"]`);
-            const lbl    = container.querySelector(`.sector-inline-floor-label[data-floor="${floorNum}"]`);
-            if (anyRow && lbl) {
-                lbl.style.height = anyRow.offsetHeight + "px";
-            }
-        });
-    });
-
+    // ── Outdoor parking (Block P) ─────────────────────────────────────
     const outdoorEl = document.getElementById("gareAvtosadgomebi");
     outdoorEl.innerHTML = "";
     if (selectedBlocks.includes("P") && blockPList.length > 0) {
@@ -1338,7 +1366,6 @@ function renderBySectors(allProducts, selectedBlocks, container) {
         outdoorEl.appendChild(wrap);
     }
 }
-
 // ══════════════════════════════════════════
 //  APT TILE FACTORY
 // ══════════════════════════════════════════
