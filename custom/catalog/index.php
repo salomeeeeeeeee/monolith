@@ -1663,23 +1663,45 @@ function renderBlockSections(apt) {
     container.innerHTML = "";
     const sc = aptCls(apt["_P64GYD"]||"");
 
+    // Build the "already shown" set up front, before any section is rendered
+    const shown = new Set([
+        ...MAIN_CODES,
+        ...IMAGE_CODES,
+        ...SKIP_CODES,
+        // Field code constants (the raw property keys like _FTRIDL, __6KWOWZ, etc.)
+        F_BLOCK, F_FLOOR, F_NUMBER, F_TOTAL_AREA, F_TYPE, F_SALE, F_CADASTRAL, F_SECTOR,
+        // Alias keys added by PHP/JS that duplicate the above
+        "Number", "FLOOR", "TOTAL_AREA",
+        "__X1GCRZ", "_L24CUB", "_3BU0JH",
+        // Price keys rendered in the price section
+        "__9YCWGZ",
+        "PRICE", "PRICE_GEL",
+    ]);
+
     const keyFields = MAIN_CODES
-        .filter(code => apt[code]!==undefined&&apt[code]!==null&&apt[code]!=="")
-        .map(code  => ({ code, name:propertyMap[code]?.name||code, main:["_P64GYD","Number","TOTAL_AREA"].includes(code) }));
-    if (keyFields.length>0) appendSection(container,"ძირითადი ინფორმაცია",keyFields,apt,sc);
+        .filter(code => apt[code] !== undefined && apt[code] !== null && apt[code] !== "")
+        .map(code => ({ code, name: propertyMap[code]?.name || code, main: ["_P64GYD","Number","TOTAL_AREA"].includes(code) }));
+    if (keyFields.length > 0) appendSection(container, "ძირითადი ინფორმაცია", keyFields, apt, sc);
 
-    const imgFields = Object.keys(apt).filter(code=>IMAGE_CODES.has(code)&&apt[code]);
-    if (imgFields.length>0) appendImageSection(container,imgFields,apt);
+    const imgFields = Object.keys(apt).filter(code => IMAGE_CODES.has(code) && apt[code]);
+    if (imgFields.length > 0) appendImageSection(container, imgFields, apt);
 
-    appendPriceSection(container,apt);
+    appendPriceSection(container, apt);
 
-    const shown = new Set([...MAIN_CODES,...IMAGE_CODES,...SKIP_CODES]);
-    const rest  = Object.keys(apt)
-        .filter(code => !shown.has(code)&&!code.startsWith("~")&&apt[code]!==undefined&&apt[code]!==null&&apt[code]!=="")
-        .map(code  => ({ code, name:propertyMap[code]?.name||code, main:false }));
-    if (rest.length>0) appendSection(container,"დეტალური ინფორმაცია",rest,apt,"");
+    // Now filter rest — nothing already shown can leak through
+    const rest = Object.keys(apt)
+        .filter(code =>
+            !shown.has(code) &&
+            !code.startsWith("~") &&
+            apt[code] !== undefined &&
+            apt[code] !== null &&
+            apt[code] !== ""
+        )
+        .map(code => ({ code, name: propertyMap[code]?.name || code, main: false }));
 
-    appendLinksSection(container,apt);
+    if (rest.length > 0) appendSection(container, "დეტალური ინფორმაცია", rest, apt, "");
+
+    appendLinksSection(container, apt);
 }
 
 function appendSection(container, title, fields, apt, statusClass) {
