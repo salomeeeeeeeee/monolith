@@ -961,3 +961,37 @@ if (!empty($htmlEditorConfigs))
 		}
 	);
 </script>
+
+<script>
+BX.ready(function() {
+    setInterval(function() {
+        document.querySelectorAll('.crm-timeline__card').forEach(card => {
+            let textBlock = card.querySelector('.crm-timeline__editable-text_text');
+
+            if (textBlock && textBlock.innerText.includes("სისტემური კომენტარი:")) {
+                let actionBlock = card.querySelector('.crm-timeline__card-action');
+                let actionBlock2 = card.querySelector('.crm-timeline__editable-text_edit-icon');
+                
+                if (actionBlock) {
+                    actionBlock.style.display = "none";
+                }
+                if (actionBlock2) {
+                    actionBlock2.style.display = "none";
+                }
+            }
+        });
+    }, 500);
+});
+
+
+BX.ready(function() {
+    setInterval(function() {
+        const el = document.querySelector("[data-cid='OPPORTUNITY_WITH_CURRENCY']");
+        if (el) {
+            el.style.pointerEvents = "none";
+            el.style.userSelect = "none";
+        }
+    }, 500);
+});
+
+</script>

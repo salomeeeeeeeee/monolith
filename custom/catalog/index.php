@@ -16,7 +16,7 @@ define('F_FLOOR',      '_FTRIDL');
 define('F_NUMBER',     '__6KWOWZ');
 define('F_TOTAL_AREA', '__173JA5');
 define('F_TYPE',       '__X1GCRZ');
-define('F_PRICE_USD',  '__9YCWGZ');
+define('F_PRICE_USD',  'PRICE');
 define('F_KVM_USD',    '__6ZWTER');
 define('F_SALE',       '_UQIM2I');
 define('F_CADASTRAL',  '__51MODL');
@@ -737,7 +737,7 @@ const F_FLOOR      = '_FTRIDL';
 const F_NUMBER     = '__6KWOWZ';
 const F_TOTAL_AREA = '__173JA5';
 const F_TYPE       = '__X1GCRZ';
-const F_PRICE_USD  = '__9YCWGZ';
+const F_PRICE_USD  = 'PRICE';
 const F_KVM_USD    = '__6ZWTER';
 const F_SALE       = '_UQIM2I';
 const F_CADASTRAL  = '__51MODL';
@@ -764,7 +764,7 @@ const SKIP_CODES = new Set([
     "erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo",
     "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME","DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","QUEUE",
     "PRICE","PRICE_GEL",
-    "_P64GYD","Number","FLOOR","TOTAL_AREA","__X1GCRZ","_L24CUB",
+    "_P64GYD","Number","FLOOR","__X1GCRZ","_L24CUB",
 ]);
 
 const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA"];
@@ -1609,6 +1609,9 @@ function updateDropdownHeader(id,def){const v=getCheckboxValues(id);document.que
 // ══════════════════════════════════════════
 //  POPUP
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+//  POPUP
+// ══════════════════════════════════════════
 let currentlyActiveApt = null;
 document.addEventListener("click", e => {
     const apt = e.target.closest(".apt");
@@ -1658,40 +1661,92 @@ function openPopup(aptId, fromBox=false) {
     document.getElementById("toggleDetailsBtn").textContent = "► დამატებითი დეტალები";
 }
 
+// ── Grouped field definitions ──
+const POPUP_GROUPS = [
+    {
+        title: "ძირითადი ინფორმაცია",
+        icon: `<svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="#00d4aa" stroke-width="1.2"/><line x1="4.5" y1="5" x2="11.5" y2="5" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/><line x1="4.5" y1="7.5" x2="11.5" y2="7.5" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/><line x1="4.5" y1="10" x2="8.5" y2="10" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/></svg>`,
+        codes: ["_P64GYD", "Number", "__X1GCRZ", "_L24CUB", "_3BU0JH", "_FTRIDL", "_D599QA", "__51MODL", "__VO9RG4", "__6ZWTER"],
+        mainCodes: ["_P64GYD", "Number", "__X1GCRZ"],
+    },
+    {
+        title: "ფართობები",
+        icon: `<svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="13" height="13" rx="1.5" stroke="#00d4aa" stroke-width="1.2"/><path d="M1.5 6h13M6 1.5v13" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/></svg>`,
+        codes: ["__173JA5", "__US58ND", "__BL1XXK", "_1_7CGWZ9", "_2_I5WZ38", "__J9TMOP"],
+    },
+    {
+        title: "ოთახები",
+        icon: `<svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="10" rx="1.5" stroke="#00d4aa" stroke-width="1.2"/><path d="M1.5 8h13M8 3.5v10" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/></svg>`,
+        codes: ["__WX6YWZ", "__KYRP1L", "_1_UJ6WRQ", "_2_UH0KQR", "_3_4Y50I1", "__Z60OKH", "__J33KT8"],
+    },
+    {
+        title: "სველი წერტილები",
+        icon: `<svg viewBox="0 0 16 16" fill="none"><path d="M8 2C6 5 3 7 3 10a5 5 0 0 0 10 0c0-3-3-5-5-8z" stroke="#00d4aa" stroke-width="1.2" fill="none"/></svg>`,
+        codes: ["__9H8XS9", "_1_8M61S3", "_2_LK1VJB"],
+    },
+    {
+        title: "პროექტი / სხვა",
+        icon: `<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#00d4aa" stroke-width="1.2"/><path d="M8 5v3l2 2" stroke="#00d4aa" stroke-width="1.1" stroke-linecap="round"/></svg>`,
+        codes: ["__THLWP9", "_UQIM2I"],
+    },
+];
+
 function renderBlockSections(apt) {
     const container = document.getElementById("popupBlockSections");
     container.innerHTML = "";
-    const sc = aptCls(apt["_P64GYD"]||"");
 
-    // Build the "already shown" set up front, before any section is rendered
-    const shown = new Set([
-        ...MAIN_CODES,
-        ...IMAGE_CODES,
-        ...SKIP_CODES,
-        // Field code constants (the raw property keys like _FTRIDL, __6KWOWZ, etc.)
-        F_BLOCK, F_FLOOR, F_NUMBER, F_TOTAL_AREA, F_TYPE, F_SALE, F_CADASTRAL, F_SECTOR,
-        // Alias keys added by PHP/JS that duplicate the above
-        "Number", "FLOOR", "TOTAL_AREA",
-        "__X1GCRZ", "_L24CUB", "_3BU0JH",
-        // Price keys rendered in the price section
-        "__9YCWGZ",
-        "PRICE", "PRICE_GEL",
-    ]);
+    const shownCodes = new Set([
+        "ID","NAME","~ID","~NAME","IBLOCK_ID","~IBLOCK_ID","IBLOCK_SECTION_ID","~IBLOCK_SECTION_ID",
+        "IBLOCK_ELEMENT_ID","PREVIEW_PICTURE","DETAIL_PICTURE","~DETAIL_PICTURE","MORE_PHOTO",
+        "image","image2","image3","image4","image5",
+        "binis_gegmareba","render_3D","sartulis2D","binisNaxazi2D",
+        "erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo",
+        "PRICE","PRICE_GEL",
+        F_BLOCK, F_FLOOR, F_NUMBER, F_TYPE, F_SALE, F_CADASTRAL, F_SECTOR,
+        "Number","FLOOR","TOTAL_AREA","__X1GCRZ","_L24CUB","_3BU0JH","__6ZWTER","__9YCWGZ",
+        "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME",
+        "DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","OWNER_PERSONAL_CONTACT","QUEUE",
+        ]);
 
-    const keyFields = MAIN_CODES
-        .filter(code => apt[code] !== undefined && apt[code] !== null && apt[code] !== "")
-        .map(code => ({ code, name: propertyMap[code]?.name || code, main: ["_P64GYD","Number","TOTAL_AREA"].includes(code) }));
-    if (keyFields.length > 0) appendSection(container, "ძირითადი ინფორმაცია", keyFields, apt, sc);
-
-    const imgFields = Object.keys(apt).filter(code => IMAGE_CODES.has(code) && apt[code]);
-    if (imgFields.length > 0) appendImageSection(container, imgFields, apt);
-
+    // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
+    shownCodes.add("PRICE"); shownCodes.add("PRICE_GEL");
 
-    // Now filter rest — nothing already shown can leak through
-    const rest = Object.keys(apt)
+    // ── 2. Grouped sections ───────────────────────────────────────────
+    POPUP_GROUPS.forEach(group => {
+        const fields = group.codes
+            .filter(code =>
+                !shownCodes.has(code) &&
+                apt[code] !== undefined &&
+                apt[code] !== null &&
+                apt[code] !== ""
+            )
+            .map(code => ({
+                code,
+                name: propertyMap[code]?.name || code,
+                main: (group.mainCodes || []).includes(code),
+            }));
+
+        if (fields.length === 0) return;
+
+        const sc = aptCls(apt["_P64GYD"] || "");
+        appendSectionWithIcon(container, group.title, group.icon, fields, apt, sc);
+        fields.forEach(f => shownCodes.add(f.code));
+    });
+
+    // ── 3. Images ─────────────────────────────────────────────────────
+    const imgFields = Object.keys(apt).filter(
+        code => IMAGE_CODES.has(code) && apt[code] && !shownCodes.has(code)
+    );
+    if (imgFields.length > 0) {
+        appendImageSection(container, imgFields, apt);
+        imgFields.forEach(c => shownCodes.add(c));
+    }
+
+    // ── 4. Remainder + links merged into one section ───────────────────
+    const restFields = Object.keys(apt)
         .filter(code =>
-            !shown.has(code) &&
+            !shownCodes.has(code) &&
             !code.startsWith("~") &&
             apt[code] !== undefined &&
             apt[code] !== null &&
@@ -1699,23 +1754,64 @@ function renderBlockSections(apt) {
         )
         .map(code => ({ code, name: propertyMap[code]?.name || code, main: false }));
 
-    if (rest.length > 0) appendSection(container, "დეტალური ინფორმაცია", rest, apt, "");
+    // Build link rows as pseudo field-row HTML appended after restFields
+    const linkRows = [];
+    if (apt["OWNER_DEAL"])
+        linkRows.push({ label: "მფლობელის დილი", html: `<a href="/crm/deal/details/${apt["OWNER_DEAL"]}/" target="_blank">${apt["OWNER_DEAL"]}</a>` });
+    if (apt["QUEUE"] && apt["QUEUE"] !== "") {
+        const ql = apt["QUEUE"].split("|").filter(q=>q).map(q=>`<a href="/crm/deal/details/${q}/" target="_blank">${q}</a>`).join(", ");
+        linkRows.push({ label: "ჯავშნის რიგში", html: ql });
+    }
+    if (apt["OWNER_CONTACT"])
+        linkRows.push({ label: "კონტაქტი", html: `<a href="/crm/contact/details/${apt["OWNER_CONTACT"]}/" target="_blank">${apt["OWNER_CONTACT_NAME"] || apt["OWNER_CONTACT"]}</a>` });
+    if (apt["DEAL_RESPONSIBLE"])
+        linkRows.push({ label: "პასუხისმგებელი", html: `<a href="/company/personal/user/${apt["DEAL_RESPONSIBLE"]}/" target="_blank">${apt["DEAL_RESPONSIBLE_NAME"] || apt["DEAL_RESPONSIBLE"]}</a>` });
 
-    appendLinksSection(container, apt);
+    if (restFields.length > 0 || linkRows.length > 0) {
+        const icon = `<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#00d4aa" stroke-width="1.2"/><path d="M8 6v2M8 10v.5" stroke="#00d4aa" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+        const sec = document.createElement("div");
+        sec.className = "block-section";
+        sec.innerHTML = `
+            <div class="block-header">
+                <div class="block-header-icon">${icon}</div>
+                <span class="block-header-title">დამატებითი ინფორმაცია</span>
+            </div>
+            <div class="block-fields"></div>`;
+        container.appendChild(sec);
+        const bf = sec.querySelector(".block-fields");
+
+        // Regular unknown fields
+        restFields.forEach(f => bf.appendChild(buildFieldRow(f, apt, "")));
+
+        // Link rows styled like field rows
+        linkRows.forEach(({ label, html }) => {
+            const row = document.createElement("div");
+            row.className = "field-row";
+            row.innerHTML = `
+                <span class="field-label">${label}</span>
+                <span class="field-value" style="white-space:normal;text-align:right;">${html}</span>`;
+            bf.appendChild(row);
+        });
+    }
 }
 
-function appendSection(container, title, fields, apt, statusClass) {
+function appendSectionWithIcon(container, title, iconSvg, fields, apt, statusClass) {
     const sec = document.createElement("div");
     sec.className = "block-section";
     sec.innerHTML = `
         <div class="block-header">
-            <div class="block-header-icon"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="#00d4aa" stroke-width="1.2"/><line x1="4.5" y1="5" x2="11.5" y2="5" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/><line x1="4.5" y1="7.5" x2="11.5" y2="7.5" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/><line x1="4.5" y1="10" x2="8.5" y2="10" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/></svg></div>
+            <div class="block-header-icon">${iconSvg}</div>
             <span class="block-header-title">${title}</span>
         </div>
         <div class="block-fields"></div>`;
     container.appendChild(sec);
     const bf = sec.querySelector(".block-fields");
-    fields.forEach(f => bf.appendChild(buildFieldRow(f,apt,statusClass)));
+    fields.forEach(f => bf.appendChild(buildFieldRow(f, apt, statusClass)));
+}
+
+function appendSection(container, title, fields, apt, statusClass) {
+    const icon = `<svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="#00d4aa" stroke-width="1.2"/></svg>`;
+    appendSectionWithIcon(container, title, icon, fields, apt, statusClass);
 }
 
 function buildFieldRow(field, apt, statusClass) {
@@ -1751,7 +1847,7 @@ function appendImageSection(container, imgFields, apt) {
 }
 
 function appendPriceSection(container, apt) {
-    const price    = parseFloat(String(apt["__9YCWGZ"] || apt[F_PRICE_USD] || "0").replace(/[^0-9.]/g, "")) || 0;
+    const price    = parseFloat(String(apt["PRICE"] || apt[F_PRICE_USD] || apt["PRICE"] || "0").replace(/[^0-9.]/g, "")) || 0;
     const priceGel = price ? Math.round(price * nbg) : 0;
     const kvmUsd   = parseFloat(String(apt[F_KVM_USD] || "0").replace(/[^0-9.]/g, "")) || 0;
     const kvmGel   = kvmUsd ? Math.round(kvmUsd * nbg) : 0;
@@ -2048,15 +2144,15 @@ async function exportToExcel() {
         <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ტიპი</label>
         <select id="resUserSelect" onchange="resToggleFields()" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;background:#fff;color:#333;font-family:'Noto Sans Georgian',sans-serif;">
           <option value="">აირჩიეთ რეზერვაციის ტიპი</option>
-          <option value="24hr">უფასო</option>
-          <option value="paid">ფასიანი</option>
+          <option value="41">სტანდარტული</option>
+          <option value="42">არასტანდარტული</option>
         </select>
       </div>
 
       <!-- deadline -->
       <div id="resDateWrap" style="margin-bottom:14px;display:none;">
         <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ვადა</label>
-        <input type="datetime-local" id="resDate" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;background:#f4f6f8;color:#555;cursor:default;" readonly />
+        <input type="text" id="resDate" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;background:#f4f6f8;color:#555;cursor:default;" readonly />
       </div>
 
       <!-- payment type -->
@@ -2079,7 +2175,9 @@ async function exportToExcel() {
       <!-- passport upload -->
       <div style="margin-bottom:4px;">
         <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;">ატვირთეთ პირადობა ან პასპორტი</label>
-        <input id="resPassportInput" type="file" style="display:none;" onchange="resHandleFile()" />
+        <input id="resPassportInput" type="file" style="display:none;" 
+       accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" 
+       onchange="resHandleFile()" />
         <div id="resDropZone" onclick="document.getElementById('resPassportInput').click()"
           style="border:1.5px dashed #97c459;border-radius:7px;padding:14px 12px;text-align:center;cursor:pointer;background:#f5fced;transition:background .15s;">
           <svg width="22" height="22" viewBox="0 0 28 28" fill="none" style="margin:0 auto 6px;display:block;">
@@ -2147,7 +2245,7 @@ function resAddWorkingDays(date, days) {
 }
 function resToDatetimeLocal(date) {
     var p = n => String(n).padStart(2,"0");
-    return date.getFullYear()+"-"+p(date.getMonth()+1)+"-"+p(date.getDate())+"T"+p(date.getHours())+":"+p(date.getMinutes());
+    return p(date.getDate())+"/"+p(date.getMonth()+1)+"/"+date.getFullYear();
 }
 
 function resToggleFields() {
@@ -2158,28 +2256,44 @@ function resToggleFields() {
     document.getElementById("resAmountWrap").style.display  = "none";
     document.getElementById("resFooter").style.display      = "none";
 
-    if (choice === "24hr") {
+    if (choice === "41") {
         document.getElementById("resDate").value = resToDatetimeLocal(new Date(now.getTime() + 24*60*60*1000));
         document.getElementById("resDateWrap").style.display = "block";
         document.getElementById("resFooter").style.display   = "flex";
     }
-    if (choice === "paid") {
+    if (choice === "42") {
         var dl = resAddWorkingDays(now, 10);
-        dl.setHours(now.getHours(), now.getMinutes());
         document.getElementById("resDate").value = resToDatetimeLocal(dl);
         document.getElementById("resDateWrap").style.display    = "block";
         document.getElementById("resPayTypeWrap").style.display = "block";
         document.getElementById("resAmountWrap").style.display  = "block";
         document.getElementById("resFooter").style.display      = "flex";
     }
+
+    console.log('date', document.getElementById("resDate").value);
 }
 
 function resHandleFile() {
     var inp  = document.getElementById("resPassportInput");
     var file = inp.files[0];
     if (!file) return;
-    document.getElementById("resFileName").textContent    = file.name;
-    document.getElementById("resDropZone").style.display  = "none";
+
+    const allowed = ["image/jpeg", "image/png", "application/pdf"];
+    if (!allowed.includes(file.type)) {
+        alert("დაშვებულია მხოლოდ JPG, PNG ან PDF ფორმატი");
+        inp.value = "";
+        return;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        alert("ფაილის ზომა არ უნდა აღემატებოდეს 10MB-ს");
+        inp.value = "";
+        return;
+    }
+
+    document.getElementById("resFileName").textContent     = file.name;
+    document.getElementById("resDropZone").style.display   = "none";
     document.getElementById("resFileChosen").style.display = "flex";
 }
 
@@ -2218,6 +2332,7 @@ function submitReservation() {
     var btn = document.getElementById("sendButton");
     btn.style.opacity = ".6"; btn.style.pointerEvents = "none";
 
+    
     fetch("/rest/local/api/projects/saveReservation.php", { method: "POST", body: formData })
         .then(r => r.json())
         .then(data => {
