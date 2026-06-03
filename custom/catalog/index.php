@@ -743,13 +743,51 @@ const F_SALE       = '_UQIM2I';
 const F_CADASTRAL  = '__51MODL';
 const F_SECTOR     = '_3BU0JH';
 
+
+
+
 // ── Runtime state ──
 let openedOnDeal    = Array.isArray(deal) && deal.length > 0;
 let stage_id        = openedOnDeal ? deal[0].STAGE_ID : "";
 let allowedStages   = ["PREPARATION","PREPAYMENT_INVOICE","EXECUTING"];
 let inAllowedStages = true;
 let productsCache   = [];
-let propertyMap     = {};
+
+let propertyMap = {
+    "_P64GYD":   { name: "სტატუსი",                    type: "S" },
+    "__6KWOWZ":  { name: "უძრავი ქონების №",            type: "S" },
+    "Number":    { name: "უძრავი ქონების №",            type: "S" },
+    "__X1GCRZ":  { name: "უძრავი ქონების ტიპი",        type: "S" },
+    "_L24CUB":   { name: "ბლოკი",                      type: "S" },
+    "_MVA3NL":   { name: "ბლოკი",                      type: "S" },
+    "_3BU0JH":   { name: "სექტორი",                    type: "S" },
+    "_FTRIDL":   { name: "სართული",                    type: "S" },
+    "FLOOR":     { name: "სართული",                    type: "S" },
+    "_D599QA":   { name: "სადარბაზო",                  type: "S" },
+    "__51MODL":  { name: "საკადასტრო კოდი",             type: "S" },
+    "__VO9RG4":  { name: "პროექტის დასახელება",        type: "S" },
+    "__6ZWTER":  { name: "კვ/მ ღირებულება $",          type: "S" },
+    "__9YCWGZ":  { name: "ჯამური ღირებულება $",        type: "S" },
+    "__173JA5":  { name: "სრული ფართი",                 type: "S" },
+    "TOTAL_AREA":{ name: "სრული ფართი",                 type: "S" },
+    "__US58ND":  { name: "შიდა ფართი",                  type: "S" },
+    "__BL1XXK":  { name: "საზაფხულო ფართი",             type: "S" },
+    "_1_7CGWZ9": { name: "საზაფხულო ფართი 1",          type: "S" },
+    "_2_I5WZ38": { name: "საზაფხულო ფართი 2",          type: "S" },
+    "__J9TMOP":  { name: "ჰოლის ფართობი",              type: "S" },
+    "__WX6YWZ":  { name: "ოთახების რაოდენობა",          type: "S" },
+    "__KYRP1L":  { name: "საძინებლების რაოდენობა",      type: "S" },
+    "_1_UJ6WRQ": { name: "საძინებელი 1",               type: "S" },
+    "_2_UH0KQR": { name: "საძინებელი 2",               type: "S" },
+    "__Z60OKH":  { name: "მისაღები ოთახი",             type: "S" },
+    "__9H8XS9":  { name: "სველი წერტილის რაოდენობა",   type: "S" },
+    "_1_8M61S3": { name: "სველი წერტილი 1",            type: "S" },
+    "_2_LK1VJB": { name: "სველი წერტილი 2",            type: "S" },
+    "_UQIM2I":   { name: "აქცია",                      type: "S" },
+};
+
+
+
 let isDeletingOnly  = false;
 
 // Image fields resolved to URLs by PHP
@@ -1625,10 +1663,18 @@ document.addEventListener("click", e => {
 function openPopup(aptId, fromBox=false) {
     document.getElementById("apartmentPopup").classList.add("active");
 
-    const apt = fromBox
+    let apt = fromBox
         ? products.find(p=>p["ID"]==aptId)
         : productsCache.find(p=>p["ID"]==aptId);
     if (!apt) return;
+
+    // Normalize aliased keys so popup codes resolve correctly
+    if (apt["Number"]     !== undefined) apt[F_NUMBER]     = apt[F_NUMBER]     || apt["Number"];
+    if (apt["FLOOR"]      !== undefined) apt[F_FLOOR]      = apt[F_FLOOR]      || apt["FLOOR"];
+    if (apt["TOTAL_AREA"] !== undefined) apt[F_TOTAL_AREA] = apt[F_TOTAL_AREA] || apt["TOTAL_AREA"];
+    if (apt["__X1GCRZ"]   !== undefined) apt[F_TYPE]       = apt[F_TYPE]       || apt["__X1GCRZ"];
+    if (apt["_L24CUB"]    !== undefined) apt[F_BLOCK]      = apt[F_BLOCK]      || apt["_L24CUB"];
+    if (apt["_3BU0JH"]    !== undefined) apt[F_SECTOR]     = apt[F_SECTOR]     || apt["_3BU0JH"];
 
     const typeLabel = apt["__X1GCRZ"]==="ავტოსადგომი"?"P":(apt["__X1GCRZ"]||"ბინა");
     const num       = apt["Number"] || apt[F_NUMBER] || apt["NAME"] || "–";
@@ -1666,8 +1712,8 @@ const POPUP_GROUPS = [
     {
         title: "ძირითადი ინფორმაცია",
         icon: `<svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="#00d4aa" stroke-width="1.2"/><line x1="4.5" y1="5" x2="11.5" y2="5" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/><line x1="4.5" y1="7.5" x2="11.5" y2="7.5" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/><line x1="4.5" y1="10" x2="8.5" y2="10" stroke="#00d4aa" stroke-width="1" stroke-linecap="round"/></svg>`,
-        codes: ["_P64GYD", "Number", "__X1GCRZ", "_L24CUB", "_3BU0JH", "_FTRIDL", "_D599QA", "__51MODL", "__VO9RG4", "__6ZWTER"],
-        mainCodes: ["_P64GYD", "Number", "__X1GCRZ"],
+        codes: ["_P64GYD", "__6KWOWZ", "__X1GCRZ", "_L24CUB", "_MVA3NL", "_3BU0JH", "_FTRIDL", "_D599QA", "__51MODL", "__VO9RG4", "__6ZWTER"],
+        mainCodes: ["_P64GYD", "__6KWOWZ", "__X1GCRZ", "_L24CUB", "_MVA3NL", "_3BU0JH", "_FTRIDL"],
     },
     {
         title: "ფართობები",
@@ -1702,11 +1748,11 @@ function renderBlockSections(apt) {
         "binis_gegmareba","render_3D","sartulis2D","binisNaxazi2D",
         "erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo",
         "PRICE","PRICE_GEL",
-        F_BLOCK, F_FLOOR, F_NUMBER, F_TYPE, F_SALE, F_CADASTRAL, F_SECTOR,
-        "Number","FLOOR","TOTAL_AREA","__X1GCRZ","_L24CUB","_3BU0JH","__6ZWTER","__9YCWGZ",
+        F_SALE,
+        "Number","FLOOR","TOTAL_AREA",
         "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME",
         "DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","OWNER_PERSONAL_CONTACT","QUEUE",
-        ]);
+    ]);
 
     // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
@@ -2354,6 +2400,7 @@ function submitReservation() {
     formData.append("userSelect",       type);
     formData.append("reserveDate",      date);
     var currency = document.getElementById("resCurrency")?.value || "GEL";
+    console.log("currency:", currency, "amount:", amount);
     formData.append("reservationPrice", amount);
     formData.append("currency",         currency);
     formData.append("paymentType",      payType);

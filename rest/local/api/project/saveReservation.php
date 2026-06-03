@@ -3,17 +3,11 @@ ob_start();
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
 CModule::IncludeModule('crm');
 
-function printArr ($arr) {
-    echo "<pre>"; print_r($arr); echo "</pre>";
-}
-
 function getCorrectDateRA($date) {
     if (!$date) return ["", ""];
-    // Already DD/MM/YYYY (from JS reservation popup)
     if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $date)) {
         return [$date, $date];
     }
-    // ISO format YYYY-MM-DDTHH:MM:SS
     $parts   = explode("T", $date);
     $dateArr = explode("-", $parts[0]);
     $fixedDate = $dateArr[2] . "/" . $dateArr[1] . "/" . $dateArr[0];
@@ -33,39 +27,36 @@ function getContactInfo($contactId) {
     return $arContact;
 }
 
-$postdata= $_POST;
-$xelshekrulebaID = $_FILES['passport'] ?? null;
-$userSelect = $postdata['userSelect'];
-$dealId = $postdata['deal_id']; 
-list($reserveDate, $onlyDate) = getCorrectDateRA($postdata['reserveDate']);
-$prodNum = $postdata['prodNum'];
-$reservationPrice = $postdata['reservationPrice'];
-$paymentType = $postdata['paymentType'];
-$dgeebi = $postdata['dgeebi'];
-$currency = $_POST['currency'] ?? 'GEL';
-$params["currency"] = $currency;
+$userSelect       = $_POST['userSelect']       ?? '';
+$dealId           = $_POST['deal_id']          ?? '';
+$reservationPrice = $_POST['reservationPrice'] ?? '';
+$paymentType      = $_POST['paymentType']      ?? '';
+$currency         = trim($_POST['currency']    ?? 'GEL');
+$prodNum          = $_POST['prodNum']          ?? '';
+$dgeebi           = $_POST['dgeebi']           ?? '';
+$xelshekrulebaID  = $_FILES['passport']        ?? null;
 
-$params = array("type" => $userSelect,
-                "numOfAps" => $prodNum,
-                "reserveDate" => $reserveDate,
-                "onlyDate" => $onlyDate,
-                "reservationPrice" => $reservationPrice,
-                "paymentType" => $paymentType,
+list($reserveDate, $onlyDate) = getCorrectDateRA($_POST['reserveDate'] ?? '');
+
+$params = array(
+    "type"             => $userSelect,
+    "numOfAps"         => $prodNum,
+    "reserveDate"      => $reserveDate,
+    "onlyDate"         => $onlyDate,
+    "reservationPrice" => $reservationPrice,
+    "paymentType"      => $paymentType,
+    "currency"         => $currency,
 );
-
 
 if ($xelshekrulebaID && $xelshekrulebaID['error'] === UPLOAD_ERR_OK) {
     $contactId = \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($dealId)[0];
-    $contact = getContactInfo($contactId);
-
+    $contact   = getContactInfo($contactId);
     $serverPath = $xelshekrulebaID['tmp_name'];
-
     if (!$contact["UF_CRM_1779873020955"]) {
         $CCrmContact = new CCrmContact();
-        $upd = array(
+        $CCrmContact->Update($contactId, [
             "UF_CRM_1779873020955" => CFile::MakeFileArray($serverPath),
-        );
-        $updateReserve = $CCrmContact->Update($contactId, $upd);
+        ]);
     }
 }
 
@@ -93,34 +84,35 @@ $arrForAdd = [
     'UF_CRM_1779278590201' => $todayForBitrix,
     'UF_CRM_1779278567041' => $reserveDateForBitrix,
 ];
+
+if ($reservationPrice !== '') {
+    $arrForAdd['UF_CRM_1780487414362'] = trim($reservationPrice) . ' ' . $currency;
+}
+
 $Deal = new CCrmDeal();
 $Deal->Update($dealId, $arrForAdd);
 
 $arErrorsTmp = array();
 $wfId = CBPDocument::StartWorkflow(
-    6,                                                               //პროცესის ID
-    array("crm", "CCrmDocumentDeal", "DEAL_$dealId"),        // deal || contact || lead || company
+    6,
+    array("crm", "CCrmDocumentDeal", "DEAL_$dealId"),
     $params,
     $arErrorsTmp
 );
 
-
 $resArr = array();
-if(!empty($dealId) && is_numeric($dealId)) {
-    if($wfId) {
-        $resArr["status"] = 200;
+if (!empty($dealId) && is_numeric($dealId)) {
+    if ($wfId) {
+        $resArr["status"]  = 200;
         $resArr["message"] = "Sent successfully";
-
     } else {
-        $resArr["status"] = 400;
+        $resArr["status"]  = 400;
         $resArr["message"] = "Invalid Parameters";
     }
 } else {
-    $resArr["status"] = 405;
+    $resArr["status"]  = 405;
     $resArr["message"] = "Method not Found";
 }
-
-
 
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
