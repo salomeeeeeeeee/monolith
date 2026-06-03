@@ -98,7 +98,7 @@ $Deal->Update($dealId, $arrForAdd);
 
 $arErrorsTmp = array();
 $wfId = CBPDocument::StartWorkflow(
-    6,                                                               //პროცესის ID
+    8,                                                               //პროცესის ID
     array("crm", "CCrmDocumentDeal", "DEAL_$dealId"),        // deal || contact || lead || company
     $params,
     $arErrorsTmp

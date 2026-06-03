@@ -2151,9 +2151,10 @@ async function exportToExcel() {
 
       <!-- deadline -->
       <div id="resDateWrap" style="margin-bottom:14px;display:none;">
-        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ვადა</label>
-        <input type="text" id="resDate" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;background:#f4f6f8;color:#555;cursor:default;" readonly />
-      </div>
+  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ვადა</label>
+  <input type="text" id="resDate" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;background:#f4f6f8;color:#555;" readonly />
+  <input type="date" id="resDatePicker" style="display:none;width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;" onchange="resDatePickerChange()" />
+</div>
 
       <!-- payment type -->
       <div id="resPayTypeWrap" style="margin-bottom:14px;display:none;">
@@ -2167,10 +2168,16 @@ async function exportToExcel() {
       </div>
 
       <!-- price -->
-      <div id="resAmountWrap" style="margin-bottom:14px;display:none;">
-        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ფასი</label>
-        <input type="text" id="resAmount" placeholder="0.00" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
-      </div>
+<div id="resAmountWrap" style="margin-bottom:14px;display:none;">
+  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ფასი</label>
+  <div style="display:flex;gap:6px;">
+    <input type="text" id="resAmount" placeholder="0.00" style="flex:1;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
+    <select id="resCurrency" style="height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 8px;font-size:13px;background:#fff;color:#333;font-family:'Noto Sans Georgian',sans-serif;min-width:70px;">
+      <option value="GEL">₾ GEL</option>
+      <option value="USD">$ USD</option>
+    </select>
+  </div>
+</div>
 
       <!-- passport upload -->
       <div style="margin-bottom:4px;">
@@ -2189,9 +2196,10 @@ async function exportToExcel() {
           <p style="margin:3px 0 0;font-size:11px;color:#6b7280;">ID card or passport — JPG, PNG, PDF</p>
         </div>
         <div id="resFileChosen" style="display:none;margin-top:6px;background:#eaf3de;border:.5px solid #97c459;border-radius:7px;padding:7px 10px;align-items:center;gap:8px;">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="10" height="13" rx="2" stroke="#3b6d11" stroke-width="1.2"/><path d="M5 5h5M5 8h5M5 11h3" stroke="#3b6d11" stroke-width="1.2" stroke-linecap="round"/></svg>
-          <span id="resFileName" style="font-size:12px;color:#3b6d11;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-        </div>
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="10" height="13" rx="2" stroke="#3b6d11" stroke-width="1.2"/><path d="M5 5h5M5 8h5M5 11h3" stroke="#3b6d11" stroke-width="1.2" stroke-linecap="round"/></svg>
+  <span id="resFileName" style="font-size:12px;color:#3b6d11;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+  <span onclick="removeResFile()" style="cursor:pointer;font-size:16px;color:#d85a30;line-height:1;flex-shrink:0;" title="წაშლა">&times;</span>
+</div>
       </div>
     </div>
 
@@ -2257,20 +2265,32 @@ function resToggleFields() {
     document.getElementById("resFooter").style.display      = "none";
 
     if (choice === "41") {
-        document.getElementById("resDate").value = resToDatetimeLocal(new Date(now.getTime() + 24*60*60*1000));
+        document.getElementById("resDate").value            = resToDatetimeLocal(new Date(now.getTime() + 24*60*60*1000));
+        document.getElementById("resDate").style.display    = "";
+        document.getElementById("resDatePicker").style.display = "none";
         document.getElementById("resDateWrap").style.display = "block";
         document.getElementById("resFooter").style.display   = "flex";
     }
     if (choice === "42") {
         var dl = resAddWorkingDays(now, 10);
-        document.getElementById("resDate").value = resToDatetimeLocal(dl);
+        var y = dl.getFullYear(), m = String(dl.getMonth()+1).padStart(2,"0"), d = String(dl.getDate()).padStart(2,"0");
+        document.getElementById("resDatePicker").value         = y+"-"+m+"-"+d;
+        document.getElementById("resDate").style.display       = "none";
+        document.getElementById("resDatePicker").style.display = "block";
+        // sync the hidden text field so submitReservation still reads it
+        document.getElementById("resDate").value = d+"/"+m+"/"+y;
         document.getElementById("resDateWrap").style.display    = "block";
         document.getElementById("resPayTypeWrap").style.display = "block";
         document.getElementById("resAmountWrap").style.display  = "block";
         document.getElementById("resFooter").style.display      = "flex";
     }
+}
 
-    console.log('date', document.getElementById("resDate").value);
+function resDatePickerChange() {
+    var val = document.getElementById("resDatePicker").value; // YYYY-MM-DD
+    if (!val) return;
+    var parts = val.split("-");
+    document.getElementById("resDate").value = parts[2]+"/"+parts[1]+"/"+parts[0];
 }
 
 function resHandleFile() {
@@ -2285,7 +2305,7 @@ function resHandleFile() {
         return;
     }
 
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
         alert("ფაილის ზომა არ უნდა აღემატებოდეს 10MB-ს");
         inp.value = "";
@@ -2296,6 +2316,14 @@ function resHandleFile() {
     document.getElementById("resDropZone").style.display   = "none";
     document.getElementById("resFileChosen").style.display = "flex";
 }
+
+function removeResFile() {
+    document.getElementById("resPassportInput").value       = "";
+    document.getElementById("resFileName").textContent      = "";
+    document.getElementById("resFileChosen").style.display  = "none";
+    document.getElementById("resDropZone").style.display    = "";
+}
+
 
 (function() {
     var dz = document.getElementById("resDropZone");
@@ -2325,9 +2353,13 @@ function submitReservation() {
     formData.append("deal_id",          dealID);
     formData.append("userSelect",       type);
     formData.append("reserveDate",      date);
+    var currency = document.getElementById("resCurrency")?.value || "GEL";
     formData.append("reservationPrice", amount);
+    formData.append("currency",         currency);
     formData.append("paymentType",      payType);
     formData.append("passport",         fileInp.files[0]);
+
+    console.log(fileInp.files[0]);
 
     var btn = document.getElementById("sendButton");
     btn.style.opacity = ".6"; btn.style.pointerEvents = "none";
@@ -2336,6 +2368,7 @@ function submitReservation() {
     fetch("/rest/local/api/projects/saveReservation.php", { method: "POST", body: formData })
         .then(r => r.json())
         .then(data => {
+            console.log(data);
             if (data.status === 200) {
                 showResMsg("success");
                 launchConfetti();
@@ -2343,9 +2376,11 @@ function submitReservation() {
             } else {
                 showResMsg("error");
                 btn.style.opacity = "1"; btn.style.pointerEvents = "";
+                
             }
         })
-        .catch(() => {
+        .catch(function(err) {
+            console.error('fetch error:', err);
             showResMsg("error");
             btn.style.opacity = "1"; btn.style.pointerEvents = "";
         });

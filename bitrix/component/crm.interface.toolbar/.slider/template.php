@@ -322,9 +322,10 @@ if (stage2 === "FINAL_INVOICE") {
                 </div>
 
                 <div id="jvDateWrap" style="margin-bottom:14px;display:none;">
-                  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ვადა</label>
-                  <input type="text" id="jvDate" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;background:#f4f6f8;color:#555;cursor:default;" readonly />
-                </div>
+  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ვადა</label>
+  <input type="text" id="jvDate" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;background:#f4f6f8;color:#555;cursor:default;" readonly />
+  <input type="date" id="jvDatePicker" style="display:none;width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;margin-top:6px;" onchange="jvDatePickerChange()" />
+</div>
 
                 <div id="jvPayTypeWrap" style="margin-bottom:14px;display:none;">
                   <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> სასურველი გადახდის ტიპი</label>
@@ -337,9 +338,15 @@ if (stage2 === "FINAL_INVOICE") {
                 </div>
 
                 <div id="jvAmountWrap" style="margin-bottom:14px;display:none;">
-                  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ფასი</label>
-                  <input type="text" id="jvAmount" placeholder="0.00" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
-                </div>
+  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ფასი</label>
+  <div style="display:flex;gap:6px;">
+    <input type="text" id="jvAmount" placeholder="0.00" style="flex:1;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
+    <select id="jvCurrency" style="height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 8px;font-size:13px;background:#fff;color:#333;font-family:'Noto Sans Georgian',sans-serif;min-width:70px;">
+      <option value="GEL">₾ GEL</option>
+      <option value="USD">$ USD</option>
+    </select>
+  </div>
+</div>
 
                 <div style="margin-bottom:4px;">
                   <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;">ატვირთეთ პირადობა ან პასპორტი</label>
@@ -357,8 +364,10 @@ if (stage2 === "FINAL_INVOICE") {
                     <p style="margin:3px 0 0;font-size:11px;color:#6b7280;">ID card or passport — JPG, PNG, PDF</p>
                   </div>
                   <div id="jvFileChosen" style="display:none;margin-top:6px;background:#e8edff;border:.5px solid #4c6ef5;border-radius:7px;padding:7px 10px;align-items:center;gap:8px;">
-                    <span id="jvFileName" style="font-size:12px;color:#3b5bdb;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-                  </div>
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="10" height="13" rx="2" stroke="#3b5bdb" stroke-width="1.2"/><path d="M5 5h5M5 8h5M5 11h3" stroke="#3b5bdb" stroke-width="1.2" stroke-linecap="round"/></svg>
+  <span id="jvFileName" style="font-size:12px;color:#3b5bdb;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+  <span onclick="jvRemoveFile()" style="cursor:pointer;font-size:16px;color:#d85a30;line-height:1;flex-shrink:0;" title="წაშლა">&times;</span>
+</div>
                 </div>
               </div>
 
@@ -410,98 +419,125 @@ if (stage2 === "FINAL_INVOICE") {
         setTimeout(function() { overlay.style.display = "none"; }, 250);
     };
 
-    window.jvToggleFields = function() {
-        var choice = document.getElementById("jvUserSelect").value;
-        var now    = new Date();
+    window.jvRemoveFile = function() {
+    document.getElementById("jvPassportInput").value      = "";
+    document.getElementById("jvFileName").textContent     = "";
+    document.getElementById("jvFileChosen").style.display = "none";
+    document.getElementById("jvDropZone").style.display   = "";
+};
 
-        ["jvDateWrap","jvPayTypeWrap","jvAmountWrap","jvFooter"].forEach(function(id) {
-            document.getElementById(id).style.display = "none";
-        });
+window.jvHandleFile = function() {
+    var inp  = document.getElementById("jvPassportInput");
+    var file = inp.files[0];
+    if (!file) return;
+    var allowed = ["image/jpeg","image/png","application/pdf"];
+    if (!allowed.includes(file.type)) {
+        alert("დაშვებულია მხოლოდ JPG, PNG ან PDF ფორმატი");
+        inp.value = ""; return;
+    }
+    if (file.size > 10*1024*1024) {
+        alert("ფაილის ზომა არ უნდა აღემატებოდეს 10MB-ს");
+        inp.value = ""; return;
+    }
+    document.getElementById("jvFileName").textContent     = file.name;
+    document.getElementById("jvDropZone").style.display   = "none";
+    document.getElementById("jvFileChosen").style.display = "flex";
+};
 
-        function addWorkingDays(date, days) {
-            var r = new Date(date), added = 0;
-            while (added < days) {
-                r.setDate(r.getDate() + 1);
-                var d = r.getDay();
-                if (d !== 0 && d !== 6) added++;
-            }
-            return r;
+window.jvDatePickerChange = function() {
+    var val = document.getElementById("jvDatePicker").value; // YYYY-MM-DD
+    if (!val) return;
+    var parts = val.split("-");
+    document.getElementById("jvDate").value = parts[2]+"/"+parts[1]+"/"+parts[0];
+};
+
+window.jvToggleFields = function() {
+    var choice = document.getElementById("jvUserSelect").value;
+    var now    = new Date();
+
+    ["jvDateWrap","jvPayTypeWrap","jvAmountWrap","jvFooter"].forEach(function(id) {
+        document.getElementById(id).style.display = "none";
+    });
+    document.getElementById("jvDatePicker").style.display = "none";
+    document.getElementById("jvDate").readOnly = true;
+    document.getElementById("jvDate").style.background = "#f4f6f8";
+    document.getElementById("jvDate").style.cursor = "default";
+
+    function addWorkingDays(date, days) {
+        var r = new Date(date), added = 0;
+        while (added < days) {
+            r.setDate(r.getDate() + 1);
+            var d = r.getDay();
+            if (d !== 0 && d !== 6) added++;
         }
+        return r;
+    }
 
-        function toDisplay(date) {
-            var p = function(n) { return String(n).padStart(2, "0"); };
-            return p(date.getDate()) + "/" + p(date.getMonth() + 1) + "/" + date.getFullYear();
-        }
+    function toDisplay(date) {
+        var p = function(n) { return String(n).padStart(2, "0"); };
+        return p(date.getDate()) + "/" + p(date.getMonth() + 1) + "/" + date.getFullYear();
+    }
 
-        if (choice === "41") {
-            document.getElementById("jvDate").value           = toDisplay(new Date(now.getTime() + 24*60*60*1000));
-            document.getElementById("jvDateWrap").style.display = "block";
-            document.getElementById("jvFooter").style.display  = "flex";
-        }
-        if (choice === "42") {
-            document.getElementById("jvDate").value              = toDisplay(addWorkingDays(now, 10));
-            document.getElementById("jvDateWrap").style.display    = "block";
-            document.getElementById("jvPayTypeWrap").style.display = "block";
-            document.getElementById("jvAmountWrap").style.display  = "block";
-            document.getElementById("jvFooter").style.display      = "flex";
-        }
-    };
+    if (choice === "41") {
+    document.getElementById("jvDate").value             = toDisplay(new Date(now.getTime() + 24*60*60*1000));
+    document.getElementById("jvDate").style.display     = "";
+    document.getElementById("jvDatePicker").style.display = "none";
+    document.getElementById("jvDateWrap").style.display  = "block";
+    document.getElementById("jvFooter").style.display    = "flex";
+}
+if (choice === "42") {
+    var dl = addWorkingDays(now, 10);
+    var y = dl.getFullYear(), m = String(dl.getMonth()+1).padStart(2,"0"), d = String(dl.getDate()).padStart(2,"0");
+    document.getElementById("jvDatePicker").value          = y+"-"+m+"-"+d;
+    document.getElementById("jvDate").value                = d+"/"+m+"/"+y;
+    document.getElementById("jvDate").style.display        = "none";
+    document.getElementById("jvDatePicker").style.display  = "block";
+    document.getElementById("jvDateWrap").style.display    = "block";
+    document.getElementById("jvPayTypeWrap").style.display = "block";
+    document.getElementById("jvAmountWrap").style.display  = "block";
+    document.getElementById("jvFooter").style.display      = "flex";
+}
+};
 
-    window.jvHandleFile = function() {
-        var inp  = document.getElementById("jvPassportInput");
-        var file = inp.files[0];
-        if (!file) return;
-        var allowed = ["image/jpeg","image/png","application/pdf"];
-        if (!allowed.includes(file.type)) {
-            alert("დაშვებულია მხოლოდ JPG, PNG ან PDF ფორმატი");
-            inp.value = ""; return;
-        }
-        if (file.size > 10*1024*1024) {
-            alert("ფაილის ზომა არ უნდა აღემატებოდეს 10MB-ს");
-            inp.value = ""; return;
-        }
-        document.getElementById("jvFileName").textContent     = file.name;
-        document.getElementById("jvDropZone").style.display   = "none";
-        document.getElementById("jvFileChosen").style.display = "flex";
-    };
+window.submitJavshnisVada = function() {
+    var type     = document.getElementById("jvUserSelect").value;
+    var date     = document.getElementById("jvDate").value;
+    var payType  = document.getElementById("jvPayType").value;
+    var amount   = document.getElementById("jvAmount").value;
+    var currency = document.getElementById("jvCurrency")?.value || "GEL";
+    var fileInp  = document.getElementById("jvPassportInput");
 
-    window.submitJavshnisVada = function() {
-        var type    = document.getElementById("jvUserSelect").value;
-        var date    = document.getElementById("jvDate").value;
-        var payType = document.getElementById("jvPayType").value;
-        var amount  = document.getElementById("jvAmount").value;
-        var fileInp = document.getElementById("jvPassportInput");
+    if (!type || !date) { jvShowMsg("warn"); return; }
+    if (type === "42" && (!payType || !amount)) { jvShowMsg("warn"); return; }
 
-        if (!type || !date) { jvShowMsg("warn"); return; }
-        if (type === "42" && (!payType || !amount)) { jvShowMsg("warn"); return; }
+    var formData = new FormData();
+    formData.append("deal_id",          dealId2);
+    formData.append("userSelect",       type);
+    formData.append("reserveDate",      date);
+    formData.append("reservationPrice", amount);
+    formData.append("paymentType",      payType);
+    formData.append("currency",         currency);
+    if (fileInp.files[0]) formData.append("passport", fileInp.files[0]);
 
-        var formData = new FormData();
-        formData.append("deal_id",          dealId2);
-        formData.append("userSelect",       type);
-        formData.append("reserveDate",      date);
-        formData.append("reservationPrice", amount);
-        formData.append("paymentType",      payType);
-        if (fileInp.files[0]) formData.append("passport", fileInp.files[0]);
+    var btn = document.getElementById("jvSendBtn");
+    btn.style.opacity = ".6"; btn.style.pointerEvents = "none";
 
-        var btn = document.getElementById("jvSendBtn");
-        btn.style.opacity = ".6"; btn.style.pointerEvents = "none";
-
-        fetch("/rest/local/api/projects/saveReservation.php", { method: "POST", body: formData })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.status === 200) {
-                    jvShowMsg("success");
-                    setTimeout(closeJavshnisVadaPopup, 2000);
-                } else {
-                    jvShowMsg("error");
-                    btn.style.opacity = "1"; btn.style.pointerEvents = "";
-                }
-            })
-            .catch(function() {
+    fetch("/rest/local/api/projects/updateReservation.php", { method: "POST", body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 200) {
+                jvShowMsg("success");
+                setTimeout(closeJavshnisVadaPopup, 2000);
+            } else {
                 jvShowMsg("error");
                 btn.style.opacity = "1"; btn.style.pointerEvents = "";
-            });
-    };
+            }
+        })
+        .catch(function() {
+            jvShowMsg("error");
+            btn.style.opacity = "1"; btn.style.pointerEvents = "";
+        });
+};
 
     window.jvShowMsg = function(type) {
         ["jvMsgSuccess","jvMsgError","jvMsgWarn"].forEach(function(id) {
