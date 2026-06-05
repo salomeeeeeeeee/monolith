@@ -1683,6 +1683,9 @@ function openPopup(aptId, fromBox=false) {
     document.getElementById("popupTitle").dataset.status = apt["_P64GYD"]||"";
     document.getElementById("popupTitle").dataset.fromBox = fromBox ? "1" : "0";
 
+   
+
+
     renderBlockSections(apt);
 
     const selectBtn = document.getElementById("popupSelectBtn");
@@ -1702,6 +1705,37 @@ function openPopup(aptId, fromBox=false) {
         selectBtn.style.background = "var(--accent)";
         selectBtn.dataset.mode     = "add";
     }
+
+// ── Offer / Calculator buttons ──
+const existingOfferRow = document.getElementById("popupOfferRow");
+    if (existingOfferRow) existingOfferRow.remove();
+
+    const offerRow = document.createElement("div");
+    offerRow.id = "popupOfferRow";
+    offerRow.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:6px 0 2px;";
+
+    const btnDefs = [
+        { label: "შეთავაზება",     href: `/crm/deal/offer-catalog.php?prod_ID=${aptId}` },
+        { label: "შეთავაზება ENG", href: `/crm/deal/offer-catalog-eng.php?prod_ID=${aptId}` },
+    ];
+
+    btnDefs.forEach(({ label, href }) => {
+        const a = document.createElement("a");
+        a.href = href;
+        a.target = "_blank";
+        a.style.cssText = "text-decoration:none;";
+        a.innerHTML = `<button style="
+            width:100%;height:30px;border-radius:var(--radius);
+            background:var(--bg3);border:1px solid var(--border2);
+            color:var(--text2);font-size:11px;font-weight:600;
+            font-family:var(--body);cursor:pointer;transition:all .2s;
+        " onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)';this.style.background='var(--accent-dim)'"
+           onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)';this.style.background='var(--bg3)'"
+        >${label}</button>`;
+        offerRow.appendChild(a);
+    });
+
+    document.querySelector(".popup-buttons").after(offerRow);
 
     document.getElementById("popupDetailsWrapper").classList.remove("open");
     document.getElementById("toggleDetailsBtn").textContent = "► დამატებითი დეტალები";
