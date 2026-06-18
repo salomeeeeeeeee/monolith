@@ -299,12 +299,18 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
         if (stage2 === "FINAL_INVOICE") {
             div.dataset.rendered = "1";
             div.insertAdjacentHTML("beforeend",
+                '<div onclick="openCalculatorPopup();" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;margin-right:8px;background:linear-gradient(135deg,#4f46e5,#3730a3);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(79,70,229,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(79,70,229,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(79,70,229,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#fff" stroke-width="1.4"/><line x1="5" y1="11" x2="5" y2="8" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><line x1="8" y1="11" x2="8" y2="5" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><line x1="11" y1="11" x2="11" y2="7" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>კალკულატორი</div>'
+            );
+            div.insertAdjacentHTML("beforeend",
                 '<div onclick="openJavshnisVadaPopup();" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:linear-gradient(135deg,#3b5bdb,#7048e8);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(59,91,219,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(59,91,219,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(59,91,219,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#fff" stroke-width="1.4"/><path d="M8 5v3.5M8 11v.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>რეზერვაციის ცვლილება</div>'
             );
         }
 
         if (stage2 === "EXECUTING") {
             div.dataset.rendered = "1";
+            div.insertAdjacentHTML("beforeend",
+                '<div onclick="openCalculatorPopup();" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:linear-gradient(135deg,#4f46e5,#3730a3);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(79,70,229,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(79,70,229,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(79,70,229,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#fff" stroke-width="1.4"/><line x1="5" y1="11" x2="5" y2="8" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><line x1="8" y1="11" x2="8" y2="5" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><line x1="11" y1="11" x2="11" y2="7" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>კალკულატორი</div>'
+            );
             div.insertAdjacentHTML("beforeend",
                 '<div style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;margin-left:8px;background:linear-gradient(135deg,#0ca678,#28c7a9);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(12,166,120,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(12,166,120,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(12,166,120,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-9" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>გაყიდვა</div>'
             );
@@ -335,6 +341,20 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
                     cacheable: false,
                     allowChangeHistory: false,
                     title: 'რეზერვაციის ვადის ცვლილება'
+                }
+            );
+        }
+    };
+
+    window.openCalculatorPopup = function() {
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(
+                location.origin + '/custom/calculator/?dealid=' + dealId2,
+                {
+                    width: 1100,
+                    cacheable: false,
+                    allowChangeHistory: false,
+                    title: 'განვადების კალკულატორი'
                 }
             );
         }
