@@ -1058,6 +1058,14 @@ BX.ready(function() {
         var catalog = document.getElementById('crm_scope_detail_c_deal__catalog');
         if (catalog) catalog.style.display = stage === 'NEW' ? 'none' : '';
 
+		// tab_lists_21 and tab_lists_22 — visible only on EXECUTING, UC_NSTB3H, UC_NJ7A78
+var allowedTabStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
+['crm_scope_detail_c_deal__tab_lists_21', 'crm_scope_detail_c_deal__tab_lists_22'].forEach(function(tabId) {
+    var tab = document.getElementById(tabId);
+    if (tab) tab.style.display = allowedTabStages.indexOf(stage) !== -1 ? '' : 'none';
+});
+
+
         // more_button
         var hideMoreStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
         var moreBtn = document.getElementById('crm_scope_detail_c_deal__more_button');
