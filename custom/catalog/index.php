@@ -2010,11 +2010,37 @@ function renderBlockSections(apt) {
         resFields.push({ code: "OWNER_PERSONAL_CONTACT", name: "კონტაქტი", value: `<a href="/crm/contact/details/${apt["OWNER_PERSONAL_CONTACT"]}/" target="_blank">${apt["OWNER_CONTACT_NAME"] || apt["OWNER_PERSONAL_CONTACT"]}</a>` });
     if (apt["DEAL_RESPONSIBLE"])
         resFields.push({ code: "DEAL_RESPONSIBLE", name: "პასუხისმგებელი", value: `<a href="/company/personal/user/${apt["DEAL_RESPONSIBLE"]}/" target="_blank">${apt["DEAL_RESPONSIBLE_NAME"] || apt["DEAL_RESPONSIBLE"]}</a>` });
+       
+       
         if (apt["RESERVATION_DATE"])
     resFields.push({ code: "RESERVATION_DATE", name: "რეზერვაციის თარიღი", value: formatResDate(apt["RESERVATION_DATE"]) });
-if (apt["RESERVATION_STAGE_ID"])
+
+// Show stage from pre-resolved field OR fetch it live from OWNER_DEAL
+if (apt["RESERVATION_STAGE_ID"]) {
     resFields.push({ code: "RESERVATION_STAGE_ID", name: "ეტაპი", value: stageLabel(apt["RESERVATION_STAGE_ID"]) });
-    if (resFields.length > 0) {
+} else if (apt["OWNER_DEAL"]) {
+    // Insert a placeholder row, then fill it asynchronously
+    const stageRow = document.createElement("div");
+    stageRow.className = "field-row";
+    stageRow.innerHTML = `<span class="field-label">ეტაპი</span><span class="field-value" style="color:var(--text3);font-style:italic;">იტვირთება...</span>`;
+    resFields.push({ _isNode: true, node: stageRow });
+
+    fetch(`/rest/local/api/projects/get.php?stageOnly=1&dealId=${apt["OWNER_DEAL"]}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.stage_id) {
+                stageRow.querySelector(".field-value").textContent = stageLabel(data.stage_id);
+                stageRow.querySelector(".field-value").style.fontStyle = "";
+                stageRow.querySelector(".field-value").style.color = "";
+                apt["RESERVATION_STAGE_ID"] = data.stage_id; // cache it
+            } else {
+                stageRow.remove();
+            }
+        })
+        .catch(() => stageRow.remove());
+}
+
+        if (resFields.length > 0) {
         const resIcon = `<svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="#00d4aa" stroke-width="1.2"/><circle cx="8" cy="6.5" r="2" stroke="#00d4aa" stroke-width="1.1"/><path d="M4 13c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#00d4aa" stroke-width="1.1" stroke-linecap="round"/></svg>`;
         const sec = document.createElement("div");
         sec.className = "block-section";

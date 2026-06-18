@@ -95,9 +95,18 @@ function getProducts($projId = null, $blockId = null) {
         if ($arPushs["OWNER_CONTACT"]) {
             $arPushs["OWNER_CONTACT_NAME"] = getContactInfo($arPushs["OWNER_CONTACT"])["FULL_NAME"];
         }
-
+        
         if ($arPushs["DEAL_RESPONSIBLE"]) {
             $arPushs["DEAL_RESPONSIBLE_NAME"] = getUserName($arPushs["DEAL_RESPONSIBLE"]);
+        }
+        
+        // Resolve OWNER_DEAL → reservation stage/date
+        if (!empty($arPushs["OWNER_DEAL"])) {
+            $dRes = CCrmDeal::GetList(["ID" => "ASC"], ["ID" => $arPushs["OWNER_DEAL"]], ["ID", "STAGE_ID", "UF_CRM_1779278567041"]);
+            if ($dRow = $dRes->Fetch()) {
+                $arPushs["RESERVATION_STAGE_ID"] = $dRow["STAGE_ID"];
+                $arPushs["RESERVATION_DATE"]     = $dRow["UF_CRM_1779278567041"];
+            }
         }
 
         // ── Legacy image aliases (kept for backward compatibility) ──
