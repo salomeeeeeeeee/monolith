@@ -49,8 +49,7 @@ if (!$element || intval($element['IBLOCK_ID']) !== 21) {
 }
 
 $jsonRaw = $element['JSON'] ?? '';
-$jsonRaw = str_replace('&quot;', '"', $jsonRaw);
-$json = json_decode($jsonRaw, true);
+$json = calcParseScheduleJson($jsonRaw);
 
 if (!is_array($json) || empty($json['dealId']) || empty($json['data'])) {
     $result['txt'] = 'JSON მონაცემები არასწორია';
@@ -66,6 +65,7 @@ if (!$dealData) {
 $meta = calcGetDealMetaForPlan($dealData);
 $exchangeRate = calcGetNbgRate();
 $prodPriceUSD = round(floatval($json['PRICE'] ?? 0), 2);
+$kvmPriceUSD = round(floatval($json['kvmPrice'] ?? 0), 2);
 $principal = $prodPriceUSD;
 
 // წაშალოს არსებული განვადების ჩანაწერები ამ დილზე
@@ -120,16 +120,37 @@ foreach ($json['data'] as $row) {
 }
 
 if ($created > 0) {
-    $dealUpdate = new CCrmDeal();
-    $dealUpdate->Update($json['dealId'], [
+    $dealId = intval($json['dealId']);
+    $currencyId = $dealData['CURRENCY_ID'] ?: 'USD';
+
+    $productRows = CCrmDeal::LoadProductRows($dealId);
+    if (!empty($productRows)) {
+        foreach ($productRows as &$row) {
+            $row['PRICE'] = $prodPriceUSD;
+            if (empty($row['QUANTITY'])) {
+                $row['QUANTITY'] = 1;
+            }
+        }
+        unset($row);
+        CCrmDeal::SaveProductRows($dealId, $productRows);
+    }
+
+    $dealUpdate = new CCrmDeal(false);
+    $arDealFields = [
+        'IS_MANUAL_OPPORTUNITY' => 'Y',
         'OPPORTUNITY' => $prodPriceUSD,
-        'UF_CRM_1761658642424' => $prodPriceUSD,
-    ]);
+        'CURRENCY_ID' => $currencyId,
+        'UF_CRM_1779277671391' => $kvmPriceUSD,
+    ];
+    $dealUpdated = (bool)$dealUpdate->Update($dealId, $arDealFields);
 
     $result = [
         'status' => 200,
         'txt' => "გრაფიკი წარმატებით დარეგისტრირდა ($created ჩანაწერი)",
         'created' => $created,
+        'dealUpdated' => $dealUpdated,
+        'price' => $prodPriceUSD,
+        'kvmPrice' => $kvmPriceUSD,
     ];
 } else {
     $result = ['status' => 400, 'txt' => 'გრაფიკის ჩანაწერები ვერ შეიქმნა'];

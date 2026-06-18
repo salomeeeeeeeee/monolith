@@ -19,7 +19,8 @@ if (!function_exists('calcGetCIBlockElementsByFilter')) {
                 $row[$key] = $val;
             }
             foreach ($arProps as $key => $prop) {
-                $row[$key] = $prop['VALUE'];
+                $code = !empty($prop['CODE']) ? $prop['CODE'] : $key;
+                $row[$code] = $prop['VALUE'];
             }
             $arElements[] = $row;
         }
@@ -42,7 +43,8 @@ if (!function_exists('calcGetElementByID')) {
                 $row[$key] = $val;
             }
             foreach ($arProps as $key => $prop) {
-                $row[$key] = $prop['VALUE'];
+                $code = !empty($prop['CODE']) ? $prop['CODE'] : $key;
+                $row[$code] = $prop['VALUE'];
             }
             return $row;
         }
@@ -284,9 +286,124 @@ if (!function_exists('calcGetInstallmentConditions')) {
     }
 }
 
-if (!function_exists('calcBuildScheduleHtml')) {
-    function calcBuildScheduleHtml($rows)
+if (!function_exists('calcGetNumericProp')) {
+    function calcGetNumericProp($element, $codes)
     {
+        if (!is_array($codes)) {
+            $codes = [$codes];
+        }
+        foreach ($codes as $code) {
+            if (!isset($element[$code])) {
+                continue;
+            }
+            $val = calcGetIblockPropText($element[$code]);
+            if ($val !== '' && is_numeric($val)) {
+                return floatval($val);
+            }
+        }
+        return 0;
+    }
+}
+
+if (!function_exists('calcParseAdvancePctFromName')) {
+    function calcParseAdvancePctFromName($name)
+    {
+        $name = (string)$name;
+        if (preg_match('/(\d+)\s*%?\s*პირველად/ui', $name, $m)) {
+            return floatval($m[1]);
+        }
+        return 0;
+    }
+}
+
+if (!function_exists('calcParseLastPctFromName')) {
+    function calcParseLastPctFromName($name)
+    {
+        $name = (string)$name;
+        if (preg_match('/ბოლო[^\d]*(\d+)\s*%/ui', $name, $m)) {
+            return floatval($m[1]);
+        }
+        return 0;
+    }
+}
+
+if (!function_exists('calcGetConditionPercent')) {
+    function calcGetConditionPercent($element, $codes, $nameParser = null)
+    {
+        $value = calcGetNumericProp($element, $codes);
+        if ($value > 0) {
+            return $value;
+        }
+        if ($nameParser && is_callable($nameParser)) {
+            return floatval($nameParser($element['NAME'] ?? ''));
+        }
+        return 0;
+    }
+}
+
+if (!function_exists('calcGetIblockPropText')) {
+    function calcGetIblockPropText($value)
+    {
+        if (is_array($value)) {
+            if (isset($value['TEXT'])) {
+                return (string)$value['TEXT'];
+            }
+            if (isset($value['VALUE'])) {
+                return calcGetIblockPropText($value['VALUE']);
+            }
+            $parts = [];
+            foreach ($value as $item) {
+                $text = calcGetIblockPropText($item);
+                if ($text !== '') {
+                    $parts[] = $text;
+                }
+            }
+            return implode('', $parts);
+        }
+        return (string)$value;
+    }
+}
+
+if (!function_exists('calcParseScheduleJson')) {
+    function calcParseScheduleJson($jsonRaw)
+    {
+        if (is_array($jsonRaw)) {
+            $jsonRaw = calcGetIblockPropText($jsonRaw);
+        }
+        $jsonRaw = str_replace('&quot;', '"', (string)$jsonRaw);
+        $json = json_decode($jsonRaw, true);
+        return is_array($json) ? $json : [];
+    }
+}
+
+if (!function_exists('calcBuildScheduleHtml')) {
+    function calcBuildScheduleHtml($rows, $totalPrice = null)
+    {
+        $hasLeftToPay = false;
+        foreach ($rows as $row) {
+            if (isset($row['leftToPay']) && $row['leftToPay'] !== '' && $row['leftToPay'] !== null) {
+                $hasLeftToPay = true;
+                break;
+            }
+        }
+
+        if (!$hasLeftToPay) {
+            if ($totalPrice === null) {
+                $totalPrice = 0;
+                foreach ($rows as $row) {
+                    $totalPrice += floatval($row['amount']);
+                }
+            }
+            $paid = 0;
+            $enriched = [];
+            foreach ($rows as $row) {
+                $paid += floatval($row['amount']);
+                $row['leftToPay'] = round(floatval($totalPrice) - $paid, 2);
+                $enriched[] = $row;
+            }
+            $rows = $enriched;
+        }
+
         $html = '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:13px;">';
         $html .= '<thead><tr style="background:#1e3a5f;color:#fff;"><th>#</th><th>თარიღი</th><th>თანხა ($)</th><th>დარჩენილი ძირი</th></tr></thead><tbody>';
         foreach ($rows as $row) {
@@ -299,6 +416,48 @@ if (!function_exists('calcBuildScheduleHtml')) {
         }
         $html .= '</tbody></table>';
         return $html;
+    }
+}
+
+if (!function_exists('calcUpdateDealFinalPrice')) {
+    function calcUpdateDealFinalPrice($dealId, $totalPrice, $kvmPrice)
+    {
+        $dealId = intval($dealId);
+        $totalPrice = round(floatval($totalPrice), 2);
+        $kvmPrice = round(floatval($kvmPrice), 2);
+
+        if ($dealId <= 0 || $totalPrice <= 0) {
+            return false;
+        }
+
+        $dealData = calcGetDealInfoByID($dealId);
+        if (!$dealData) {
+            return false;
+        }
+
+        $currencyId = $dealData['CURRENCY_ID'] ?: 'USD';
+        $productRows = CCrmDeal::LoadProductRows($dealId);
+
+        if (!empty($productRows)) {
+            foreach ($productRows as &$row) {
+                $row['PRICE'] = $totalPrice;
+                if (empty($row['QUANTITY'])) {
+                    $row['QUANTITY'] = 1;
+                }
+            }
+            unset($row);
+            CCrmDeal::SaveProductRows($dealId, $productRows);
+        }
+
+        $dealUpdate = new CCrmDeal(false);
+        $arDealFields = [
+            'IS_MANUAL_OPPORTUNITY' => 'Y',
+            'OPPORTUNITY' => $totalPrice,
+            'CURRENCY_ID' => $currencyId,
+            'UF_CRM_1779277671391' => $kvmPrice,
+        ];
+
+        return (bool)$dealUpdate->Update($dealId, $arDealFields);
     }
 }
 

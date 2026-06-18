@@ -66,6 +66,7 @@ $scheduleTypeArr['customType'] = [
     'price' => $oldPrice,
     'kvmPrice' => $startSqmPrice,
     'discountAmount' => 0,
+    'discountPerSqm' => 0,
     'oldPrice' => $oldPrice,
     'TOTAL_AREA' => $totalKVM,
     'startSqmPrice' => $startSqmPrice,
@@ -75,6 +76,7 @@ $scheduleTypeArr['allCash'] = [
     'price' => round($oldPrice - (70 * $totalKVM), 2),
     'kvmPrice' => round($startSqmPrice - 70, 2),
     'discountAmount' => round(70 * $totalKVM, 2),
+    'discountPerSqm' => 70,
     'oldPrice' => $oldPrice,
     'TOTAL_AREA' => $totalKVM,
     'startSqmPrice' => $startSqmPrice,
@@ -85,9 +87,17 @@ $scheduleTypeArr['allCash'] = [
 $instalmentPlanArr['allCash'] = 'ერთიანი გადახდა';
 
 foreach ($conditionElements as $element) {
-    $discountPerSqm = floatval($element['DISCOUNT']);
-    $advancePct = floatval($element['ADVANCE_PAYMENT']);
-    $lastPct = floatval($element['LAST_PAYMENT']);
+    $discountPerSqm = calcGetNumericProp($element, ['DISCOUNT', 'DISCOUNT_PER_SQM', 'FASDAKLEBA']);
+    $advancePct = calcGetConditionPercent(
+        $element,
+        ['ADVANCE_PAYNMENT', 'ADVANCE_PAYMENT', 'PIRVELADI_SHENETANI', 'FIRST_PAYMENT', 'ADVANCE_PERCENT'],
+        'calcParseAdvancePctFromName'
+    );
+    $lastPct = calcGetConditionPercent(
+        $element,
+        ['LAST_PAYMENT', 'Bolo_SHENETANI', 'LAST_PAYMENT_PERCENT', 'BOLO_SHENETANI'],
+        'calcParseLastPctFromName'
+    );
     $discountAmount = round($discountPerSqm * $totalKVM, 2);
     $price = round($oldPrice - $discountAmount, 2);
     $kvmPrice = $totalKVM > 0 ? round($price / $totalKVM, 2) : 0;
@@ -119,6 +129,7 @@ foreach ($conditionElements as $element) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         :root {
             --primary: #4f46e5;
@@ -209,6 +220,16 @@ foreach ($conditionElements as $element) {
             font-weight: 600;
             cursor: not-allowed;
         }
+        .field input.date-field {
+            cursor: pointer;
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM2 2a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H2z'/%3E%3Cpath d='M2.5 4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V4z'/%3E%3C/svg%3E") no-repeat right 10px center;
+            padding-right: 34px;
+        }
+        .field input.date-field:disabled {
+            cursor: not-allowed;
+            background-color: #f8fafc;
+        }
+        .flatpickr-calendar { z-index: 99999 !important; }
         .field textarea { height: auto; padding: 10px 12px; }
         .field.frozen input {
             background: #f0f4ff;
@@ -290,7 +311,7 @@ foreach ($conditionElements as $element) {
 
 <div class="calc-header">
     <h1>განვადების კალკულატორი</h1>
-    <p>Monolith 24 &mdash; გადახდის გრაფიკის დაგეგმვა და დასტურისთვის გაგზავნა</p>
+    <!-- <p>Monolith 24 &mdash; გადახდის გრაფიკის დაგეგმვა და დასტურისთვის გაგზავნა</p> -->
     <span class="mode-badge" id="modeBadge">არასტანდარტული</span>
 </div>
 
@@ -299,13 +320,17 @@ foreach ($conditionElements as $element) {
 
 <!-- საინფორმაციო ველები -->
 <div class="card-panel">
-    <h3>საინფორმაციო ველები</h3>
+    <!-- <h3>საინფორმაციო ველები</h3> -->
     <div class="form-grid">
         <div class="field frozen">
             <label>დილი</label>
             <div style="height:38px;display:flex;align-items:center;padding:0 12px;background:#f0f4ff;border:1.5px solid #c7d2fe;border-radius:8px;">
                 <a class="deal-link" href="/crm/deal/details/<?= $dealID ?>/" target="_blank">#<?= $dealID ?></a>
             </div>
+        </div>
+        <div class="field frozen">
+            <label>უძრავი ქონების № / მ²</label>
+            <input value="<?= htmlspecialchars($binisNomeri) ?> / <?= $totalKVM ?> მ²" disabled>
         </div>
         <div class="field frozen">
             <label>საწყისი კვ.მ ღირებულება ($)</label>
@@ -315,22 +340,19 @@ foreach ($conditionElements as $element) {
             <label>საწყისი ჯამური ღირებულება ($)</label>
             <input id="startPrice" value="<?= number_format($oldPrice, 2, '.', ',') ?>" disabled>
         </div>
-        <div class="field frozen">
-            <label>უძრავი ქონების № / მ²</label>
-            <input value="<?= htmlspecialchars($binisNomeri) ?> / <?= $totalKVM ?> მ²" disabled>
-        </div>
+
     </div>
 </div>
 
 <!-- გადახდის ტიპი -->
 <div class="card-panel">
-    <h3>გადახდის ტიპი</h3>
+    <!-- <h3>გადახდის ტიპი</h3> -->
     <div class="form-grid">
         <div class="field">
             <label>ტიპი</label>
             <select id="paymentMode" class="green-border" onchange="onPaymentModeChange()">
                 <option value="customType">არასტანდარტული</option>
-                <option value="allCash">ერთიანი</option>
+                <option value="allCash">ერთიანი გადახდა</option>
                 <option value="internal">შიდა განვადება</option>
             </select>
         </div>
@@ -358,19 +380,29 @@ foreach ($conditionElements as $element) {
 
 <!-- ფასები -->
 <div class="card-panel">
-    <h3>ფასები</h3>
+    <!-- <h3>ფასები</h3> -->
     <div class="form-grid">
+        <div class="field frozen" style="display:none;">
+            <label>სულ ($)</label>
+            <input id="totalPrice" value="<?= number_format($oldPrice, 2, '.', ',') ?>" disabled>
+        </div>
+
         <div class="field">
-            <label>ფასდაკლება ($)</label>
+            <label>ფასდაკლება კვ.მ ($)</label>
+            <input id="discountPerSqm" value="0" oninput="calculateDiscountPerSqm()">
+        </div>
+        <div class="field">
+            <label>საბოლოო კვ.მ ფასი ($)</label>
+            <input id="kvmPrice" disabled>
+        </div>
+
+        <div class="field">
+            <label>ფასდაკლება სრული ($)</label>
             <input id="discountNum" value="0" oninput="calculateDiscount()">
         </div>
         <div class="field">
             <label>საბოლოო ფასი ($)</label>
             <input id="price" disabled>
-        </div>
-        <div class="field">
-            <label>საბოლოო კვ.მ ფასი ($)</label>
-            <input id="kvmPrice" disabled>
         </div>
         <div class="field" style="display:none;">
             <label>საბოლოო ფასი (₾)</label>
@@ -381,12 +413,11 @@ foreach ($conditionElements as $element) {
 
 <!-- გადახდები -->
 <div class="card-panel">
-    <h3>გადახდის პარამეტრები</h3>
+    <!-- <h3>გადახდის პარამეტრები</h3> -->
     <div class="form-grid">
         <div class="field">
             <label>პირველადი შენატანის თარიღი</label>
-            <input id="advancePayDate" type="text" placeholder="dd/mm/YYYY" autocomplete="off"
-                   onclick="BX.calendar({node:this,field:this,bTime:false,bSetFocus:false})">
+            <input id="advancePayDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
         <div class="field">
             <label>პირველადი შენატანი ($)</label>
@@ -396,32 +427,29 @@ foreach ($conditionElements as $element) {
             <label>პირველადი შენატანი (%)</label>
             <input id="advancePaymentPercent" oninput="onAdvanceChange('percent')">
         </div>
-        <div class="field">
+        <div class="field" id="fieldStartDate">
             <label>დაწყების თარიღი</label>
-            <input id="startDate" type="text" placeholder="dd/mm/YYYY" autocomplete="off"
-                   onclick="BX.calendar({node:this,field:this,bTime:false,bSetFocus:false})">
+            <input id="startDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
-        <div class="field">
+        <div class="field" id="fieldEndDate">
             <label>დასრულების თარიღი</label>
-            <input id="endDate" type="text" placeholder="dd/mm/YYYY" autocomplete="off"
-                   onclick="BX.calendar({node:this,field:this,bTime:false,bSetFocus:false})">
+            <input id="endDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
-        <div class="field">
+        <div class="field" id="fieldLastPayDate">
             <label>ბოლო შენატანის თარიღი</label>
-            <input id="lastPayDate" type="text" placeholder="dd/mm/YYYY" autocomplete="off"
-                   onclick="BX.calendar({node:this,field:this,bTime:false,bSetFocus:false})">
+            <input id="lastPayDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
-        <div class="field">
+        <div class="field" id="fieldLastPayment">
             <label>ბოლო შენატანი ($)</label>
             <input id="lastPayment" oninput="onLastChange('amount')">
         </div>
-        <div class="field">
+        <div class="field" id="fieldLastPaymentPercent">
             <label>ბოლო შენატანი (%)</label>
             <input id="lastPaymentPercent" oninput="onLastChange('percent')">
         </div>
     </div>
-    <div class="form-grid" style="margin-top:14px;">
-        <div class="field" style="grid-column: span 4;">
+    <div class="form-grid" style="margin-top:14px; display:none;">
+        <div class="field" style="grid-column: span 4; display:none;">
             <label>კომენტარი</label>
             <textarea id="commentInput" rows="2"></textarea>
         </div>
@@ -430,13 +458,22 @@ foreach ($conditionElements as $element) {
 
 <div class="actions">
     <button class="btn-calc" onclick="getAndFillGraph()">გამოთვლა</button>
-    <button class="btn-save hidden" id="saveBTN" onclick="saveGraph()">გრაფიკის შენახვა და გაგზავნა</button>
+    <button class="btn-save hidden" id="saveBTN" onclick="saveGraph()">შენახვა</button>
 </div>
 
 <table id="graphData" class="table-graph"></table>
 
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+const DATE_FIELD_IDS = ['advancePayDate', 'startDate', 'endDate', 'lastPayDate'];
+const ALL_CASH_HIDDEN_FIELDS = ['fieldStartDate', 'fieldEndDate', 'fieldLastPayDate', 'fieldLastPayment', 'fieldLastPaymentPercent'];
+const DATE_PICKER_OPTS = {
+    dateFormat: 'd/m/Y',
+    allowInput: false,
+    disableMobile: true,
+    locale: { firstDayOfWeek: 1 },
+};
 const CONFIG = {
     nbgKursi: <?= json_encode($nbgKursi) ?>,
     instalmentPlanArr: <?= json_encode($instalmentPlanArr, JSON_UNESCAPED_UNICODE) ?>,
@@ -444,6 +481,7 @@ const CONFIG = {
     dealID: <?= json_encode($dealID) ?>,
     prodID: <?= json_encode($prod_ID) ?>,
     oldPrice: <?= json_encode($oldPrice) ?>,
+    startSqmPrice: <?= json_encode($startSqmPrice) ?>,
     totalKVM: <?= json_encode($totalKVM) ?>,
     userID: <?= json_encode($USER->GetID()) ?>,
     projectName: <?= json_encode($projectName, JSON_UNESCAPED_UNICODE) ?>,
@@ -454,9 +492,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window !== window.top || (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance.getTopSlider())) {
         document.body.classList.add('in-sidepanel');
     }
+    initDatePickers();
     onPaymentModeChange();
-    setValue('startDate', dateAddMonth(today(), 1));
-    setValue('advancePayDate', today());
+    setDateValue('startDate', dateAddMonth(today(), 1));
+    setDateValue('advancePayDate', today());
 });
 
 function onPaymentModeChange() {
@@ -470,17 +509,21 @@ function onPaymentModeChange() {
 
     if (mode === 'internal') {
         scheduleField.classList.remove('hidden');
+        ALL_CASH_HIDDEN_FIELDS.forEach(show);
         fillScheduleOptions();
         confirmTxt.classList.add('hidden');
     } else if (mode === 'allCash') {
         scheduleField.classList.add('hidden');
+        ALL_CASH_HIDDEN_FIELDS.forEach(hide);
         fillAllCashData();
         confirmTxt.classList.add('hidden');
     } else {
         scheduleField.classList.add('hidden');
+        ALL_CASH_HIDDEN_FIELDS.forEach(show);
         fillCustomTypeData();
         confirmTxt.classList.remove('hidden');
     }
+    updateSaveButtonText();
     clearGraph();
 }
 
@@ -509,6 +552,7 @@ function onScheduleTypeChange() {
 
 function fillAllCashData() {
     const d = CONFIG.scheduleTypeArr.allCash;
+    setValue('discountPerSqm', formatNumber(d.discountPerSqm));
     setValue('discountNum', formatNumber(d.discountAmount));
     setValue('price', formatNumber(d.price));
     setValue('kvmPrice', formatNumber(d.kvmPrice));
@@ -520,20 +564,22 @@ function fillAllCashData() {
     setValue('lastPaymentPercent', '0');
     setValue('endDate', today());
     setValue('lastPayDate', today());
-    disableFields(['discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
+    disableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
 }
 
 function fillCustomTypeData() {
     const d = CONFIG.scheduleTypeArr.customType;
+    setValue('discountPerSqm', '0');
     setValue('discountNum', '0');
     setValue('price', formatNumber(d.price));
     setValue('kvmPrice', formatNumber(d.kvmPrice));
     setValue('priceGel', formatNumber(d.price * CONFIG.nbgKursi));
-    enableFields(['discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','startDate','advancePayDate','lastPayDate']);
+    enableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','startDate','advancePayDate','lastPayDate']);
 }
 
 function fillScheduleData(id) {
     const d = CONFIG.scheduleTypeArr[id];
+    setValue('discountPerSqm', formatNumber(d.discountPerSqm || 0));
     setValue('discountNum', formatNumber(d.discountAmount));
     setValue('price', formatNumber(d.price));
     setValue('kvmPrice', formatNumber(d.kvmPrice));
@@ -549,19 +595,21 @@ function fillScheduleData(id) {
     setValue('advancePayDate', calcDate);
 
     const price = d.price;
-    if (d.advancePaymentPct > 0) {
-        const adv = (price / 100 * d.advancePaymentPct).toFixed(2);
+    const advancePct = parseFloat(d.advancePaymentPct) || 0;
+    if (advancePct > 0) {
+        const adv = (price / 100 * advancePct).toFixed(2);
         setValue('advancePayment', formatNumber(adv));
-        setValue('advancePaymentPercent', d.advancePaymentPct);
+        setValue('advancePaymentPercent', formatNumber(advancePct));
     } else {
         setValue('advancePayment', '0');
         setValue('advancePaymentPercent', '0');
     }
 
-    if (d.lastPaymentPct > 0) {
-        const last = (price / 100 * d.lastPaymentPct).toFixed(2);
+    const lastPct = parseFloat(d.lastPaymentPct) || 0;
+    if (lastPct > 0) {
+        const last = (price / 100 * lastPct).toFixed(2);
         setValue('lastPayment', formatNumber(last));
-        setValue('lastPaymentPercent', d.lastPaymentPct);
+        setValue('lastPaymentPercent', formatNumber(lastPct));
         setValue('lastPayDate', endDate);
         setValue('endDate', dateAddMonth(endDate, -1));
     } else {
@@ -570,19 +618,33 @@ function fillScheduleData(id) {
         setValue('lastPayDate', '');
     }
 
-    disableFields(['discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
+    disableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
+}
+
+function applyPriceFromDiscount(discount) {
+    const startPrice = CONFIG.oldPrice;
+    const price = Math.max(0, startPrice - discount);
+    const kvm = CONFIG.totalKVM > 0 ? price / CONFIG.totalKVM : 0;
+    const perSqm = CONFIG.totalKVM > 0 ? discount / CONFIG.totalKVM : 0;
+    setValue('price', formatNumber(price));
+    setValue('kvmPrice', formatNumber(kvm));
+    setValue('priceGel', formatNumber(price * CONFIG.nbgKursi));
+    setValue('discountPerSqm', formatNumber(perSqm));
+    setValue('discountNum', formatNumber(discount));
 }
 
 function calculateDiscount() {
     const mode = getValue('paymentMode');
     if (mode !== 'customType') return;
-    const startPrice = CONFIG.oldPrice;
-    const discount = parseFormattedNumber(getValue('discountNum'));
-    const price = Math.max(0, startPrice - discount);
-    const kvm = CONFIG.totalKVM > 0 ? price / CONFIG.totalKVM : 0;
-    setValue('price', formatNumber(price));
-    setValue('kvmPrice', formatNumber(kvm));
-    setValue('priceGel', formatNumber(price * CONFIG.nbgKursi));
+    applyPriceFromDiscount(parseFormattedNumber(getValue('discountNum')));
+}
+
+function calculateDiscountPerSqm() {
+    const mode = getValue('paymentMode');
+    if (mode !== 'customType') return;
+    const perSqm = parseFormattedNumber(getValue('discountPerSqm'));
+    const discount = perSqm * CONFIG.totalKVM;
+    applyPriceFromDiscount(discount);
 }
 
 function onAdvanceChange(type) {
@@ -652,6 +714,7 @@ async function getAndFillGraph() {
         if (data.status === 200) {
             showError('');
             fillGraph(data, mode === 'customType');
+            updateSaveButtonText();
             show('saveBTN');
         } else {
             showError(data.errorTXT || 'გამოთვლა ვერ მოხერხდა');
@@ -663,19 +726,49 @@ async function getAndFillGraph() {
     }
 }
 
+function isAdvanceRow(row) {
+    const advance = parseFormattedNumber(getValue('advancePayment'));
+    const advanceDate = getValue('advancePayDate');
+    return advance > 0 && row.date === advanceDate && Math.abs(row.amount - advance) < 0.05;
+}
+
+function isLastRow(row) {
+    const last = parseFormattedNumber(getValue('lastPayment'));
+    const lastDate = getValue('lastPayDate');
+    return last > 0 && lastDate && row.date === lastDate && Math.abs(row.amount - last) < 0.05;
+}
+
+function paymentLabel(row, installmentNum) {
+    if (isAdvanceRow(row)) return 'პირველადი შენატანი';
+    if (isLastRow(row)) return 'ბოლო შენატანი';
+    return installmentNum;
+}
+
 function fillGraph(data, editable) {
-    let html = `<thead><tr><th>#</th><th>გადახდის თარიღი</th><th>თანხა ($)</th><th style="display:none">დარჩენილი</th></tr></thead><tbody>`;
-    data.result.forEach(row => {
-        if (row.amount <= 0) return;
-        html += `<tr><td>${row.payment}</td>`;
-        html += `<td><input type="text" value="${row.date}" ${editable ? '' : 'disabled'}
-            onclick="BX.calendar({node:this,field:this,bTime:false,bSetFocus:false})"></td>`;
+    const rows = data.result.filter(row => row.amount > 0);
+    let installmentNum = 0;
+
+    let html = `<thead><tr><th>#</th><th>გადახდის თარიღი</th><th>თანხა ($)</th><th>დარჩენილი თანხა ($)</th></tr></thead><tbody>`;
+    rows.forEach(row => {
+        if (!isAdvanceRow(row) && !isLastRow(row)) installmentNum++;
+        const label = paymentLabel(row, installmentNum);
+        html += `<tr data-payment="${label}"><td>${label}</td>`;
+        html += `<td><input type="text" class="date-field" value="${row.date}" ${editable ? '' : 'disabled'} readonly></td>`;
         html += `<td><input value="${formatNumber(row.amount)}" ${editable ? '' : 'disabled'}
             oninput="recalculateDebt()"></td>`;
-        html += `<td style="display:none">${formatNumber(row.leftToPay)}</td></tr>`;
+        html += `<td>${formatNumber(row.leftToPay)}</td></tr>`;
     });
     html += '</tbody>';
     document.getElementById('graphData').innerHTML = html;
+    if (editable) {
+        document.querySelectorAll('#graphData .date-field').forEach(el => initDatePickerOnElement(el));
+    }
+}
+
+function updateSaveButtonText() {
+    const btn = document.getElementById('saveBTN');
+    if (!btn) return;
+    btn.textContent = getValue('paymentMode') === 'customType' ? 'გაგზავნა' : 'შენახვა';
 }
 
 async function saveGraph() {
@@ -687,7 +780,7 @@ async function saveGraph() {
     if (!tbody || !tbody.rows.length) { alert('გთხოვთ ჯერ გამოთვალოთ გრაფიკი'); return; }
 
     const paymentPlan = Array.from(tbody.rows).map(row => ({
-        payment: row.cells[0].textContent,
+        payment: row.dataset.payment || row.cells[0].textContent,
         date: row.cells[1].querySelector('input').value,
         amount: parseFormattedNumber(row.cells[2].querySelector('input').value),
     }));
@@ -737,8 +830,9 @@ async function saveGraph() {
             body: JSON.stringify(savingJson),
         });
         const data = await res.json();
-        await Swal.fire({ icon: data.status === 200 ? 'success' : 'warning', title: data.TEXT, confirmButtonColor: '#4f46e5' });
-        if (data.status === 200) {
+        const swalResult = await Swal.fire({ icon: data.status === 200 ? 'success' : 'warning', title: data.TEXT, confirmButtonColor: '#4f46e5' });
+        if (data.status === 200 && swalResult.isConfirmed) {
+            refreshDealPage();
             if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance.getSliderByWindow(window)) {
                 BX.SidePanel.Instance.close();
             } else if (window.opener) {
@@ -750,14 +844,42 @@ async function saveGraph() {
     }
 }
 
+function refreshDealPage() {
+    try {
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            const slider = BX.SidePanel.Instance.getSliderByWindow(window);
+            if (slider && slider.getParentSlider) {
+                const parentSlider = slider.getParentSlider();
+                if (parentSlider) {
+                    const parentWin = parentSlider.getWindow();
+                    if (parentWin && parentWin.location) {
+                        parentWin.location.reload();
+                        return;
+                    }
+                }
+            }
+        }
+    } catch (e) {}
+
+    if (window.opener && !window.opener.closed) {
+        window.opener.location.reload();
+    } else if (window.top && window.top !== window) {
+        window.top.location.reload();
+    }
+}
+
 function recalculateDebt() {
     const price = parseFormattedNumber(getValue('price'));
     const table = document.getElementById('graphData');
     const tbody = table.querySelector('tbody');
     if (!tbody) return;
     let sum = 0;
+    let paid = 0;
     Array.from(tbody.rows).forEach(row => {
-        sum += parseFormattedNumber(row.cells[2].querySelector('input').value);
+        const amt = parseFormattedNumber(row.cells[2].querySelector('input').value);
+        sum += amt;
+        paid += amt;
+        if (row.cells[3]) row.cells[3].textContent = formatNumber(Math.max(0, price - paid));
     });
     if (Math.abs(sum - price) <= 0.05) show('saveBTN');
     else hide('saveBTN');
@@ -784,7 +906,35 @@ function dateAddMonth(date, months) {
     return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 function getValue(id) { return document.getElementById(id).value; }
-function setValue(id, val) { document.getElementById(id).value = val; }
+function setValue(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (DATE_FIELD_IDS.includes(id)) {
+        setDateValue(id, val);
+        return;
+    }
+    el.value = val;
+}
+function setDateValue(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el._flatpickr) {
+        if (val) el._flatpickr.setDate(val, false, 'd/m/Y');
+        else el._flatpickr.clear();
+    } else {
+        el.value = val || '';
+    }
+}
+function initDatePickers() {
+    DATE_FIELD_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) initDatePickerOnElement(el);
+    });
+}
+function initDatePickerOnElement(el) {
+    if (!el || el._flatpickr) return;
+    flatpickr(el, DATE_PICKER_OPTS);
+}
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 function showError(msg) {
@@ -795,8 +945,22 @@ function clearGraph() {
     document.getElementById('graphData').innerHTML = '';
     hide('saveBTN');
 }
-function disableFields(ids) { ids.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; }); }
-function enableFields(ids) { ids.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; }); }
+function disableFields(ids) {
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.disabled = true;
+        if (el._flatpickr) el._flatpickr.set('clickOpens', false);
+    });
+}
+function enableFields(ids) {
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.disabled = false;
+        if (el._flatpickr) el._flatpickr.set('clickOpens', true);
+    });
+}
 </script>
 </body>
 </html>

@@ -102,16 +102,21 @@ try {
     $arErrorsTmp[] = $e->getMessage();
 }
 
+$paymentMode = $json['payment_mode'] ?? '';
+$successText = $paymentMode === 'customType'
+    ? 'გრაფიკი წარმატებით გაიგზავნა დასადასტურებლად'
+    : 'გრაფიკი წარმატებით შეინახა';
+
 if (!empty($arErrorsTmp)) {
     $result = [
         'status' => 200,
-        'TEXT' => 'გრაფიკი შეინახა (ID: ' . $res . '), მაგრამ პროცესი ვერ გაეშვა: ' . implode('; ', $arErrorsTmp),
+        'TEXT' => $successText . ' (ID: ' . $res . '), მაგრამ პროცესი ვერ გაეშვა: ' . implode('; ', $arErrorsTmp),
         'elementId' => $res,
     ];
 } else {
     $result = [
         'status' => 200,
-        'TEXT' => 'გრაფიკი წარმატებით გაიგზავნა დასტურისთვის',
+        'TEXT' => $successText,
         'elementId' => $res,
     ];
 }
