@@ -1,128 +1,101 @@
 <?php
 ob_start();
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
-CModule::IncludeModule('crm');
 
-function printArr ($arr) {
-    echo "<pre>"; print_r($arr); echo "</pre>";
+use Bitrix\Main\Loader;
+
+if (!Loader::includeModule('crm')) {
+    die('CRM module not loaded');
 }
 
-function getCorrectDateRA($date) {
-    if (!$date) return ["", ""];
-    // Already DD/MM/YYYY (from JS reservation popup)
-    if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $date)) {
-        return [$date, $date];
-    }
-    // ISO format YYYY-MM-DDTHH:MM:SS
-    $parts   = explode("T", $date);
-    $dateArr = explode("-", $parts[0]);
-    $fixedDate = $dateArr[2] . "/" . $dateArr[1] . "/" . $dateArr[0];
-    return [$fixedDate, $fixedDate];
-}
+$APPLICATION->SetTitle("რეზერვაციის ცვლილება");
 
-function getContactInfo($contactId) {
-    $arContact = array();
-    $res = CCrmContact::GetList(array("ID" => "ASC"), array("ID" => $contactId), array("ID", "UF_CRM_1779873020955"));
-    if($arContact = $res->Fetch()){
-        $PHONE=\CCrmFieldMulti::GetList(array(), array('ENTITY_ID' => 'CONTACT','TYPE_ID' => 'PHONE', 'VALUE_TYPE' => 'MOBILE|WORK', "ELEMENT_ID" => $arContact["ID"]))->Fetch();
-        $MAIL=\CCrmFieldMulti::GetList(array(), array('ENTITY_ID' => 'CONTACT','TYPE_ID' => 'EMAIL', 'VALUE_TYPE' => 'HOME|WORK', "ELEMENT_ID" => $arContact["ID"]))->Fetch();
-        $arContact["PHONE"] = $PHONE["VALUE"];
-        $arContact["EMAIL"] = $MAIL["VALUE"];
-        return $arContact;
-    }
-    return $arContact;
-}
+$deal_id = (int)($_GET["deal_id"] ?? 0);
+if (!$deal_id) die("No deal ID");
 
-$postdata= $_POST;
-$xelshekrulebaID = $_FILES['passport'] ?? null;
-$userSelect = $postdata['userSelect'];
-$dealId = $postdata['deal_id']; 
-list($reserveDate, $onlyDate) = getCorrectDateRA($postdata['reserveDate']);
-$prodNum = $postdata['prodNum'];
-$reservationPrice = $postdata['reservationPrice'];
-$paymentType = $postdata['paymentType'];
-$dgeebi = $postdata['dgeebi'];
-$currency = $_POST['currency'] ?? 'GEL';
-$params["currency"] = $currency;
-
-$params = array("type" => $userSelect,
-                "numOfAps" => $prodNum,
-                "reserveDate" => $reserveDate,
-                "onlyDate" => $onlyDate,
-                "reservationPrice" => $reservationPrice,
-                "paymentType" => $paymentType,
-);
-
-
-if ($xelshekrulebaID && $xelshekrulebaID['error'] === UPLOAD_ERR_OK) {
-    $contactId = \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($dealId)[0];
-    $contact = getContactInfo($contactId);
-
-    $serverPath = $xelshekrulebaID['tmp_name'];
-
-    if (!$contact["UF_CRM_1779873020955"]) {
-        $CCrmContact = new CCrmContact();
-        $upd = array(
-            "UF_CRM_1779873020955" => CFile::MakeFileArray($serverPath),
-        );
-        $updateReserve = $CCrmContact->Update($contactId, $upd);
-    }
-}
-
-$fullFormat  = CSite::GetDateFormat('FULL');
-$shortFormat = CSite::GetDateFormat('SHORT');
-
-$todayForBitrix = CDatabase::FormatDate(
-    date('Y-m-d H:i:s'),
-    'YYYY-MM-DD HH:MI:SS',
-    $fullFormat
-);
-
-$reserveDateForBitrix = '';
-if ($onlyDate) {
-    $parts = explode("/", $onlyDate);
-    if (count($parts) === 3) {
-        list($day, $month, $year) = $parts;
-        $isoDate = $year . '-' . str_pad($month, 2, '0', STR_PAD_LEFT) . '-' . str_pad($day, 2, '0', STR_PAD_LEFT);
-        $reserveDateForBitrix = CDatabase::FormatDate($isoDate, 'YYYY-MM-DD', $shortFormat);
-    }
-}
-
-$arrForAdd = [
-    'UF_CRM_1779278640735' => $userSelect,
-    'UF_CRM_1779278590201' => $todayForBitrix,
-    'UF_CRM_1779278567041' => $reserveDateForBitrix,
-];
-$Deal = new CCrmDeal();
-$Deal->Update($dealId, $arrForAdd);
-
-$arErrorsTmp = array();
-$wfId = CBPDocument::StartWorkflow(
-    8,                                                               //პროცესის ID
-    array("crm", "CCrmDocumentDeal", "DEAL_$dealId"),        // deal || contact || lead || company
-    $params,
-    $arErrorsTmp
-);
-
-
-$resArr = array();
-if(!empty($dealId) && is_numeric($dealId)) {
-    if($wfId) {
-        $resArr["status"] = 200;
-        $resArr["message"] = "Sent successfully";
-
-    } else {
-        $resArr["status"] = 400;
-        $resArr["message"] = "Invalid Parameters";
-    }
-} else {
-    $resArr["status"] = 405;
-    $resArr["message"] = "Method not Found";
-}
-
-
+$res  = CCrmDeal::GetList([], ["ID" => $deal_id]);
+$deal = $res->Fetch();
 
 ob_end_clean();
-header('Content-Type: application/json; charset=utf-8');
-echo json_encode($resArr, JSON_UNESCAPED_UNICODE);
 ?>
+
+<div style="width:650px; padding:20px; background:#eef2f4;">
+
+    <div style="margin-bottom:15px;">
+        <label style="display:block; color:#4a5568; font-weight:600; margin-bottom:8px; font-size:14px;">
+            <span style="color:red">*</span> რეზერვაციის ვადა:
+        </label>
+        <input type="date" id="contr_date"
+       style="width:100%; padding:14px 18px; border:2px solid #e2e8f0; border-radius:10px; font-size:15px; outline:none; background:white; box-sizing:border-box; cursor:pointer;"
+       onclick="this.showPicker()" />
+    </div>
+
+    <div style="margin-bottom:15px;">
+        <label style="display:block; color:#4a5568; font-weight:600; margin-bottom:8px; font-size:14px;">
+            კომენტარი:
+        </label>
+        <input type="text" id="comment"
+               style="width:100%; padding:14px 18px; border:2px solid #e2e8f0; border-radius:10px; font-size:15px; outline:none; background:white; box-sizing:border-box;" />
+    </div>
+
+    <button id="saveBtn" onclick="saveUpdate()"
+            style="background:#38a169; color:#fff; padding:14px 32px; border-radius:10px; border:none; cursor:pointer; font-size:14px;">
+        Save
+    </button>
+
+    <div id="status" style="margin-top:15px; padding:10px; display:none; border-radius:5px;"></div>
+
+</div>
+
+<script>
+    function saveUpdate() {
+        var deal_id   = <?= json_encode($deal_id) ?>;
+        var date      = document.getElementById('contr_date').value;
+        var comment   = document.getElementById('comment').value;
+        var statusDiv = document.getElementById('status');
+        var btn       = document.getElementById('saveBtn');
+
+        if (!date) {
+            statusDiv.style.display    = 'block';
+            statusDiv.style.background = '#ef4444';
+            statusDiv.style.color      = '#fff';
+            statusDiv.textContent      = 'გთხოვთ აირჩიოთ თარიღი';
+            return;
+        }
+
+        btn.disabled = true;
+        statusDiv.style.display    = 'block';
+        statusDiv.style.background = '#3b82f6';
+        statusDiv.style.color      = '#fff';
+        statusDiv.textContent      = 'შენახვა...';
+
+        fetch(location.origin + '/rest/local/api/projects/saveUpdatereservation.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ deal_id: deal_id, contr_date: date, comment: comment })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 200) {
+                statusDiv.style.background = '#38a169';
+                statusDiv.textContent      = 'მოთხოვნა წარმატებით გაიგზავნა';
+                setTimeout(function() {
+                    var BX = window.top.BX;
+                    if (BX && BX.SidePanel) {
+                        var slider = BX.SidePanel.Instance.getTopSlider();
+                        if (slider) slider.close();
+                    }
+                }, 1000);
+            } else {
+                statusDiv.style.background = '#ef4444';
+                statusDiv.textContent      = 'შეცდომა: ' + (data.message || 'უცნობი შეცდომა');
+                btn.disabled = false;
+            }
+        })
+        .catch(function(err) {
+            statusDiv.style.background = '#ef4444';
+            statusDiv.textContent      = 'შეცდომა: ' + err.message;
+            btn.disabled = false;
+        });
+    }
+</script>

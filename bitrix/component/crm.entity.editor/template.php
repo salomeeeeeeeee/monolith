@@ -962,36 +962,328 @@ if (!empty($htmlEditorConfigs))
 	);
 </script>
 
+<?php
+GLOBAL $USER;
+$userID = $USER->GetID();
+$userGroups = $USER->GetUserGroupArray();
+
+$urlParts = explode('/', "//{$_SERVER['HTTP_HOST']}{$_SERVER['REQUEST_URI']}");
+$dealInfo = array();
+$leadInfo = array();
+
+function getDealInfoForDublTemplate($dealID) {
+    $res = CCrmDeal::GetListEx(array("ID" => "ASC"), array("ID" => $dealID), false, false, array("ID","CATEGORY_ID","STAGE_ID"));
+    if ($arDeal = $res->Fetch()) return $arDeal;
+    return array();
+}
+
+function getLeadInfoForDublTemplate($leadID) {
+    $res = CCrmLead::GetListEx(array("ID" => "ASC"), array("ID" => $leadID), false, false, array("ID"));
+    if ($arLead = $res->Fetch()) return $arLead;
+    return array();
+}
+
+if (isset($urlParts[4]) && $urlParts[4] == "deal" && isset($urlParts[6]) && is_numeric($urlParts[6]) && $urlParts[6] != 0) {
+    $dealInfo = getDealInfoForDublTemplate($urlParts[6]);
+}
+if (isset($urlParts[4]) && $urlParts[4] == "lead" && isset($urlParts[6]) && is_numeric($urlParts[6]) && $urlParts[6] != 0) {
+    $leadInfo = getLeadInfoForDublTemplate($urlParts[6]);
+}
+
+
+?>
+<style>
+#crm-details-category-changer-container {
+    display: none !important;
+}
+
+.ui-btn-split.intranet-binding-menu-btn,
+button.ui-btn.ui-btn-icon-setting {
+    display: none !important;
+}
+
+[id*="_convert_"] {
+    display: none !important;
+}
+
+#crm_entity_bp_starter {
+    display: none !important;
+}
+
+
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+
 <script>
 BX.ready(function() {
-    setInterval(function() {
-        document.querySelectorAll('.crm-timeline__card').forEach(card => {
-            let textBlock = card.querySelector('.crm-timeline__editable-text_text');
+    var lastStage = null;
 
-            if (textBlock && textBlock.innerText.includes("სისტემური კომენტარი:")) {
-                let actionBlock = card.querySelector('.crm-timeline__card-action');
-                let actionBlock2 = card.querySelector('.crm-timeline__editable-text_edit-icon');
-                
-                if (actionBlock) {
-                    actionBlock.style.display = "none";
+    setInterval(function() {
+        var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
+        var model = editor && editor.getModel && editor.getModel();
+        var stage = model && model.getField('STAGE_ID');
+
+        // Skip if nothing changed
+        if (stage === lastStage) return;
+        lastStage = stage;
+
+        // user_lld2uqra
+        var el = document.querySelector("[data-cid='user_lld2uqra']");
+        if (el) {
+            var hideLld = ['NEW', 'UC_WX29F1', 'PREPARATION'].indexOf(stage) !== -1;
+            el.style.display = hideLld ? 'none' : '';
+            if (!hideLld) {
+                el.style.pointerEvents = 'none';
+                el.style.userSelect = 'none';
+            }
+        }
+
+        // OPPORTUNITY_WITH_CURRENCY
+        var opp = document.querySelector("[data-cid='OPPORTUNITY_WITH_CURRENCY']");
+        if (opp) {
+            opp.style.pointerEvents = 'none';
+            opp.style.userSelect = 'none';
+        }
+
+        // user_mb1jno9p
+        var hiddenStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE'];
+        var mb = document.querySelector("[data-cid='user_mb1jno9p']");
+        if (mb) mb.style.display = hiddenStages.indexOf(stage) !== -1 ? 'none' : '';
+
+        // user_qztp1b6v
+        var qz = document.querySelector("[data-cid='user_qztp1b6v']");
+        if (qz) qz.style.display = (stage && stage.indexOf('LOSE') !== -1) ? '' : 'none';
+
+        // catalog tab
+        var catalog = document.getElementById('crm_scope_detail_c_deal__catalog');
+        if (catalog) catalog.style.display = stage === 'NEW' ? 'none' : '';
+
+        // more_button
+        var hideMoreStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
+        var moreBtn = document.getElementById('crm_scope_detail_c_deal__more_button');
+        if (moreBtn) moreBtn.style.display = hideMoreStages.indexOf(stage) !== -1 ? 'none' : '';
+
+		// Hide document button
+        var dealId = <?= isset($dealInfo['ID']) ? intval($dealInfo['ID']) : 0 ?>;
+        if (dealId) {
+            var docBtn = document.getElementById('toolbar_deal_details_' + dealId + '_document');
+            if (docBtn) docBtn.style.display = 'none';
+        }
+
+
+        // main-buttons (hide all children except deal scope when stage is NEW)
+        var box = document.querySelector('.main-buttons');
+        if (box) {
+            Array.from(box.children).forEach(function(child) {
+                if (child.id === 'crm_scope_detail_c_deal_' || child.querySelector('#crm_scope_detail_c_deal__main')) {
+                    child.style.display = '';
+                    return;
                 }
-                if (actionBlock2) {
-                    actionBlock2.style.display = "none";
+                child.style.display = stage === 'NEW' ? 'none' : '';
+            });
+        }
+
+        // user_irhcfh47 (permission-gated field)
+        var ih = document.querySelector("[data-cid='user_irhcfh47']");
+        if (ih) {
+            if (stage === 'NEW') {
+                ih.style.display = 'none';
+            } else {
+                ih.style.display = '';
+                if (userID != 1 && userID != 3) {
+                    ih.style.pointerEvents = 'none';
+                    ih.style.userSelect = 'none';
+                    ih.style.opacity = '0.7';
+                    ih.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
+                        btn.style.display = 'none';
+                    });
+                    if (!ih._lockBound) {
+                        ih._lockBound = true;
+                        ih.addEventListener('click', function(e) {
+                            if (userID != 1 && userID != 3) {
+                                e.stopPropagation();
+                                e.preventDefault();
+                            }
+                        }, true);
+                    }
+                } else {
+                    ih.style.pointerEvents = '';
+                    ih.style.userSelect = '';
+                    ih.style.opacity = '';
+                    ih.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
+                        btn.style.display = '';
+                    });
                 }
             }
-        });
-    }, 500);
-});
-
-
-BX.ready(function() {
-    setInterval(function() {
-        const el = document.querySelector("[data-cid='OPPORTUNITY_WITH_CURRENCY']");
-        if (el) {
-            el.style.pointerEvents = "none";
-            el.style.userSelect = "none";
         }
-    }, 500);
-});
 
+    }, 500);
+
+    // MutationObserver — scoped, not document.body
+    function hideSystemCommentActions() {
+        document.querySelectorAll('.crm-timeline__card').forEach(card => {
+            var textBlock = card.querySelector('.crm-timeline__editable-text_text');
+            if (textBlock && textBlock.innerText.includes("სისტემური კომენტარი:")) {
+                var a1 = card.querySelector('.crm-timeline__card-action');
+                var a2 = card.querySelector('.crm-timeline__editable-text_edit-icon');
+                if (a1) a1.style.display = 'none';
+                if (a2) a2.style.display = 'none';
+            }
+        });
+    }
+
+    hideSystemCommentActions();
+
+    // Scope observer to timeline container only, not entire body
+    var timelineContainer = document.querySelector('.crm-timeline') || document.body;
+    var observer = new MutationObserver(hideSystemCommentActions);
+    observer.observe(timelineContainer, { childList: true, subtree: true });
+});
+</script>
+
+<script>
+var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
+
+(function() {
+    var pathname = window.location.pathname.split("/");
+
+    var userGroups = <?php echo json_encode($userGroups); ?>;
+    var dealInfo = <?php echo json_encode($dealInfo); ?>;
+    var leadInfo = <?php echo json_encode($leadInfo); ?>;
+
+    if ((pathname[2] == "deal" || pathname[2] == "lead") && pathname[3] == "details") {
+        var lastPhoneNumber = "";
+
+        setInterval(function() {
+
+			
+            if (!document.getElementById("checkSamePhoneInDeals")) {
+                var newDiv = document.createElement("div");
+                newDiv.id = "checkSamePhoneInDeals";
+
+                var clientElement = document.querySelector("[data-cid='CLIENT']");
+                if (clientElement) {
+                    clientElement.appendChild(newDiv);
+                }
+            }
+
+            var phoneField1 = document.querySelector(".crm-entity-widget-client-contact-phone");
+            var phoneField2 = document.querySelector(".crm-entity-widget-content-input-phone");
+            var phoneField3 = document.querySelector("[data-cid='PHONE']");
+
+            var phoneValue = "";
+
+            if (phoneField1 && phoneField1.textContent) {
+                phoneValue = phoneField1.textContent;
+            } else if (phoneField2 && phoneField2.value) {
+                phoneValue = phoneField2.value;
+            } else if (phoneField3 && phoneField3.innerText) {
+                phoneValue = phoneField3.innerText;
+            }
+
+            if (phoneValue) {
+                phoneValue = phoneValue.replace(/\D/g, "");
+                phoneValue = phoneValue.slice(-9);
+
+                if (phoneValue.length == 9 && lastPhoneNumber != phoneValue) {
+                    lastPhoneNumber = phoneValue;
+                    getDealsByPhone(phoneValue, pathname[4]);
+                }
+            }
+        }, 2000);
+    }
+	
+
+    function getDealsByPhone(phone, id) {
+        var type = "deal";
+        if (pathname[2] == "lead") type = "lead";
+
+        fetch(location.origin + "/rest/local/api/deal/getByPhone.php?id=" + id + "&phone=" + phone + "&type=" + type)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.status == 200) {
+                    var drawDivs = "";
+
+                    if (document.getElementById("checkSamePhoneInDeals")) {
+                        document.getElementById("checkSamePhoneInDeals").innerHTML = "";
+                        drawDivs += drawFields(data.res.DEALS, "deal");
+                        drawDivs += drawFields(data.res.LEADS, "lead");
+                    }
+
+                    var total = data.res.DEALS.length + data.res.LEADS.length;
+                    document.getElementById("checkSamePhoneInDeals").innerHTML =
+                        '<div style="margin-top:10px; font-family: sans-serif;">' +
+                            '<div style="' +
+                                'display:inline-flex; align-items:center; gap:8px;' +
+                                'background:#fff0f0; border:1.5px solid #e53935;' +
+                                'border-radius:8px; padding:6px 12px;' +
+                                'cursor:pointer; user-select:none;' +
+                            '" onclick="(document.getElementById(\'dealsInfosBlock\').style.display===\'none\') ? showDealsInfos() : hideDealsInfos();">' +
+                                '<span style="' +
+                                    'background:#e53935; color:#fff;' +
+                                    'font-size:11px; font-weight:700;' +
+                                    'border-radius:50px; padding:2px 8px; letter-spacing:0.5px;' +
+                                '">' + total + '</span>' +
+                                '<span style="color:#c62828; font-weight:600; font-size:13px;">დუბლირება</span>' +
+                                '<i id="showArrow" class="fa fa-chevron-down" style="color:#e53935; font-size:11px;"></i>' +
+                                '<i id="hideArrow" class="fa fa-chevron-up" style="color:#e53935; font-size:11px; display:none;"></i>' +
+                            '</div>' +
+                            '<div id="dealsInfosBlock" style="display:none; margin-top:6px;">' +
+                                drawDivs +
+                            '</div>' +
+                        '</div>';
+                } else {
+                    if (document.getElementById("checkSamePhoneInDeals")) {
+                        document.getElementById("checkSamePhoneInDeals").innerHTML = "";
+                    }
+                }
+            })
+            .catch(function(error) { console.error('Error:', error); });
+    }
+
+    function drawFields(infos, type) {
+        var drawDivs = "";
+        for (var i = 0; i < infos.length; i++) {
+            var info = infos[i];
+            var detailUrl = type == "lead"
+                ? location.origin + "/crm/lead/details/" + info["ID"] + "/"
+                : location.origin + "/crm/deal/details/" + info["ID"] + "/";
+
+            drawDivs += '<div style="' +
+                'display:flex; align-items:center; gap:8px;' +
+                'background:#fff; border:1px solid #ffcdd2;' +
+                'border-left:3px solid #e53935;' +
+                'border-radius:6px; padding:6px 10px; margin-bottom:4px;' +
+                'font-family:sans-serif; font-size:12px; color:#333;' +
+            '">' +
+                '<a href="' + detailUrl + '" style="' +
+                    'color:#e53935; font-weight:700; text-decoration:none;' +
+                    'background:#ffebee; border-radius:4px; padding:2px 6px; white-space:nowrap;' +
+                '">#' + info["ID"] + '</a>' +
+                '<span style="color:#666;">📞 ' + info["PHONE"] + '</span>' +
+                '<span style="color:#888; background:#f5f5f5; border-radius:4px; padding:1px 6px;">' + info["CATEGORY_NAME"] + '</span>' +
+                '<span style="color:#555; margin-left:auto;">👤 ' + info["RESPONSIBLE_NAME"] + '</span>' +
+            '</div>';
+        }
+        return drawDivs;
+    }
+
+    window.showDealsInfos = function() {
+        var block = document.getElementById("dealsInfosBlock");
+        var hideArrow = document.getElementById("hideArrow");
+        var showArrow = document.getElementById("showArrow");
+        if (block) block.style.display = "block";
+        if (hideArrow) hideArrow.style.display = "";
+        if (showArrow) showArrow.style.display = "none";
+    };
+
+    window.hideDealsInfos = function() {
+        var block = document.getElementById("dealsInfosBlock");
+        var hideArrow = document.getElementById("hideArrow");
+        var showArrow = document.getElementById("showArrow");
+        if (block) block.style.display = "none";
+        if (hideArrow) hideArrow.style.display = "none";
+        if (showArrow) showArrow.style.display = "";
+    };
+})();
 </script>

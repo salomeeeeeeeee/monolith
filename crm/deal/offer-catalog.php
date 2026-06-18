@@ -1,26 +1,31 @@
 <?
 ob_start();
-require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
+require($_SERVER["DOCUMENT_ROOT"] . "/bitrix/header.php");
 $APPLICATION->SetTitle(" ");
 CJSCore::Init(array("jquery"));
 
 
 
-
-
-function getCIBlockElementsByFilter($arFilter = array()) {
+function getCIBlockElementsByFilter($arFilter = array())
+{
     $arElements = array();
-    $arSelect = Array("ID","IBLOCK_ID","NAME","DATE_ACTIVE_FROM","PROPERTY_*","PREVIEW_PICTURE","DETAIL_PICTURE", "IBLOCK_SECTION_ID");
-    $res = CIBlockElement::GetList(Array(), $arFilter, false, Array("nPageSize"=>50), $arSelect);
-    while($ob = $res->GetNextElement()) {
+    $arSelect = array("ID", "IBLOCK_ID", "NAME", "DATE_ACTIVE_FROM", "PROPERTY_*", "PREVIEW_PICTURE", "DETAIL_PICTURE", "IBLOCK_SECTION_ID");
+    $res = CIBlockElement::GetList(array(), $arFilter, false, array("nPageSize" => 50), $arSelect);
+    while ($ob = $res->GetNextElement()) {
         $arFilds = $ob->GetFields();
         $arProps = $ob->GetProperties();
         $arPushs = array();
-        foreach($arFilds as $key => $arFild) $arPushs[$key] = $arFild;
-        foreach($arProps as $key => $arProp) $arPushs[$key] = $arProp["VALUE"];
-        $arPushs["floorplan"]    = CFile::GetPath($arPushs["floorplan"]);
-        $arPushs["threedrender"]    = CFile::GetPath($arPushs["threedrender"]);
-        $price      = CPrice::GetBasePrice($arPushs["ID"]);
+        foreach ($arFilds as $key => $arFild)
+            $arPushs[$key] = $arFild;
+        foreach ($arProps as $key => $arProp)
+            $arPushs[$key] = $arProp["VALUE"];
+        $arPushs["sartulinew"] = CFile::GetPath($arPushs["sartulinew"]);
+        $arPushs["floorplan"] = CFile::GetPath($arPushs["floorplan"]);
+        $arPushs["threedrender"] = CFile::GetPath($arPushs["threedrender"]);
+        $arPushs["xedi_1"] = CFile::GetPath($arPushs["xedi_1"]);
+        $arPushs["xedi_2"] = CFile::GetPath($arPushs["xedi_2"]);
+        $arPushs["xedi_3"] = CFile::GetPath($arPushs["xedi_3"]);
+        $price = CPrice::GetBasePrice($arPushs["ID"]);
         $arPushs["PRICE"] = $price["PRICE"];
 
         array_push($arElements, $arPushs);
@@ -30,67 +35,39 @@ function getCIBlockElementsByFilter($arFilter = array()) {
 
 
 
-function printArr($arr) {
-    echo "<pre>"; print_r($arr); echo "</pre>";
+function printArr($arr)
+{
+    echo "<pre>";
+    print_r($arr);
+    echo "</pre>";
 }
 
 
 
-function getDealsByFilter($arFilter, $arSelect = array(), $arSort = array("ID"=>"DESC")) {
+function getDealsByFilter($arFilter, $arSelect = array(), $arSort = array("ID" => "DESC"))
+{
     $arDeals = array();
     $res = CCrmDeal::GetList($arSort, $arFilter, $arSelect);
-    while($arDeal = $res->Fetch()) array_push($arDeals, $arDeal);
+    while ($arDeal = $res->Fetch())
+        array_push($arDeals, $arDeal);
     return (count($arDeals) > 0) ? $arDeals : false;
 }
 
-function getUserName ($ASSIGNED_BY_ID) {
+function getUserName($ASSIGNED_BY_ID)
+{
     $res = CUser::GetByID($ASSIGNED_BY_ID)->Fetch();
 
-    return $res["ASSIGNED_BY_NAME"]." ".$res["ASSIGNED_BY_LAST_NAME"];
+    return $res["NAME"] . " " . $res["LAST_NAME"];
 }
-
-
-function grafikisGeneracia($danarti_content){
-    // printArr($danarti_content);
-
-    $grafiki = "
-      <table class='grafik-table-danart'> 
-          <tHead class='grafik-table-head'>
-              <th class='grafik-coll-n'><b>№</b></th>
-              <th class='grafik-coll'><b>გადახდის დრო</b></th>
-              <th class='grafik-coll'><b>თანხა $</b></th>
-          </tHead>";
-
-
-    foreach ($danarti_content["data"] as $story){
-        $n=$story["payment"];
-        $TARIGI=$story["date"];
-        $TANXA_NUMBR=$story["amount"];
-        $grafiki .=  "<tr class='grafik-content'>
-                                      <td class='grafik-coll-n'>$n</td>       
-                                      <td class='grafik-coll'>$TARIGI</td>
-                                      <td class='grafik-coll'>$TANXA_NUMBR</td>
-                                  </tr>";
-
-
-
-    }
-
-    $grafiki .= "</table>
-                  </div>";
-    return $grafiki;
-
-}
-
-function getUsersdsByID ($id) {
-    $arrUsers=array();
-    $arSelect = array('SELECT' => array("ID","WORK_POSITION", "PERSONAL_ICQ", "UF_*"));
+function getUsersdsByID($id)
+{
+    $arrUsers = array();
+    $arSelect = array('SELECT' => array("ID", "WORK_POSITION", "PERSONAL_ICQ", "UF_*"));
 
     $arFilter = array(
         "ID" => $id,
     );
     $rsUsers = CUser::GetList(($by = "NAME"), ($order = "desc"), $arFilter, $arSelect);
-
     while ($arUser = $rsUsers->Fetch()) {
         return $arUser;
     }
@@ -98,166 +75,129 @@ function getUsersdsByID ($id) {
 }
 
 
-
-
-
-
 global $USER;
 $userID = $USER->GetID();
-$salesmeneger=getUsersdsByID($userID);
-//printArr($salesmeneger);
+$salesmeneger = getUsersdsByID($userID);
 
-$salesmenegerphone=$salesmeneger["PERSONAL_MOBILE"];
-$salesmenegername=$salesmeneger["NAME"]." ".$salesmeneger["LAST_NAME"];
-$salesmenegermail=$salesmeneger["EMAIL"];
-$salesmenegerworkphone=$salesmeneger["WORK_PHONE"];
-$misamarti=$salesmeneger["PERSONAL_STREET"];
-
+$salesmenegerphone = $salesmeneger["PERSONAL_MOBILE"];
+$salesmenegername = $salesmeneger["NAME"] . " " . $salesmeneger["LAST_NAME"];
+$salesmenegermail = $salesmeneger["EMAIL"];
+$salesmenegerworkphone = $salesmeneger["WORK_PHONE"];
+$misamarti = $salesmeneger["PERSONAL_STREET"];
 
 
-// printArr($salesmeneger);
 $date = date("Y-m-d");
 
-$url="https://nbg.gov.ge/gw/api/ct/monetarypolicy/currencies?Currencies=USD&date={$date}";
-
+$url = "https://nbg.gov.ge/gw/api/ct/monetarypolicy/currencies?Currencies=USD&date={$date}";
+// printArr($url);
 $seb = file_get_contents($url);
 
 $seb = json_decode($seb);
 
-$seb_currency=$seb[0]->currencies[0]->rate;
-
+$seb_currency = $seb[0]->currencies[0]->rate;
 // printArr($seb_currency);
 
-if(isset($_GET["dealID"]) && !empty($_GET["dealID"])) $dealID = $_GET["dealID"];
 
+if (isset($_GET["prod_ID"]) && !empty($_GET["prod_ID"]))
+    $documentid = $_GET["prod_ID"];
 
-
-
-$productID = $_GET["prod_ID"];
+$prod_ID = $documentid;
 
 $arFilter = array(
-    "ID" => $dealID,
+    "ID" => $prod_ID
 );
 
+$product = getCIBlockElementsByFilter($arFilter);
 
+$korpusi = $product[0]['_L24CUB'];
+$sadarbazo = $product[0]['_D599QA'];
+$sartuli = $product[0]['_FTRIDL'];
+$flatNum = $product[0]['__6KWOWZ'];
+$totalspace = $product[0]['__173JA5'];
+$sacxovrebelifarti = $product[0]['__US58ND'];
+$aivani = $product[0]['__BL1XXK'];
 
-// $product = getCIBlockElementsByFilter($arFilter);
-$Deal = getDealsByFilter($arFilter);
-
-$prods = CCrmDeal::LoadProductRows($dealID);
-
-$arFilter=array("ID"=>$productID);
-
-$product=getCIBlockElementsByFilter($arFilter);
-
-
-$project=$product[0]['__VO9RG4'];
-$sartuli=$product[0]['_FTRIDL'];
-$sacxovrebelifarti=$product[0]['__US58ND'];
-$sadarbazo=$product[0]['_D599QA'];
-$aivani=$product[0]['__BL1XXK'];
-$flatNum=$product[0]['__6KWOWZ'];
-$korpusi=$product[0]['_L24CUB'];
-$totalspace=$product[0]['__173JA5'];
-$chabarebisforma= $product[0]['SUBMISSION_TYPE'];
-$sawyisifasilari=$Deal[0]['UF_CRM_1693385814530'];
-$totalprice = $product[0]['PRICE'];
-// $kvmprice=$Deal[0]["UF_CRM_1693385814530"];
-$kvmprice = $product[0]['PRICE'];
 $kvmdollar = $product[0]['__6ZWTER'];
-// $kursi=$Deal[0]["UF_CRM_1701786033562"];
-$responsible=$product[0]["DEAL_RESPONSIBLE"];
-$responsibleinfo=getUsersdsByID($Deal[0]["ASSIGNED_BY_ID"]);
-// printArr($product);
-$responsibleemail=$responsibleinfo["EMAIL"];
+$kvmezo = $product[0]['yardKvmPrice'];
+$kvmterasa = $product[0]['terraceprice_per'];
+
+
+$totalprice = round($product[0]['PRICE']);
+
+$sartulinew = $product[0]["sartulinew"];
+$floorplan = $product[0]['floorplan'];
+$threeD = $product[0]["threedrender"];
+
+$xedi_1 = $product[0]['xedi_1'];
+$xedi_2 = $product[0]["xedi_2"];
+$xedi_3 = $product[0]["xedi_3"];
+
 $chabarebisforma = $product[0]['SUBMISSION_TYPE'];
+$projectName = $deals[0]['UF_CRM_1779277729207'];
+$kvmPrice = $product[0]['__6ZWTER'];
+$projectID = $product[0]['IBLOCK_SECTION_ID'];
+$projectName = $product[0]['__VO9RG4'];
 
 
+$fartisType1 = $product[0]['__X1GCRZ'];
 
-// $fartistipi=$Deal[0]['UF_CRM_1693385992603'];
-
-
-
-
-
-
-
+if($fartisType1=="ბინა"){
+    $fartisType="ბინი";
+}else {
+    $fartisType=$fartisType1;
+}
 
 
-//printArr($Deal);
-// printArr($product[0]);
+// $chabarebisforma = $product[0]['SUBMISSION_TYPE'];
+// $sawyisifasilari = $product[0]['KVM_PRICE'];
 
-$twoDrender=$product[0]['floorplan'];
-$threeD=$product[0]["threedrender"];
-
-$projectID=$product[0]['IBLOCK_SECTION_ID'];
 
 // if($projectID==21){
-//     $projectName="ლისი";
-// }elseif($projectID==22){
-//     $projectName="დიღომი";
-// }elseif($projectID==23){
-//     $projectName="ვერონა";
+//     $projectName="დიღომი ჭალები";
 // }
 
 
-$arFilter = array(
-    "ID" => $projectID,
-);
-
-$arFilter = array(
-    "ID" => 37197,
-);
-
-
-$fotilogo = getCIBlockElementsByFilter($arFilter);
-if (count($fotilogo)) {
-    $fotilogofoto = CFile::GetPath($fotilogo[0]["PHOTO"]);
-}
+// $arFilter = array(
+//     "ID" => $projectID,
+// );
 
 
 
 $arFilter = array(
-    "ID" =>37195,
+    "ID" => 10953,
 );
 
-$beliashvili = getCIBlockElementsByFilter($arFilter);
-if (count($beliashvili)) {
-    $beliashvilifoto = CFile::GetPath($beliashvili[0]["PHOTO"]);
+$zion = getCIBlockElementsByFilter($arFilter);
+if (count($zion)) {
+    $zionfoto = CFile::GetPath($zion[0]["PHOTO"]);
 }
-
-
 
 $arFilter = array(
-    "ID" =>37194,
+    "ID" => 11131,
 );
 
-$reverance = getCIBlockElementsByFilter($arFilter);
-if (count($reverance)) {
-    $reverancefoto = CFile::GetPath($reverance[0]["PHOTO"]);
+$z = getCIBlockElementsByFilter($arFilter);
+if (count($z)) {
+    $zfoto = CFile::GetPath($z[0]["PHOTO"]);
 }
 
-$arFilter=array("PROPERTY_DEAL"=>$dealID);
+$arFilter = array(
+    "ID" => 11133,
+);
 
-
-$grafikiJson=getCIBlockElementsByFilter($arFilter);
-
-if ($grafikiJson){
-    $grafikicount=count($grafikiJson)-1;
-    $json = str_replace("&quot;", "\"",  $grafikiJson[$grafikicount]["JSON"]);
-    $grafikiArr = json_decode($json, true);
-
-    $grafikiTable = grafikisGeneracia($grafikiArr);
-
-    $sesxisMoculoba = $grafikiArr["loan_amount"];
-    $tanamonawileoba = $grafikiArr["tanamonawileoba"];
-    $wliuriProcent = $grafikiArr["wliuriProcent"];
-    $sesxisVada = $grafikiArr["sesxisVada"];
-    $dasafariSul = $grafikiArr["dasafariSul"];
-    $gadasaxadiTveshi = $grafikiArr["gadasaxadiTveshi"];
-
+$logo2 = getCIBlockElementsByFilter($arFilter);
+if (count($logo2)) {
+    $logo2foto = CFile::GetPath($logo2[0]["PHOTO"]);
 }
 
+$arFilter = array(
+    "ID" => 11134,
+);
+
+$bade = getCIBlockElementsByFilter($arFilter);
+if (count($bade)) {
+    $badefoto = CFile::GetPath($bade[0]["PHOTO"]);
+}
 
 ?>
 
@@ -268,149 +208,55 @@ if ($grafikiJson){
 </head>
 
 <style>
-
-
-
-
-    /* font-family: MyCustomFont; */
-
-
-
-    /* Define styles for the table */
-    #myTable {
-        border-collapse: separate;
-        border-spacing: 10px;
-        width: 60%;
-        background-color: #013d58;
-        color: white;
-        float: right;
-        margin-top: 310px;
-        font-size: small;
-        margin-top:
-    }
-
-
-    #myTable th,
-    #myTable td {
-        width: 1%;
-        text-align: left;
-        padding-top: 2px;
-        padding-bottom: 2px;
-        border-bottom: 0.2px solid white;
-        font-family: "BPG Nino Elite Exp Caps", sans-serif;
-        text-transform: uppercase;
-    }
-
-    #myTable th {
-        background-color: #013d58;
-        width: 2%;
-    }
-
-    #myTable tr {
-        position: relative;
-    }
-
-    #myTable tr::after {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 1px;
-        background-color: white;
-    }
-
-    #myTable td {
-        font-weight: 600;
-        font-size: 14px;
-        color: #d2d2ce;
-    }
-
-    .binisprice {
-        background-color: #a0c6a6;
-        font-weight: bolder;
-    }
-
-    .totalKVM {
-        color: black;
-    }
-
-    #projectName {
-        width: 33%;
-    }
-
-    .div p {
-        margin-top: 2px;
-    }
-
-    #price th {
-        align-items: center;
-    }
-
-    #myTable td:nth-child(1) {
-        /* Style for the first column */
-        font-weight: 700; /* Normal text */
-        color: #ffffff; /* White color */
-    }
-
-    #myTable td:nth-child(2) {
-        /* Style for the second column */
-        font-weight: bolder; /* Bold text */
-    }
-
-
-
-    #myTable tr:nth-child(10) th,
-    #myTable tr:nth-child(11) th {
-        border-bottom: none !important;
-    }
-
-
-
     .workarea-content-paddings {
         padding: 0 !important;
     }
 
-    #address{
-        font-weight: bolder;
-        text-transform: none;
-
-    }
-    #sales{
-        font-weight: bolder;
-        text-transform: none;
-
-
-    }
-    #workphone{
+    #address {
         font-weight: bolder;
         text-transform: none;
 
     }
 
-    #phone{
+    #sales {
+        font-weight: bolder;
+        text-transform: none;
+
+
+    }
+
+    #workphone {
         font-weight: bolder;
         text-transform: none;
 
     }
-    #mail{
+
+    #phone {
         font-weight: bolder;
         text-transform: none;
 
     }
 
-    #link{
+    #mail {
         font-weight: bolder;
         text-transform: none;
 
     }
+
+    #link {
+        font-weight: bolder;
+        text-transform: none;
+
+    }
+
     .info {
         bottom: 0;
         left: 0;
         width: 100%;
         display: flex;
-        justify-content:center;
+        justify-content: center;
         padding: 20px;
-        margin-top: 940px;
+
         font-family: "Arial GEO BoldItalic", sans-serif;
 
     }
@@ -420,7 +266,7 @@ if ($grafikiJson){
         padding: 10px;
     }
 
-    .column p{
+    .column p {
         margin: 0;
     }
 
@@ -429,429 +275,498 @@ if ($grafikiJson){
         flex-direction: column;
     }
 
-    #detalebi{
-
-        color: gray;
-        position: relative;
-        font-weight: 80%;
-    }
-
-    #girebuleba{
+    .detalebi {
         text-transform: uppercase;
         font-weight: bolder;
         position: relative;
+        top: 356px;
+        left: 100px;
+        border-bottom: 2px solid #013d58 !important;
         font-family: "BPG WEB 001 Caps", sans-serif;
-
+        text-transform: uppercase;
     }
 
-    #sakontaqto{
+    .girebuleba {
         text-transform: uppercase;
         font-weight: bolder;
         position: relative;
+        top: 663px;
+        left: 100px;
+        border-bottom: 2px solid #013d58 !important;
         font-family: "BPG WEB 001 Caps", sans-serif;
-        margin-left: 100px;
-        margin-top: 1px;
+        text-transform: uppercase;
     }
 
 
     .foto {
-        background-image: url("<?php echo $whitebackgroundfoto ?>");
-        background-size:cover;
-        background-position: center; /* Center the background */
+        background-image: url("<?php echo $zfoto ?>");
         position: absolute;
         background-repeat: no-repeat;
-        top: 17px;
-        left: 0;
-        width: 100%; /* Full width */
-        height: 100vh; /* Viewport height, covers the entire screen vertically */
+        top: 220px;
+        left: 30px;
+        width: 100%;
+        height: 100vh;
+        background-size: 300px;
+
     }
 
-    img{
-        margin-top: 1550px;
-        width: 800px;
-        height: auto;
-        align-items: center;
+    
+    .foto2 {
+        background-image: url("<?php echo $zionfoto ?>");
+        background-repeat: no-repeat;
+        width: 100%;
+        height: 100%;
+        background-size: 250px;
+        margin-left: 50px;
+        margin-top: 30px;
+        position: absolute;
+        display: flex;
+
+
     }
 
-    .bx-layout-inner-inner-top-row{
-        display:none;
+    .foto3 {
+        background-image: url("<?php echo $zfoto ?>");
+        position: absolute;
+        background-repeat: no-repeat;
+        top: 1440px;
+        left: 30px;
+        width: 100%;
+        height: 100%;
+        background-size: 340px;
+
+
     }
 
-    .workarea-content-paddings{
-        padding:0px;
-        margin:0 !important;
+    .foto4 {
+        background-image: url("<?php echo $zionfoto ?>");
+        background-repeat: no-repeat;
+        width: 100%;
+        height: 100%;
+        background-size: 280px;
+        margin-left: 50px;
+        margin-top: 30px;
+        position: absolute;
+        display: flex;
+
+
     }
-    .bx-layout-inner-left{
-        display:none;
+
+    .foto5 {
+        background-image: url("<?php echo $logo2foto ?>");
+        background-repeat: no-repeat;
+        width: 100%;
+        height: 100%;
+        background-size: 280px;
+        margin-left: 50px;
+        margin-top: 500px;
+        position: absolute;
+        display: flex;
+
+
     }
-    .bx-layout-inner-inner-cont{
-        padding:0 !important;
+
+    .foto6 {
+        background-image: url("<?php echo $badefoto ?>");
+        background-repeat: no-repeat;
+        width: 100%;
+        height: 100%;
+        background-size: 250px;
+        margin-left: 50px;
+        margin-top: 750px;
+        position: absolute;
+        display: flex;
+
     }
-    .workarea-content{
-        margin:0 !important;
+
+
+    .bx-layout-inner-inner-top-row {
+        display: none;
     }
-    #header-inner{
-        display:none;
+
+    .workarea-content-paddings {
+        padding: 0px;
+        margin: 0 !important;
+        background-color: #f9faf8;
     }
-    #bx-im-bar{
-        display:none;
+
+    .bx-layout-inner-left {
+        display: none;
+        background-color: #f9faf8;
     }
-    #header{
-        display:none;
+
+    .bx-layout-inner-inner-cont {
+        padding: 0 !important;
+        background-color: #f9faf8;
     }
+
+    .workarea-content {
+        margin: 0 !important;
+        background-color: #f9faf8;
+    }
+
+    #header-inner {
+        display: none;
+    }
+
+    #bx-im-bar {
+        display: none;
+    }
+
+    #header {
+        display: none;
+    }
+
 
     :root {
-        background-color: white;
+        background-color: #f9faf8;
     }
 
 
-    table {
-        font-family: Arial, sans-serif;
+    .rounded-cell {
+        width: auto;
+        /* max-width: 900px; */
+        height: 0px;
+        background-color: #0b3860;
+        border-radius: 50px;
+        display: flex;
+        align-items: center;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        /* Adds padding inside the cell */
+        margin-left: 450px;
+        margin-top: 20px;
+        margin-right: 30px;
+
 
     }
-    .table-container {
 
-        width: 100%;
-        max-width: 1330px;
-        margin: 0 auto;
-        margin-top: calc(120px + 30px);
-
-        border-collapse: collapse;
-
-
+    .footer {
+        width: auto;
+        max-width:100%;
+        height: 50px;
+        background-color: #0b3860;
+        border-radius: 50px;
+        display: flex;
+        align-items: center;
+        padding: 20px;
+        margin-top: 13px;
+        margin-right: 37px;
     }
 
-    @media print {
-        .table-container {
-
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-            margin-top: calc(120px + 30px);
-
-            border-collapse: collapse;
-
-
-        }
-    }
-    .table-container table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 20px 0;
-    }
-    .table-container th, .table-container td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
-    }
-    .table-container th {
-        background-color: #493b93;
+    .footertext {
         color: white;
-        text-align: center;
+        font-size: 12px;
+        font-family: "BPG WEB 001 Caps", sans-serif;
+        text-transform: uppercase;
+        margin: 5px;
+        font-weight: normal;
     }
-    .table-title {
+
+
+    .rounded-cell2 {
+        width: auto;
+        max-width: 800px;
+        height: 0px;
+        background-color: #b2c2e1;
+        border-radius: 50px;
+        display: flex;
+        align-items: center;
+        padding: 20px;
+        /* Adds padding inside the cell */
+        margin-top: 13px;
+
+    }
+
+    .cell-text {
+        color: white;
+        font-size: 24px;
+        font-family: "BPG WEB 001 Caps", sans-serif;
+        text-transform: uppercase;
+        margin: 5px;
         font-weight: bold;
-        margin-top: 20px;
     }
 
-    .grafik-table_cell{
-        border:solid;
-        border-width:1px;
-        width:49%;
-    }
-    .grafik-table{
-        border-collapse:collapse ;
-        border:solid;
-        border-width:1px;
-    }
-    .grafik-table_cell_title{
-        border:solid;
-        border-width:1px;
-        text-align:center;
-    }
-
-
-    .grafik-coll {
-        border:solid;
-        border-width:1px;
-        text-align:center;
-        text-align: center;
-        border: 1px solid black;
-        width:23%;
-    }
-
-    .grafik-coll-n{
-        border:solid;
-        border-width:1px;
-        text-align:center;
-        width:15%;
-    }
-
-    .grafik-table-danart{
-        font-family: arial, sans-serif;
-        border-collapse: collapse;
-        width: 70%;
-        margin-top: 200px;
-        margin: 0 auto;
-    }
-    .grafik-table-danart {
-        margin-top: 200px;
-    }
-
-    .grafik-table-head{
-        color:black;
-        height:10px;
-        border: 1px solid black;
-    }
-
-    .grafik-content {
-        border:solid;
-        border-width:1px;
-        text-align:center;
-
-    }
-
-
-    .grafik-table-head-grafiki{
-        width:100%;
-        text-align:center;
-        margin-top: 500px;
-        position: relative;
-    }
-
-
-    .fotilogofoto {
-        background-image: url("<?php echo $fotilogofoto ?>");
-        background-repeat: no-repeat;
-        width: 100%;
-        height: 100%;
-        background-size: 150px;
-        margin-left: 100px;
-        margin-top: 40px;
-        position: absolute;
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        background-size: 200px;
-
-
-    }
-    .beliashvilifoto{
-        background-image: url("<?php echo $beliashvilifoto ?>");
-        background-repeat: no-repeat;
-        width: 100%;
-        height: 100%;
-        background-size: 150px;
-        margin-left: 100px;
-        margin-top: 40px;
-        position: absolute;
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        background-size: 200px;
-
-
-    }
-
-    .reverance{
-        background-image: url("<?php echo $reverancefoto ?>");
-        background-repeat: no-repeat;
-        width: 100%;
-        height: 100%;
-        background-size: 150px;
-        margin-left: 100px;
-        margin-top: 40px;
-        position: absolute;
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        background-size: 200px;
-
-
-    }
-
-
-    @media print {
-        .header1 {
-            position: fixed;
-
-        }
-
-    }
-
-    .foto2, .link {
-        flex: 1; /* Allow both sections to take equal space */
-        text-align: center; /* Center align text within each section */
-    }
-
-    .link{
+    .cell-text2 {
+        color: #0b3860;
+        font-size: 15px;
+        font-family: "BPG Nino Elite Exp Caps", sans-serif;
+        text-transform: uppercase;
+        margin: 5px;
         font-weight: bold;
-        margin-top: 60px;
-        margin-right: -180px;
     }
 
-    @media print {
-        .link{
-            font-weight: bold;
-            margin-top: 60px;
-            margin-right: 70px;
-        }
-    }
-    .table-container th:first-child {
-        text-align: left;
-        padding-left: 10px;
-    }
-    .fasi{
-        background-color: green;
+    .binaN {
+        font-size: 25px;
+        font-family: "BPG WEB 001 Caps", sans-serif;
+        text-transform: uppercase;
+        font-weight: bolder;
+        font-size: 30px;
+        color: #95c084;
+        margin-top: 28px;
+        margin-left: 20px;
+
     }
 
+    .rounded-cell3 {
+        width: auto;
+        max-width: 800px;
+        /* Increased from 400px to 600px */
+        height: 0px;
+        background-color: #b2c2e1;
+        border-radius: 50px;
+        display: flex;
+        align-items: center;
+        padding: 20px;
+        /* Adds padding inside the cell */
+        margin-top: 5px;
 
-    #twoDRenderContainer{
-        margin-top: 20px;
     }
 
+    .rounded-cell4 {
+        width: auto;
+        max-width: 800px;
+        /* Increased from 400px to 600px */
+        height: 0px;
+        /* Increase height to ensure content fits */
+        background-color: #b2c2e1;
+        border-radius: 50px;
+        display: flex;
+        align-items: center;
+        padding: 20px;
+        margin-top: 5px;
+        margin-right: 30px;
 
+    }
+
+    .rounded-cell5 {
+        width: auto;
+        max-width: 800px;
+        /* Adjust this if needed */
+        height: 0px;
+        /* Increase height to ensure content fits */
+        background-color: #b2c2e1;
+        border-radius: 50px;
+        display: flex;
+        align-items: center;
+        padding: 20px;
+        margin-top: 13px;
+        margin-right: 30px;
+
+    }
+
+    .column-container {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        margin-left: 450px;
+        justify-content: space-between;
+    }
+
+    .column {
+        flex: 1;
+        margin-right: 10px;
+        width: 48%;
+    }
+
+    .column:last-child {
+        margin-right: 0;
+    }
+
+    .text {
+        font-size: 14px;
+        color: black;
+        font-weight: light;
+    }
+
+    .info2 {
+        margin-left: 70px;
+        margin-top: 810px;
+        z-index: 1;
+    }
+
+    .floorplan img {
+        width: 100%;
+        height: auto;
+    }
+
+    .threeDRender img {
+        width: 100%;
+        height: auto;
+    }
+
+    .sartulinew img {
+        width: 100%;
+        height: auto;
+    }
+
+    .xedi_1 img {
+        width: 100%;
+        height: auto;
+    }
+
+    .xedi_2 img {
+        width: 100%;
+        height: auto;
+    }
+    
+    .xedi_3 img {
+        width: 100%;
+        height: auto;
+    }
 </style>
 
+<div class="foto"></div>
+<div class="foto2"> </div>
+<div>
+    <div class="rounded-cell">
+        <p class="cell-text"><?php echo htmlspecialchars($fartisType); ?>ს დეტალები</p>
+    </div>
+    <div class="column-container">
+        <div class="column">
 
+            <div class="rounded-cell2">
+                <p class="cell-text2">პროექტი</p>
+            </div>
+            <div class="rounded-cell3" id="korpusiDiv">
+                <p class="cell-text2">კორპუსი</p>
+            </div>
+            <div class="rounded-cell3" id="sadarbazoDiv">
+                <p class="cell-text2">სადარბაზო</p>
+            </div>
+            <div class="rounded-cell3" id="sartuliDiv">
+                <p class="cell-text2">სართული</p>
+            </div>
+            <div class="rounded-cell3" id="binisNomeriDiv">
+                <p class="cell-text2"><?php echo htmlspecialchars($fartisType); ?>ს ნომერი</p>
+            </div>
+            <div class="rounded-cell3" id="binisJamuriFasiDiv">
+                <p class="cell-text2"><?php echo htmlspecialchars($fartisType); ?>ს ჯამური ფართი</p>
+            </div>
+            <div class="rounded-cell3" id="sacxovrebeliFartiDiv">
+                <p class="cell-text2">საცხოვრებელი ფართი</p>
+            </div>
+            <div class="rounded-cell3" id="sazafxuloDiv">
+                <p class="cell-text2">საზაფხულო ფართი</p>
+            </div>
+            <!-- <div class="rounded-cell3">
+                <p class="cell-text2">ჩაბარების მდგომარეობა</p>
+            </div> -->
 
-<div class="table-container">
+        </div>
 
-    <table>
+        <div class="column">
+            <div class="rounded-cell5">
+                <p class="cell-text2"><span id="projectName"> </span></p>
+            </div>
+            <div class="rounded-cell4" id="korpusiValueDiv">
+                <p class="cell-text2"><span id="korpusi"> </span></p>
+            </div>
+            <div class="rounded-cell4" id="sadarbazoValueDiv">
+                <p class="cell-text2"><span id="sadarbazo"> </span></p>
+            </div>
+            <div class="rounded-cell4" id="sartuliValueDiv">
+                <p class="cell-text2"><span id="sartuli"> </span></p>
+            </div>
+            <div class="rounded-cell4" id="binisNomeriValueDiv">
+                <p class="cell-text2"><span id="flatNum"> </span> </p>
+            </div>
+            <div class="rounded-cell4" id="totalspaceValueDiv">
+                <p class="cell-text2"><span id="totalspace"> </span> </p>
+            </div>
+            <div class="rounded-cell4" id="sacxovrebeliFartiValueDiv">
+                <p class="cell-text2"> <span id="sacxovrebelifarti"> </span> </p>
+            </div>
+            <div class="rounded-cell4" id="sazafxuloValueDiv">
+                <p class="cell-text2"><span id="aivani"> </span> </p>
+            </div>
+            <!-- <div class="rounded-cell4">
+                <p class="cell-text2"> პრე რემონტი </p>
+            </div> -->
+        </div>
+    </div>
+    <div class="rounded-cell">
+        <p class="cell-text"><?php echo htmlspecialchars($fartisType); ?>ს ღირებულება</p>
+    </div>
+    <div class="column-container">
+    <div class="column">
+    <div class="rounded-cell2" id="kvmPriceDiv">
+        <p class="cell-text2">საცხოვრებელი ფართის ფასი 1 კვ.მ</p>
+    </div>
 
-        <tr>
-            <th colspan="2" id="girebuleba">ბინის დეტალები</th>
-        </tr>
-        <tr>
-            <td id="detalebi">პროექტი</td>
-            <td id="detalebi"><span id="project"> </span></td>
-        </tr>
-        <tr id="detalebi">
-            <td id="detalebi">კორპუსი</td>
-            <td id="detalebi"><span id="korpusi"></span></td>
-        </tr>
-        <!-- <tr>
-            <td id="detalebi">სადარბაზო</td>
-            <td id="detalebi"><span id="sadarbazo"></span></td>
-        </tr> -->
-        <tr>
-            <td id="detalebi">სართული</td>
-            <td id="detalebi"><span id="sartuli"></span></td>
-        </tr>
-        <tr>
-            <td id="detalebi">ბინის ნომერი</td>
-            <td id="detalebi"><span id="flatNum"></span></td>
-        </tr>
-        <tr>
-            <td id="detalebi">საცხოვრებელი ფართი m<sup>2</sup></td>
-            <td id="detalebi"><span id="sacxovrebelifarti"></span> m<sup>2</sup></td>
-        </tr>
-        <tr>
-            <td id="detalebi">აივანი/ტერასა m<sup>2</sup></td>
-            <td id="detalebi"><span id="aivani"></span> m<sup>2</sup></td>
-        </tr>
-        <tr>
-            <td id="detalebi">ბინის ჯამური ფართი</td>
-            <td id="detalebi"><span id="totalspace"></span> m<sup>2</sup></td>
-        </tr>
+    <?php if (($projectName == "PETRA SEA RESORT K" && $sartuli == "1" ) || ($projectName == "PETRA SEA RESORT D" && $sartuli == "1")) : ?>
+        <div class="rounded-cell2" id="kvmPriceDiv">
+            <p class="cell-text2">ეზოს ფართის ფასი 1 კვ.მ</p>
+        </div>
+        <div class="rounded-cell2" id="kvmPriceDiv">
+            <p class="cell-text2">ტერასის ფართის ფასი 1 კვ.მ</p>
+        </div>
+    <?php endif; ?>
 
-        <tr>
-            <td id="detalebi">ჩაბარების ფორმა</td>
-            <td id="detalebi"><span id="chabarebisforma"></span></td>
-        </tr>
-
-
-    </table>
-
-    <table>
-
-        <tr class="fasi">
-            <th id="girebuleba">ბინის ღირებულება</th>
-            <th id="girebuleba">დოლარი</th>
-            <th id="girebuleba">ლარი</th>
-        </tr>
-
-
-        <tr>
-            <td id="detalebi">საწყისი ფასი 1 m<sup>2</sup></td>
-            <td id="detalebi">$<span id="kvmprice"></span></td>
-            <td id="detalebi">₾<span id="kvmpriceGel"></span></td>
-        </tr>
-        <tr>
-            <td id="detalebi">საწყისი ფასი ჯამურად</td>
-            <td id="detalebi">$<span id="totalprice"></span></td>
-            <td id="detalebi">₾<span id="totalpriceGel"> </span></td>
-        </tr>
-        <tr>
-            <td id="detalebi">საბოლოო ფასი 1 m<sup>2</sup></td>
-            <td id="detalebi"></td>
-            <td id="detalebi"></td>
-        </tr>
-        <tr>
-            <td id="detalebi">საბოლოო ფასი ჯამურად</td>
-            <td id="detalebi"></td>
-            <td id="detalebi"></td>
-        </tr>
-        <!-- <tr>
-            <td id="detalebi">ფასდაკლება სულ</td>
-            <td id="detalebi"></td>
-            <td id="detalebi"></td>
-
-        </tr> -->
-        <tr>
-            <td id="detalebi" style="border:none"></td>
-            <td id="detalebi"colspan="3" style="background-color:#e8e4e4; border:none"><span id="kursi"></span></td>
-        </tr>
-
-    </table>
-
-
-
-</div>
-<!-- <p style="display: inline; margin-left: 580px;" id="kursi"> </p> -->
-<br>
-<p style="display: inline; margin-left: 100px; color: gray;
-  font-weight: 80%;"> შეთავაზების მომზადების თარიღი: <span id="current-date"></span></p>
-<br>
-<p  style="display: inline; margin-left: 100px; color: gray;
-  font-weight: 80%;" >  შეთავაზება მოამზადა: <?php echo htmlspecialchars($salesmenegername); ?> </p>
-<br><br>
-<p id="sakontaqto"> საკონტაქტო ინფორმაცია</p>
-<br>
-
-<div style="display: flex; margin-left: 100px; align-items: stretch; margin-top:-15px;">
-    <!-- Vertical line -->
-    <div style="border-left: 1px solid gray; margin-right: 10px; width: 1px;"></div>
-    <!-- Content -->
-    <div style="color: gray; font-weight: 80%;">
-        <p style="margin: 0; padding: 5px 0;">გაყიდვების მენეჯერი: <?php echo htmlspecialchars($salesmenegername); ?></p>
-       
-         <p style="margin: 0; padding: 5px 0;">ტელეფონი:  032 211 11 05</p>
-        <p style="margin: 0; padding: 5px 0;">მობილური: <?php echo htmlspecialchars($salesmenegerphone); ?></p>
+    <div class="rounded-cell2" id="totalpriceDiv">
+        <p class="cell-text2">ჯამური ფასი</p>
     </div>
 </div>
 
+<div class="column">
+    <div class="rounded-cell5" id="kvmPriceValueDiv">
+        <p class="cell-text2"><span id="kvmPrice"> </span></p>
+    </div>
+
+    <?php if (($projectName == "PETRA SEA RESORT K" && $sartuli == "1" ) || ($projectName == "PETRA SEA RESORT D" && $sartuli == "1")) : ?>
+        <div class="rounded-cell5" id="kvmPriceValueDiv">
+            <p class="cell-text2"><span id="kvmEzo"> </span></p>
+        </div>
+        <div class="rounded-cell5" id="kvmPriceValueDiv">
+            <p class="cell-text2"><span id="kvmterasa"> </span></p>
+        </div>
+    <?php endif; ?>
+
+    <div class="rounded-cell5" id="totalPriceValueDiv">
+        <p class="cell-text2"><span id="totalprice"> </span></p>
+    </div>
+</div>
+        <!-- <div class="column">
+            <div class="rounded-cell5" id="kvmPriceGelValueDiv">
+                <p class="cell-text2">₾ <span id="kvmPriceGel"> </span> </p>
+            </div>
+            <div class="rounded-cell4" id="totalPriceGelValueDiv">
+                <p class="cell-text2">₾ <span id="totalpriceGel"> </span></p>
+            </div>
+
+        </div> -->
+    </div>
+
+    <div class="column-container">
+       
+
+        <div class="column">
+            <div class="footer">
+                <p class="footertext">
+                    <?php echo htmlspecialchars($salesmenegername); ?><br>
+                    ტელეფონი: 032 230 99 77 <br>
+                    <!-- მისამართი: ჭაბუა ამირეჯიბის გზატკეცილი N2, ბიზნეს ცენტრი მზიური სართული 2  -->
+                </p>
+            </div>
+        </div>
 
 
-<!-- <div id="twoDRenderContainer" class="twoDrenderr"> </div>
+    </div>
+
+</div>
 <div style="page-break-before: always;"></div>
-<div class='threeDRender' id="threeDRender" ></div>  -->
-<div style="page-break-before: always;"></div>
+
+<div class="sartulinew" id="sartulinew"> </div>
+<div class="floorplan" id="floorplan"></div>
+<div class="threeDRender" id="threeDRender"></div>
 
 
-<!-- <div id="grafikiTable"> </div> -->
+<div class="xedi_1" id="xedi_1"> </div>
+<div class="xedi_2" id="xedi_2"></div>
+<div class="xedi_3" id="xedi_3"></div>
 
 
 <script>
-
-    function sanitizeValue(value) {
-        return value === null || value === undefined || value === 'NaN' ? '' : value;
-    }
-
-
-    const currentDate = new Date();
-    const formattedDate = `${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`;
-    document.getElementById('current-date').textContent = formattedDate;
 
     function addCellNextToProject(content) {
         let table = document.getElementById("myTable");
@@ -861,104 +776,168 @@ if ($grafikiJson){
 
     }
 
-    function formatNumber(value) {
-        return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value);
+    function formatNumber(num) {
+        const options = {
+            useGrouping: true,
+        };
+
+        // Check if the number has decimals
+        if (num % 1 !== 0) {
+            options.minimumFractionDigits = 2;
+            options.maximumFractionDigits = 2;
+        }
+
+        return num
+            .toLocaleString('en', options)  // Format with commas
+        // Replace commas with single quotes
     }
 
-
-    // let threeD = <?php echo json_encode($threeD); ?>;
-    // let twoDRender = <?php echo json_encode($twoDrender); ?>;
-
-
-    let project= <?php echo json_encode($project); ?>;
+    let projectName = <?php echo json_encode($projectName); ?>;
+    let korpusi = <?php echo json_encode($korpusi); ?>;
+    let sadarbazo = <?php echo json_encode($sadarbazo); ?>;
     let sartuli = <?php echo json_encode($sartuli); ?>;
     let flatNum = <?php echo json_encode($flatNum); ?>;
-    let sacxovrebelifarti = <?php echo json_encode($sacxovrebelifarti); ?>;
-    let korpusi = <?php echo json_encode($korpusi); ?>;
-    //let sadarbazo = <?php echo json_encode($sadarbazo); ?>;
-    let aivani = <?php echo json_encode($aivani); ?>;
     let totalspace = <?php echo json_encode($totalspace); ?>;
-    let chabarebisforma = <?php echo json_encode($chabarebisforma); ?>;
+    let sacxovrebelifarti = <?php echo json_encode($sacxovrebelifarti); ?>;
+    let aivani = <?php echo json_encode($aivani); ?>;
 
-    
+    // let kursi = <?php echo json_encode($seb_currency); ?>;
+
     let kvmdollar = Number(<?php echo json_encode($kvmdollar); ?>)
-    // kvmdollar = Math.floor(kvmdollar)
+    kvmdollar = Math.floor(kvmdollar)
     let kvmdollarFormated = formatNumber(kvmdollar);
 
-    // let chabarebisforma = <?php echo json_encode($chabarebisforma); ?>;
-    // let kursi = <?php echo json_encode($kursi); ?>;
-    // //  let salesmenegername = <?php echo json_encode($salesmenegername); ?>;
-    // //  let salesmenegerphone = <?php echo json_encode($salesmenegerphone); ?>;
-    // //  let salesmenegerworkphone = <?php echo json_encode($salesmenegerworkphone); ?>;
-    // //  let misamarti = <?php echo json_encode($misamarti); ?>;
-    // //  let salesmenegermail = <?php echo json_encode($salesmenegermail); ?>;
-    //  let sawyisifasilari = <?php echo json_encode($sawyisifasilari); ?>;
+    let kvmezo = Number(<?php echo json_encode($kvmezo); ?>)
+    kvmezo = Math.floor(kvmezo)
+    let kvmezoFormated = formatNumber(kvmezo);
 
+    let kvmterasa = Number(<?php echo json_encode($kvmterasa); ?>)
+    kvmterasa = Math.floor(kvmterasa)
+    let kvmterasaFormated = formatNumber(kvmterasa);
+    
+    
     let totalprice = <?php echo json_encode($totalprice); ?>;
-    // totalprice = Math.floor(totalprice)
+    totalprice = Math.floor(totalprice)
     let totalpriceFormated = formatNumber(totalprice);
 
 
-    //let grafikiTable = <?php echo json_encode($grafikiTable); ?>;
-
-    let kursi = <?php echo json_encode($seb_currency); ?>;
-    //  let sesxisMoculoba = <?php echo json_encode($sesxisMoculoba); ?>;
-    //  let tanamonawileoba = <?php echo json_encode($tanamonawileoba); ?>;
-    //  let wliuriProcent = <?php echo json_encode($wliuriProcent); ?>;
-    //  let sesxisVada = <?php echo json_encode($sesxisVada); ?>;
-    //  let dasafariSul = <?php echo json_encode($dasafariSul); ?>;
-    //  let gadasaxadiTveshi = <?php echo json_encode($gadasaxadiTveshi); ?>;
-    //  let responsible = <?php echo json_encode($responsible); ?>;
-    //  let responsibleemail = <?php echo json_encode($responsibleemail); ?>;
-    //  console.log(sartuli);
-
-    let kvmpriceGel = (Number(kvmdollar) * Number(kursi)).toFixed(2);
-    // kvmpriceGel = Math.floor(kvmpriceGel)
-    let kvmpriceGelFormated = formatNumber(kvmpriceGel);
-
-    let totalpriceGel = (Number(totalprice) * Number(kursi)).toFixed(2);
-    // totalpriceGel = Math.floor(totalpriceGel)
-    let totalpriceGelFormated = formatNumber(totalpriceGel);
-    //   document.getElementById("threeDRender").innerHTML = `<img src='${threeD}' alt='project picture' >` ;
-    //  document.getElementById("twoDRenderContainer").innerHTML = `<img src='${twoDRender}' alt='2D render'>`;
+    let threeD = <?php echo json_encode($threeD); ?>;
+    let floorplan = <?php echo json_encode($floorplan); ?>;
+    let sartulinew = <?php echo json_encode($sartulinew); ?>;
 
 
-    document.getElementById("project").innerText = sanitizeValue(project) ;
-    document.getElementById("sartuli").innerText =sanitizeValue(sartuli) ;
-    // document.getElementById("grafikiTable").innerHTML = `${grafikiTable} ` ;
-    // document.getElementById("responsible").innerHTML = `შეთავაზება მოამზადა: ${responsible} ` ;
-    // document.getElementById("responsible2").innerHTML = `გაყიდვების მენეჯერი: ${responsible} ` ;
-    // document.getElementById("responsibleemail").innerHTML = ` ელ. ფოსტა: ${responsibleemail} ` ;
-    document.getElementById("flatNum").innerText = sanitizeValue(flatNum) ;
-    document.getElementById("sacxovrebelifarti").innerText = sanitizeValue(sacxovrebelifarti) ;
-    document.getElementById("korpusi").innerText = sanitizeValue(korpusi) ;
-   // document.getElementById("sadarbazo").innerText = sanitizeValue(sadarbazo) ;
-    document.getElementById("aivani").innerText = sanitizeValue(aivani) ;
-    document.getElementById("totalspace").innerText = sanitizeValue(totalspace) ;
-    //document.getElementById("kvmprice").innerText = ` $ ${kvmprice} ` ;
-    // document.getElementById("chabarebisforma").innerText = ` ${chabarebisforma} ` ;
-    document.getElementById("kursi").innerText = ` ეროვნული ბანკის კურსი: ${kursi} ` ;
+    let xedi_1 = <?php echo json_encode($xedi_1); ?>;
+    let xedi_2 = <?php echo json_encode($xedi_2); ?>;
+    let xedi_3 = <?php echo json_encode($xedi_3); ?>;
 
-    document.getElementById("kvmprice").innerText = sanitizeValue(kvmdollarFormated);
 
+
+    document.getElementById("projectName").innerText = ` ${projectName} `;
+
+    document.getElementById("kvmPrice").innerText = ` $ ${kvmdollarFormated} `;
+
+  if (document.getElementById("kvmEzo")) {
+    document.getElementById("kvmEzo").innerText = ` $ ${kvmezoFormated} `;
+}
+
+if (document.getElementById("kvmterasa")) {
+    document.getElementById("kvmterasa").innerText = ` $ ${kvmterasaFormated} `;
+}
+    document.getElementById("totalprice").innerText = ` $ ${totalpriceFormated} `;
+
+
+    document.getElementById("threeDRender").innerHTML = `<img src='${threeD}' alt='project picture' >`;
+    document.getElementById("floorplan").innerHTML = `<img src='${floorplan}' alt='2D render'>`;
+    document.getElementById("sartulinew").innerHTML = `<img src='${sartulinew}' alt='2D render'>`;
+
+
+    if (xedi_1) {
+        document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='2D render'>`;
+    }
+
+    if (xedi_2) {
+        document.getElementById("xedi_2").innerHTML = `<img src='${xedi_2}' alt='2D render'>`;
+    }
+
+    if (xedi_3) {
+        document.getElementById("xedi_3").innerHTML = `<img src='${xedi_3}' alt='2D render'>`;
+    }
+
+
+
+
+    if (xedi_1){
+        document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='2D render'>`;
+    }
+
+    if (xedi_2){
+        document.getElementById("xedi_2").innerHTML = `<img src='${xedi_2}' alt='2D render'>`;
+    }
+
+    if (xedi_3){
+        document.getElementById("xedi_3").innerHTML = `<img src='${xedi_3}' alt='2D render'>`;
+    }
+    
+    
+    
+    //  document.getElementById("chabarebisforma").innerText = ` ${chabarebisforma} ` ;
     //  document.getElementById("sales").innerText = ` Sales manager: ${salesmenegername} ` ;
     //  document.getElementById("phone").innerText = ` M.: ${salesmenegerphone} ` ;
     //  document.getElementById("workphone").innerText = ` T.: ${salesmenegerworkphone} ` ;
     //  document.getElementById("address").innerText = ` Address: ${misamarti} ` ;
     //  document.getElementById("mail").innerText = ` E.: ${salesmenegermail} ` ;
     //  document.getElementById("fasi").innerText = ` $ ${sawyisifasilari} ` ;
-    document.getElementById("totalprice").innerText = sanitizeValue(totalpriceFormated);
-    document.getElementById("kvmpriceGel").innerText = sanitizeValue(kvmpriceGelFormated);
-    document.getElementById("totalpriceGel").innerText = sanitizeValue(totalpriceGelFormated);
-    
- document.getElementById("chabarebisforma").innerText = chabarebisforma;
+    //  document.getElementById("tanxaGEL").innerText = ` ₾  ${tanxaGEL} ` ;
 
 
-    //  document.getElementById("sesxisMoculoba").innerText = sesxisMoculoba  ;
+    if (!korpusi) {
+        document.getElementById("korpusiDiv").style.display = "none";
+        document.getElementById("korpusiValueDiv").style.display = "none";
+    } else {
+        document.getElementById("korpusi").innerText = ` ${korpusi} `;
+    }
 
-    //  document.getElementById("wliuriProcent").innerText = wliuriProcent ;
-    //  document.getElementById("dasafariSul").innerText = dasafariSul ;
-    //  document.getElementById("gadasaxadiTveshi").innerText = gadasaxadiTveshi ;
-    //  document.getElementById("sesxisVada").innerText = sesxisVada ;
+    if (!sadarbazo) {
+        document.getElementById("sadarbazoDiv").style.display = "none";
+        document.getElementById("sadarbazoValueDiv").style.display = "none";
+    } else {
+        document.getElementById("sadarbazo").innerText = ` ${sadarbazo} `;
+    }
+
+    if (!sartuli) {
+        document.getElementById("sartuliDiv").style.display = "none";
+        document.getElementById("sartuliValueDiv").style.display = "none";
+    } else {
+        document.getElementById("sartuli").innerText = ` ${sartuli} `;
+    }
+
+    if (!flatNum) {
+        document.getElementById("flatNumDiv").style.display = "none";
+        document.getElementById("flatNumValueDiv").style.display = "none";
+    } else {
+        document.getElementById("flatNum").innerText = ` ${flatNum} `;
+    }
+
+    if (!totalspace) {
+        document.getElementById("totalspaceDiv").style.display = "none";
+        document.getElementById("totalspaceValueDiv").style.display = "none";
+    } else {
+        document.getElementById("totalspace").innerText = ` ${totalspace} კვ.მ`;
+    }
+
+    // if (!sacxovrebelifarti) {
+    //     document.getElementById("sacxovrebelifartiDiv").style.display = "none";
+    //     document.getElementById("sacxovrebelifartiValueDiv").style.display = "none";
+    // } else {
+        document.getElementById("sacxovrebelifarti").innerText = `${sacxovrebelifarti} კვ.მ`;
+    // }
+
+    if (!aivani) {
+        document.getElementById("sazafxuloDiv").style.display = "none";
+        document.getElementById("sazafxuloValueDiv").style.display = "none";
+    } else {
+        document.getElementById("aivani").innerText = ` ${aivani} კვ.მ`;
+    }
+
 
 </script>

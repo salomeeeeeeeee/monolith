@@ -8,14 +8,16 @@ CModule::IncludeModule("crm");
 
 // =========================== FUNCTIONS ===========================
 function getCIBlockElementsByID($ID) {
-    $res = CIBlockElement::GetList([], ["ID" => $ID], false, ["nPageSize" => 50], []);
+    $res = CIBlockElement::GetList([], ["ID" => $ID], false, ["nPageSize" => 50], ["ID", "NAME", "IBLOCK_ID", "PROPERTY_*"]);
     if ($ob = $res->GetNextElement()) {
         $arFields = $ob->GetFields();
         $arProps  = $ob->GetProperties();
         $arPushs  = [];
         foreach ($arFields as $k => $v) $arPushs[$k] = $v;
-        foreach ($arProps  as $k => $p) $arPushs[$k] = $p["VALUE"];
-        $price = CPrice::GetBasePrice($arPushs["ID"]);
+        foreach ($arProps as $k => $p) {
+            $arPushs[$k] = is_array($p["VALUE"]) ? implode(", ", $p["VALUE"]) : $p["VALUE"];
+        }
+                $price = CPrice::GetBasePrice($arPushs["ID"]);
         $arPushs["PRICE"] = $price["PRICE"];
         return $arPushs;
     }
@@ -26,6 +28,10 @@ function getCIBlockElementsByID($ID) {
 $deal_id    = $_GET["deal_id"] ?? "";
 $productIds = explode(",", $_GET["productIds"] ?? "");
 $productIds = array_filter($productIds, fn($x) => is_numeric($x));
+file_put_contents($_SERVER["DOCUMENT_ROOT"]."/debug_product.txt", print_r([
+    "deal_id"    => $deal_id,
+    "productIds" => $productIds,
+], true));
 
 $resArray  = [];
 $arrForAdd = [];
@@ -33,10 +39,29 @@ $arrForAdd = [];
 if ($deal_id) {
 
     // ── EMPTY: clear all products and wipe deal fields ──
-    if (empty($productIds)) {
-        $cleared = CCrmDeal::SaveProductRows($deal_id, []);
+   // ── EMPTY: clear all products and wipe deal fields ──
+   if (empty($productIds)) {
+    // Load BEFORE clearing
+    $prevProds = CCrmDeal::LoadProductRows($deal_id);
+    $cleared = CCrmDeal::SaveProductRows($deal_id, []);
 
-        if ($cleared) {
+    if ($cleared) {
+        // ── Clear product iBlock fields for previously attached products ──
+            $el = new CIBlockElement;
+            foreach ($prevProds as $prod) {
+                $productData = getCIBlockElementsByID($prod["PRODUCT_ID"]);
+                if (!$productData) continue;
+                $arUpdateProps = [
+                    "PROPERTY_VALUES" => array_merge($productData, [
+                        "OWNER_DEAL"             => "",
+                        "OWNER_PERSONAL_CONTACT" => "",
+                        "DEAL_RESPONSIBLE"       => "",
+                    ]),
+                    "NAME"   => $productData["NAME"],
+                    "ACTIVE" => "Y",
+                ];
+                $el->Update($productData["ID"], $arUpdateProps);
+            }
             $arrClear = [
                 "UF_CRM_1779277671391" => "",
                 "UF_CRM_1779277729207" => "",
@@ -133,6 +158,29 @@ if ($deal_id) {
     if ($added) {
         $Deal = new CCrmDeal(false);
         $Deal->Update($deal_id, $arrForAdd);
+
+        // ── Update product iBlock fields ──
+        try {
+            $dealRes  = CCrmDeal::GetList(["ID" => "ASC"], ["ID" => $deal_id], []);
+            $dealData = $dealRes->Fetch();
+
+            foreach ($productIds as $pid) {
+                $pid = intval($pid);
+                if (!$pid) continue;
+                $productData = getCIBlockElementsByID($pid);
+                if (!$productData || empty($productData["IBLOCK_ID"])) continue;
+
+                CIBlockElement::SetPropertyValuesEx($pid, $productData["IBLOCK_ID"], [
+                    "OWNER_DEAL"             => $deal_id,
+                    "OWNER_PERSONAL_CONTACT" => $dealData["CONTACT_ID"]    ?? "",
+                    "DEAL_RESPONSIBLE"       => $dealData["ASSIGNED_BY_ID"] ?? "",
+                ]);
+            }
+        } catch (Exception $e) {
+            // log but don't fail the whole request
+            error_log("iBlock property update failed: " . $e->getMessage());
+        }
+
         $resArray["status"]  = 200;
         $resArray["message"] = "მონაცემები შენახულია";
     } else {

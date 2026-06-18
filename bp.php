@@ -43,7 +43,12 @@ if (!function_exists('getStageType')) {
     function getStageType($stage_id)
     {
         if ($stage_id) {
-            $stageGroupElement = getCIBlockElementsByFilter(array("NAME" => $stage_id, "IBLOCK_ID" => 16));
+            $pureStageId = $stage_id;
+            if (strpos($stage_id, ':') !== false) {
+                $parts = explode(':', $stage_id);
+                $pureStageId = end($parts);
+            }
+            $stageGroupElement = getCIBlockElementsByFilter(array("NAME" => $pureStageId, "IBLOCK_ID" => 16));
             if (count($stageGroupElement)) {
                 return $stageGroupElement[0]["STAGE_GROUP"];
             }
@@ -158,12 +163,6 @@ if (!function_exists('new_stage')) {
                 $element["OWNER_DEAL"]              = "";
                 $element["OWNER_PERSONAL_CONTACT"]  = "";
             } 
-            // else {
-            //     if ($element["_P64GYD"] == "თავისუფალი" && $element["QUEUE"]) {
-            //         $element["_P64GYD"]           = "ჯავშნის რიგში";
-            //         $element["DEAL_RESPONSIBLE"] = $deal["ASSIGNED_BY_ID"];
-            //     }
-            // }
  
             $elementsForUpdate[$product["PRODUCT_ID"]] = $element;
         }
@@ -212,6 +211,53 @@ if (!function_exists('reservation')) {
         }
  
         return $logText;
+    }
+}
+
+if (!function_exists('queueStage')) {
+    function queueStage($dealID, $arProducts, $deal)
+    {
+        if (!count($arProducts)) {
+            $logText = changeDealStageToNew($deal, array());
+            $logText = "დილზე პროდუქტი არ არის მიბმული";
+            sendNotificationToResponsible($dealID, $logText);
+            return $logText;
+        }
+
+        $elementsForUpdate = array();
+        $debugLines = array();
+
+        foreach ($arProducts as $product) {
+            $element = getCIBlockElementByID($product["PRODUCT_ID"]);
+            if (!$element) {
+                $debugLines[] = "ProdID " . $product["PRODUCT_ID"] . ": element NOT FOUND";
+                continue;
+            }
+
+            $debugLines[] = "ProdID " . $element["ID"] . " BEFORE: _P64GYD=" . $element["_P64GYD"] . " OWNER_DEAL=" . $element["OWNER_DEAL"] . " QUEUE=" . $element["QUEUE"];
+
+            if ($element["OWNER_DEAL"] == $dealID) {
+                $element["OWNER_DEAL"]              = "";
+                $element["DEAL_RESPONSIBLE"]        = "";
+                $element["OWNER_PERSONAL_CONTACT"]  = "";
+            }
+
+            if (!alreadyInQueue($element["QUEUE"], $dealID)) {
+                $element["QUEUE"] .= "|$dealID";
+            }
+
+            $element["_P64GYD"] = "ჯავშნის რიგში";
+
+            $debugLines[] = "ProdID " . $element["ID"] . " AFTER (before save): _P64GYD=" . $element["_P64GYD"] . " QUEUE=" . $element["QUEUE"];
+
+            $elementsForUpdate[$product["PRODUCT_ID"]] = $element;
+        }
+
+        $logText = updateProdElement($elementsForUpdate) . "ჯავშნის რიგში გადავიდა";
+
+        $debugDump = implode("\n", $debugLines);
+
+        return $logText . "\n--- DEBUG ---\n" . $debugDump;
     }
 }
  
@@ -370,6 +416,8 @@ if (!function_exists('updateProdElement')) {
             if ($res) {
                 $logText .= "$count)" . $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " ProdID " . $element["ID"] . "\n";
                 $count++;
+            } else {
+                $logText .= "ERROR ProdID " . $element["ID"] . ": " . $el->LAST_ERROR . "\n";
             }
         }
         return $logText;
@@ -429,13 +477,17 @@ $dealID = intval($root->GetVariable("DEAL_ID"));
 // $dealID = 13;
  
 $deal       = getDealInfoByID($dealID);
-// printArr($deal);
 $logText    = "";
 $allocation = 0;
 
 
 $arProducts = CCrmDeal::LoadProductRows($dealID);
-// printArr($arProducts);
+
+// --- DEBUG: raw stage info ---
+$this->SetVariable("debug_deal_id", $dealID);
+$this->SetVariable("debug_stage_id", $deal["STAGE_ID"]);
+$this->SetVariable("debug_closed", $deal["CLOSED"]);
+$this->SetVariable("debug_product_count", count($arProducts));
 
 if ($deal["CLOSED"] == "Y") {
     if ($deal["STAGE_ID"] == "WON") {
@@ -445,15 +497,16 @@ if ($deal["CLOSED"] == "Y") {
     }
 } else {
     $stage_group = getStageType($deal["STAGE_ID"]);
-    // $this->SetVariable("stageGroup", $stage_group);
+
+    // --- DEBUG: resolved stage group ---
+    $this->SetVariable("debug_stage_group", $stage_group);
+
     if ($stage_group == "new") {
         $logText = new_stage($dealID, $arProducts, $deal);
-        // if ($deal["STAGE_ID"] == "FINAL_INVOICE") {
-        // } else {
-        //     $logText = junk($dealID, $arProducts);
-        // }
     } elseif ($stage_group == "Reservation") {
         $logText = reservation($dealID, $arProducts, $deal);
+    } elseif ($stage_group == "Queue") {
+        $logText = queueStage($dealID, $arProducts, $deal);
     } elseif ($stage_group == "Sold") {
         $logText = sold($dealID, $arProducts, $deal);
     } elseif ($stage_group == "junk") {
@@ -462,6 +515,24 @@ if ($deal["CLOSED"] == "Y") {
         $logText = new_stage($dealID, $arProducts, $deal);
     }
 }
+
+// --- DEBUG: dump first product's element data after processing ---
+if (count($arProducts)) {
+    $firstProdId = $arProducts[0]["PRODUCT_ID"];
+    $afterElement = getCIBlockElementByID($firstProdId);
+    $this->SetVariable("debug_first_element", json_encode($afterElement, JSON_UNESCAPED_UNICODE));
+}
  
+// --- DEBUG: write debug info to a file ---
+$debugMsg = date("Y-m-d H:i:s") . "\n"
+    . "DEAL_ID=" . $dealID
+    . " | STAGE_ID=" . $deal["STAGE_ID"]
+    . " | STAGE_GROUP=" . (isset($stage_group) ? $stage_group : "n/a")
+    . " | CLOSED=" . $deal["CLOSED"]
+    . " | PRODUCTS=" . count($arProducts)
+    . "\nLOG=" . $logText
+    . "\n----------------------------------------\n";
+@file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/debug_queue.txt", $debugMsg, FILE_APPEND);
+
 $this->SetVariable("log", $logText, JSON_UNESCAPED_UNICODE);
 $this->SetVariable("allocation", $allocation);
