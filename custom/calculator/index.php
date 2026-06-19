@@ -392,14 +392,14 @@ foreach ($conditionElements as $element) {
             <input id="discountPerSqm" value="0" oninput="calculateDiscountPerSqm()" onblur="formatDiscountField('discountPerSqm')">
         </div>
         <div class="field">
+            <label>ფასდაკლება სრული ($)</label>
+            <input id="discountNum" value="0" oninput="calculateDiscount()" onblur="formatDiscountField('discountNum')">
+        </div>
+        <div class="field">
             <label>საბოლოო კვ.მ ფასი ($)</label>
             <input id="kvmPrice" disabled>
         </div>
 
-        <div class="field">
-            <label>ფასდაკლება სრული ($)</label>
-            <input id="discountNum" value="0" oninput="calculateDiscount()" onblur="formatDiscountField('discountNum')">
-        </div>
         <div class="field">
             <label>საბოლოო ფასი ($)</label>
             <input id="price" disabled>
@@ -431,10 +431,7 @@ foreach ($conditionElements as $element) {
             <label>დაწყების თარიღი</label>
             <input id="startDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
-        <div class="field" id="fieldEndDate">
-            <label>დასრულების თარიღი</label>
-            <input id="endDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
-        </div>
+
         <div class="field" id="fieldLastPayDate">
             <label>ბოლო შენატანის თარიღი</label>
             <input id="lastPayDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
@@ -446,6 +443,10 @@ foreach ($conditionElements as $element) {
         <div class="field" id="fieldLastPaymentPercent">
             <label>ბოლო შენატანი (%)</label>
             <input id="lastPaymentPercent" oninput="onLastChange('percent')">
+        </div>
+        <div class="field" id="fieldEndDate">
+            <label>დასრულების თარიღი</label>
+            <input id="endDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
     </div>
     <div class="form-grid" style="margin-top:14px; display:none;">
