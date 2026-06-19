@@ -1875,6 +1875,7 @@ const existingOfferRow = document.getElementById("popupOfferRow");
     const btnDefs = [
         { label: "შეთავაზება",     href: `/crm/deal/offer-catalog.php?prod_ID=${aptId}` },
         { label: "შეთავაზება ENG", href: `/crm/deal/offer-catalog-eng.php?prod_ID=${aptId}` },
+        { label: "კალკულატორი", href: `/custom/calculator/index.php?ProductID=${aptId}` },
     ];
 
     btnDefs.forEach(({ label, href }) => {
