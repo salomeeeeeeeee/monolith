@@ -389,7 +389,7 @@ foreach ($conditionElements as $element) {
 
         <div class="field">
             <label>ფასდაკლება კვ.მ ($)</label>
-            <input id="discountPerSqm" value="0" oninput="calculateDiscountPerSqm()">
+            <input id="discountPerSqm" value="0" oninput="calculateDiscountPerSqm()" onblur="formatDiscountField('discountPerSqm')">
         </div>
         <div class="field">
             <label>საბოლოო კვ.მ ფასი ($)</label>
@@ -398,7 +398,7 @@ foreach ($conditionElements as $element) {
 
         <div class="field">
             <label>ფასდაკლება სრული ($)</label>
-            <input id="discountNum" value="0" oninput="calculateDiscount()">
+            <input id="discountNum" value="0" oninput="calculateDiscount()" onblur="formatDiscountField('discountNum')">
         </div>
         <div class="field">
             <label>საბოლოო ფასი ($)</label>
@@ -621,7 +621,7 @@ function fillScheduleData(id) {
     disableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
 }
 
-function applyPriceFromDiscount(discount) {
+function applyPriceFromDiscount(discount, skipField) {
     const startPrice = CONFIG.oldPrice;
     const price = Math.max(0, startPrice - discount);
     const kvm = CONFIG.totalKVM > 0 ? price / CONFIG.totalKVM : 0;
@@ -629,14 +629,18 @@ function applyPriceFromDiscount(discount) {
     setValue('price', formatNumber(price));
     setValue('kvmPrice', formatNumber(kvm));
     setValue('priceGel', formatNumber(price * CONFIG.nbgKursi));
-    setValue('discountPerSqm', formatNumber(perSqm));
-    setValue('discountNum', formatNumber(discount));
+    if (skipField !== 'discountPerSqm') {
+        setValue('discountPerSqm', formatNumber(perSqm));
+    }
+    if (skipField !== 'discountNum') {
+        setValue('discountNum', formatNumber(discount));
+    }
 }
 
 function calculateDiscount() {
     const mode = getValue('paymentMode');
     if (mode !== 'customType') return;
-    applyPriceFromDiscount(parseFormattedNumber(getValue('discountNum')));
+    applyPriceFromDiscount(parseFormattedNumber(getValue('discountNum')), 'discountNum');
 }
 
 function calculateDiscountPerSqm() {
@@ -644,7 +648,11 @@ function calculateDiscountPerSqm() {
     if (mode !== 'customType') return;
     const perSqm = parseFormattedNumber(getValue('discountPerSqm'));
     const discount = perSqm * CONFIG.totalKVM;
-    applyPriceFromDiscount(discount);
+    applyPriceFromDiscount(discount, 'discountPerSqm');
+}
+
+function formatDiscountField(id) {
+    setValue(id, formatNumber(parseFormattedNumber(getValue(id))));
 }
 
 function onAdvanceChange(type) {
