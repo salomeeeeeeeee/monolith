@@ -644,7 +644,7 @@ if (count($bade)) {
                 <p class="cell-text2"><?php echo htmlspecialchars($fartisType); ?>ს ჯამური ფართი</p>
             </div>
             <div class="rounded-cell3" id="sacxovrebeliFartiDiv">
-                <p class="cell-text2">საცხოვრებელი ფართი</p>
+                <p class="cell-text2">შიდა ფართი</p>
             </div>
             <div class="rounded-cell3" id="sazafxuloDiv">
                 <p class="cell-text2">საზაფხულო ფართი</p>
@@ -929,7 +929,12 @@ if (document.getElementById("kvmterasa")) {
     //     document.getElementById("sacxovrebelifartiDiv").style.display = "none";
     //     document.getElementById("sacxovrebelifartiValueDiv").style.display = "none";
     // } else {
-        document.getElementById("sacxovrebelifarti").innerText = `${sacxovrebelifarti} კვ.მ`;
+        let sacxovrebeliFartiCalculated = sacxovrebelifarti;
+    if (!sacxovrebelifarti && totalspace) {
+        sacxovrebeliFartiCalculated = (parseFloat(totalspace) - parseFloat(aivani || 0)).toFixed(2);
+    }
+    document.getElementById("sacxovrebelifarti").innerText = `${sacxovrebeliFartiCalculated} კვ.მ`;
+    
     // }
 
     if (!aivani) {

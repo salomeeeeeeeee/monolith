@@ -180,9 +180,20 @@ if ($deal_id) {
             // log but don't fail the whole request
             error_log("iBlock property update failed: " . $e->getMessage());
         }
-
         $resArray["status"]  = 200;
         $resArray["message"] = "მონაცემები შენახულია";
+        
+        CModule::IncludeModule('bizproc');
+        $errors = array();
+        CBPDocument::StartWorkflow(
+            25,
+            array('crm', 'CCrmDocumentDeal', 'DEAL_' . $deal_id),
+            array(),
+            $errors
+        );
+        if (!empty($errors)) {
+            error_log("Workflow 25 start error: " . implode(", ", array_map(fn($e) => $e['message'], $errors)));
+        }
     } else {
         $resArray["status"] = 400;
         $resArray["error"]  = "დაფიქსირდა შეცდომა";

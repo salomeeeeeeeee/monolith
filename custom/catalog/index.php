@@ -2628,7 +2628,7 @@ document.getElementById("resComment").value = "";
     document.getElementById("resPersonWrap").style.display = "none";
 
     if (choice === "41") {
-        document.getElementById("resDate").value            = resToDatetimeLocal(new Date(now.getTime() + 3*24*60*60*1000));
+    document.getElementById("resDate").value    = resToDatetimeLocal(resAddWorkingDays(now, 3));
         document.getElementById("resDate").style.display    = "";
         document.getElementById("resDatePicker").style.display = "none";
         document.getElementById("resDateWrap").style.display = "block";

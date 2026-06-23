@@ -972,7 +972,7 @@ $dealInfo = array();
 $leadInfo = array();
 
 function getDealInfoForDublTemplate($dealID) {
-    $res = CCrmDeal::GetListEx(array("ID" => "ASC"), array("ID" => $dealID), false, false, array("ID","CATEGORY_ID","STAGE_ID"));
+    $res = CCrmDeal::GetListEx(array("ID" => "ASC"), array("ID" => $dealID), false, false, array("ID","CATEGORY_ID","STAGE_ID","ASSIGNED_BY_ID", "DATE_CREATE"));
     if ($arDeal = $res->Fetch()) return $arDeal;
     return array();
 }
@@ -1249,32 +1249,35 @@ var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
             .catch(function(error) { console.error('Error:', error); });
     }
 
-    function drawFields(infos, type) {
-        var drawDivs = "";
-        for (var i = 0; i < infos.length; i++) {
-            var info = infos[i];
-            var detailUrl = type == "lead"
-                ? location.origin + "/crm/lead/details/" + info["ID"] + "/"
-                : location.origin + "/crm/deal/details/" + info["ID"] + "/";
+	function drawFields(infos, type) {
+    var drawDivs = "";
+    for (var i = 0; i < infos.length; i++) {
+        var info = infos[i];
+        var detailUrl = type == "lead"
+            ? location.origin + "/crm/lead/details/" + info["ID"] + "/"
+            : location.origin + "/crm/deal/details/" + info["ID"] + "/";
 
-            drawDivs += '<div style="' +
-                'display:flex; align-items:center; gap:8px;' +
-                'background:#fff; border:1px solid #ffcdd2;' +
-                'border-left:3px solid #e53935;' +
-                'border-radius:6px; padding:6px 10px; margin-bottom:4px;' +
-                'font-family:sans-serif; font-size:12px; color:#333;' +
-            '">' +
-                '<a href="' + detailUrl + '" style="' +
-                    'color:#e53935; font-weight:700; text-decoration:none;' +
-                    'background:#ffebee; border-radius:4px; padding:2px 6px; white-space:nowrap;' +
-                '">#' + info["ID"] + '</a>' +
-                '<span style="color:#666;">📞 ' + info["PHONE"] + '</span>' +
-                '<span style="color:#888; background:#f5f5f5; border-radius:4px; padding:1px 6px;">' + info["CATEGORY_NAME"] + '</span>' +
-                '<span style="color:#555; margin-left:auto;">👤 ' + info["RESPONSIBLE_NAME"] + '</span>' +
-            '</div>';
-        }
-        return drawDivs;
+        var dateStr = info["DATE_CREATE"] ? '<span style="color:#888; background:#f5f5f5; border-radius:4px; padding:1px 6px;">📅 ' + info["DATE_CREATE"] + '</span>' : '';
+
+        drawDivs += '<div style="' +
+            'display:flex; align-items:center; gap:8px;' +
+            'background:#fff; border:1px solid #ffcdd2;' +
+            'border-left:3px solid #e53935;' +
+            'border-radius:6px; padding:6px 10px; margin-bottom:4px;' +
+            'font-family:sans-serif; font-size:12px; color:#333;' +
+        '">' +
+            '<a href="' + detailUrl + '" style="' +
+                'color:#e53935; font-weight:700; text-decoration:none;' +
+                'background:#ffebee; border-radius:4px; padding:2px 6px; white-space:nowrap;' +
+            '">#' + info["ID"] + '</a>' +
+            '<span style="color:#666;">📞 ' + info["PHONE"] + '</span>' +
+            // '<span style="color:#888; background:#f5f5f5; border-radius:4px; padding:1px 6px;">' + info["CATEGORY_NAME"] + '</span>' +
+            dateStr +
+            '<span style="color:#555; margin-left:auto;">👤 ' + info["RESPONSIBLE_NAME"] + '</span>' +
+        '</div>';
     }
+    return drawDivs;
+}
 
     window.showDealsInfos = function() {
         var block = document.getElementById("dealsInfosBlock");

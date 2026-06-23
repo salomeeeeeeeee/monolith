@@ -646,7 +646,7 @@ if (count($bade)) {
                 <p class="cell-text2"><?php echo htmlspecialchars($fartisType); ?> TOTAL SPACE</p>
             </div>
             <div class="rounded-cell3" id="sacxovrebeliFartiDiv">
-                <p class="cell-text2">LIVING SPACE</p>
+                <p class="cell-text2">INDOOR SPACE</p>
             </div>
             <div class="rounded-cell3" id="sazafxuloDiv">
                 <p class="cell-text2">BALCONY SPACE</p>
@@ -931,8 +931,11 @@ if (document.getElementById("kvmterasa")) {
     //     document.getElementById("sacxovrebelifartiDiv").style.display = "none";
     //     document.getElementById("sacxovrebelifartiValueDiv").style.display = "none";
     // } else {
-        document.getElementById("sacxovrebelifarti").innerText = `${sacxovrebelifarti} SQ.M`;
-    // }
+        let sacxovrebeliFartiCalculated = sacxovrebelifarti;
+    if (!sacxovrebelifarti && totalspace) {
+        sacxovrebeliFartiCalculated = (parseFloat(totalspace) - parseFloat(aivani || 0)).toFixed(2);
+    }
+    document.getElementById("sacxovrebelifarti").innerText = `${sacxovrebeliFartiCalculated} SQ.M`;    // }
 
     if (!aivani) {
         document.getElementById("sazafxuloDiv").style.display = "none";
