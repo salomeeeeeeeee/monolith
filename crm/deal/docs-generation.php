@@ -1524,17 +1524,17 @@ if(!empty($_POST)) {
                             }
 
 
-                            if ($key == "OPPORTUNITY"){
-                                $subArray = array(
-                                    'VarName' => '$' . $key . '$',
-                                    'VarValue' => " "
-                                ); 
-                            }else{
+                            // if ($key == "OPPORTUNITY"){
+                            //     $subArray = array(
+                            //         'VarName' => '$' . $key . '$',
+                            //         'VarValue' => " "
+                            //     ); 
+                            // }else{
                                 $subArray = array(
                                     'VarName' => '$' . $key . '$',
                                     'VarValue' => $value
                                 );
-                            }
+                            // }
 
                         
 
