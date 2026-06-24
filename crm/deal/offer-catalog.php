@@ -20,6 +20,8 @@ function getCIBlockElementsByFilter($arFilter = array())
         foreach ($arProps as $key => $arProp)
             $arPushs[$key] = $arProp["VALUE"];
         $arPushs["sartulinew"] = CFile::GetPath($arPushs["sartulinew"]);
+        $arPushs["mtavari_foto"] = CFile::GetPath($arPushs["mtavari_foto"]);
+
         $arPushs["floorplan"] = CFile::GetPath($arPushs["floorplan"]);
         $arPushs["threedrender"] = CFile::GetPath($arPushs["threedrender"]);
         $arPushs["xedi_1"] = CFile::GetPath($arPushs["xedi_1"]);
@@ -125,6 +127,9 @@ $kvmterasa = $product[0]['terraceprice_per'];
 $totalprice = round($product[0]['PRICE']);
 
 $sartulinew = $product[0]["sartulinew"];
+$mtavari_foto = $product[0]["mtavari_foto"];
+
+
 $floorplan = $product[0]['floorplan'];
 $threeD = $product[0]["threedrender"];
 
@@ -600,6 +605,12 @@ if (count($bade)) {
         height: auto;
     }
 
+    .mtavari_foto img {
+        width: 100%;
+        height: auto;
+    }
+    
+
     .xedi_1 img {
         width: 100%;
         height: auto;
@@ -755,8 +766,11 @@ if (count($bade)) {
 
 </div>
 <div style="page-break-before: always;"></div>
+<div class="mtavari_foto" id="mtavari_foto"> </div>
 
 <div class="sartulinew" id="sartulinew"> </div>
+
+
 <div class="floorplan" id="floorplan"></div>
 <div class="threeDRender" id="threeDRender"></div>
 
@@ -824,8 +838,10 @@ if (count($bade)) {
     let threeD = <?php echo json_encode($threeD); ?>;
     let floorplan = <?php echo json_encode($floorplan); ?>;
     let sartulinew = <?php echo json_encode($sartulinew); ?>;
+    let mtavari_foto = <?php echo json_encode($mtavari_foto); ?>;
 
 
+    
     let xedi_1 = <?php echo json_encode($xedi_1); ?>;
     let xedi_2 = <?php echo json_encode($xedi_2); ?>;
     let xedi_3 = <?php echo json_encode($xedi_3); ?>;
@@ -849,7 +865,9 @@ if (document.getElementById("kvmterasa")) {
     document.getElementById("threeDRender").innerHTML = `<img src='${threeD}' alt='project picture' >`;
     document.getElementById("floorplan").innerHTML = `<img src='${floorplan}' alt='2D render'>`;
     document.getElementById("sartulinew").innerHTML = `<img src='${sartulinew}' alt='2D render'>`;
+    document.getElementById("mtavari_foto").innerHTML = `<img src='${mtavari_foto}' alt='2D render'>`;
 
+    
 
     if (xedi_1) {
         document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='2D render'>`;

@@ -766,6 +766,10 @@ ob_end_clean();
     </div>
 </div>
 
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
 <script>
 
 const fmt = n => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -2497,7 +2501,7 @@ async function exportToExcel() {
       <div id="resDateWrap" style="margin-bottom:14px;display:none;">
   <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> რეზერვაციის ვადა</label>
   <input type="text" id="resDate" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;background:#f4f6f8;color:#555;cursor:pointer;" readonly onclick="document.getElementById('resDatePicker').style.display='block';document.getElementById('resDate').style.display='none';document.getElementById('resDatePicker').showPicker();" />
-    <input type="date" id="resDatePicker" style="display:none;width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;" onchange="resDatePickerChange()" onclick="this.showPicker()" />
+  <input type="text" id="resDatePicker" style="display:none;width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" readonly />
 </div>
 
 <!-- personal info -->
@@ -2628,24 +2632,26 @@ document.getElementById("resComment").value = "";
     document.getElementById("resPersonWrap").style.display = "none";
 
     if (choice === "41") {
-    document.getElementById("resDate").value    = resToDatetimeLocal(resAddWorkingDays(now, 3));
-        document.getElementById("resDate").style.display    = "";
-        document.getElementById("resDatePicker").style.display = "none";
-        document.getElementById("resDateWrap").style.display = "block";
-        document.getElementById("resPersonWrap").style.display = "block";  
-
-        document.getElementById("resFooter").style.display   = "flex";
-    }
-    if (choice === "42") {
+    document.getElementById("resDate").value       = resToDatetimeLocal(resAddWorkingDays(now, 3));
+    document.getElementById("resDate").style.display       = "";
+    document.getElementById("resDate").style.pointerEvents = "none";
+    document.getElementById("resDate").style.background    = "#f0f0f0";
+    document.getElementById("resDate").style.color         = "#999";
+    document.getElementById("resDate").style.cursor        = "default";
+    document.getElementById("resDate").onclick             = null;
+    document.getElementById("resDatePicker").style.display = "none";
+    document.getElementById("resDateWrap").style.display   = "block";
+    document.getElementById("resPersonWrap").style.display = "block";
+    document.getElementById("resFooter").style.display     = "flex";
+}
+if (choice === "42") {
     var dl = resAddWorkingDays(now, 3);
-    var y = dl.getFullYear(), m = String(dl.getMonth()+1).padStart(2,"0"), d = String(dl.getDate()).padStart(2,"0");
-    document.getElementById("resDatePicker").value         = y+"-"+m+"-"+d;
-    document.getElementById("resDate").style.display       = "none";
-    document.getElementById("resDatePicker").style.display = "block";
-    document.getElementById("resDate").value = d+"/"+m+"/"+y;
+    resFlatpickr.setDate(dl, true);
+    document.getElementById("resDate").value = resToDatetimeLocal(dl); // ← add this
+    document.getElementById("resDate").style.display        = "none";
+    document.getElementById("resDatePicker").style.display  = "block";
     document.getElementById("resDateWrap").style.display    = "block";
-    document.getElementById("resPersonWrap").style.display  = "block";  
-
+    document.getElementById("resPersonWrap").style.display  = "block";
     document.getElementById("resCommentWrap").style.display = "block";
     document.getElementById("resFooter").style.display      = "flex";
 }
@@ -2662,7 +2668,12 @@ function resDatePickerChange() {
 
 function submitReservation() {
     var type      = document.getElementById("resUserSelect").value;
-    var date      = document.getElementById("resDate").value || document.getElementById("resDatePicker").value;
+
+    var choice = document.getElementById("resUserSelect").value;
+var date   = choice === "42"
+    ? document.getElementById("resDate").value || (resFlatpickr.selectedDates[0] ? resToDatetimeLocal(resFlatpickr.selectedDates[0]) : "")
+    : document.getElementById("resDate").value;
+
     var comment   = document.getElementById("resComment")?.value || "";
     var firstName = document.getElementById("resFirstName").value.trim();
     var lastName  = document.getElementById("resLastName").value.trim();
@@ -2795,6 +2806,18 @@ function fileShetvirtva(fieldID) {
         console.error('Upload error:', error);
     });
 }
+
+var resFlatpickr = flatpickr("#resDatePicker", {
+    minDate: "today",
+    disable: [function(date) {
+        return date.getDay() === 0 || date.getDay() === 6;
+    }],
+    dateFormat: "d/m/Y",
+    defaultDate: null,
+    onChange: function(selectedDates, dateStr) {
+        document.getElementById("resDate").value = dateStr;
+    }
+});
 
 </script>
 </body>
