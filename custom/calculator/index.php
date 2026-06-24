@@ -512,6 +512,7 @@ function onPaymentModeChange() {
         scheduleField.classList.remove('hidden');
         ALL_CASH_HIDDEN_FIELDS.forEach(show);
         fillScheduleOptions();
+        disableFields(['lastPayDate']);
         confirmTxt.classList.add('hidden');
     } else if (mode === 'allCash') {
         scheduleField.classList.add('hidden');
@@ -619,7 +620,7 @@ function fillScheduleData(id) {
         setValue('lastPayDate', '');
     }
 
-    disableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
+    disableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','lastPayDate']);
 }
 
 function applyPriceFromDiscount(discount, skipField) {
