@@ -17,16 +17,19 @@ if (!empty($dealIdParam) && $dealIdParam !== 'UNDEFINED') {
     $dealID = intval($dealIdParam);
 }
 
-if (!$dealID) {
-    exit('არასწორი პარამეტრები — საჭიროა dealid');
+if (!$dealID && !$prod_ID) {
+    exit('არასწორი პარამეტრები — საჭიროა dealid ან ProductID');
 }
 
-$dealData = calcGetDealInfoByID($dealID);
-if (!$dealData) {
-    exit('დილი ვერ მოიძებნა');
+$dealData = [];
+$dealProds = [];
+if ($dealID) {
+    $dealData = calcGetDealInfoByID($dealID);
+    if (!$dealData) {
+        exit('დილი ვერ მოიძებნა');
+    }
+    $dealProds = CCrmDeal::LoadProductRows($dealID);
 }
-
-$dealProds = CCrmDeal::LoadProductRows($dealID);
 $productInfo = [];
 
 if ($prod_ID) {
@@ -42,16 +45,16 @@ if (empty($productInfo[0])) {
 
 $prod = $productInfo[0];
 $totalKVM = $prod['TOTAL_AREA'] > 0 ? $prod['TOTAL_AREA'] : 1;
-$oldPrice = floatval($dealData['UF_CRM_1761658642424'] ?: $prod['PRICE']);
-$startSqmPrice = floatval($dealData['UF_CRM_1761658662573'] ?: $prod['KVM_PRICE']);
-$projectName = $dealData['UF_CRM_1779277729207'] ?: $prod['PROJECT'];
+$oldPrice = floatval(($dealData['UF_CRM_1761658642424'] ?? null) ?: $prod['PRICE']);
+$startSqmPrice = floatval(($dealData['UF_CRM_1761658662573'] ?? null) ?: $prod['KVM_PRICE']);
+$projectName = ($dealData['UF_CRM_1779277729207'] ?? null) ?: $prod['PROJECT'];
 if (!$projectName && !empty($prod['IBLOCK_SECTION_ID'])) {
     $sectionRes = CIBlockSection::GetByID($prod['IBLOCK_SECTION_ID']);
     if ($section = $sectionRes->GetNext()) {
         $projectName = $section['NAME'];
     }
 }
-$binisNomeri = $dealData['UF_CRM_1779277613798'] ?: $prod['Number'];
+$binisNomeri = ($dealData['UF_CRM_1779277613798'] ?? null) ?: $prod['Number'];
 
 $dateForNBG = date('Y-m-d');
 $nbgKursi = calcGetNbgRate($dateForNBG);
@@ -325,7 +328,11 @@ foreach ($conditionElements as $element) {
         <div class="field frozen">
             <label>დილი</label>
             <div style="height:38px;display:flex;align-items:center;padding:0 12px;background:#f0f4ff;border:1.5px solid #c7d2fe;border-radius:8px;">
-                <a class="deal-link" href="/crm/deal/details/<?= $dealID ?>/" target="_blank">#<?= $dealID ?></a>
+                <?php if ($dealID): ?>
+                    <a class="deal-link" href="/crm/deal/details/<?= $dealID ?>/" target="_blank">#<?= $dealID ?></a>
+                <?php else: ?>
+                    <span>-</span>
+                <?php endif; ?>
             </div>
         </div>
         <div class="field frozen">
@@ -725,7 +732,8 @@ async function getAndFillGraph() {
             showError('');
             fillGraph(data, mode === 'customType');
             updateSaveButtonText();
-            show('saveBTN');
+            if (CONFIG.dealID) show('saveBTN');
+            else hide('saveBTN');
         } else {
             showError(data.errorTXT || 'გამოთვლა ვერ მოხერხდა');
             hide('saveBTN');
@@ -778,10 +786,18 @@ function fillGraph(data, editable) {
 function updateSaveButtonText() {
     const btn = document.getElementById('saveBTN');
     if (!btn) return;
+    if (!CONFIG.dealID) {
+        hide('saveBTN');
+        return;
+    }
     btn.textContent = getValue('paymentMode') === 'customType' ? 'გაგზავნა' : 'შენახვა';
 }
 
 async function saveGraph() {
+    if (!CONFIG.dealID) {
+        hide('saveBTN');
+        return;
+    }
     const mode = getValue('paymentMode');
     const typeSelected = mode === 'internal' ? getValue('type_select') : mode;
     const price = parseFormattedNumber(getValue('price'));
@@ -891,6 +907,10 @@ function recalculateDebt() {
         paid += amt;
         if (row.cells[3]) row.cells[3].textContent = formatNumber(Math.max(0, price - paid));
     });
+    if (!CONFIG.dealID) {
+        hide('saveBTN');
+        return;
+    }
     if (Math.abs(sum - price) <= 0.05) show('saveBTN');
     else hide('saveBTN');
 }

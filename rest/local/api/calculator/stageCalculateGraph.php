@@ -27,7 +27,7 @@ $lastPayDate = $json['lastPayDate'] ?? '';
 $bookPayment = round(floatval($json['bookPayment'] ?? 0), 2);
 $bookPayDate = $json['bookPayDate'] ?? '';
 
-if (!$dealID || !is_numeric($dealID)) {
+if ($dealID !== null && $dealID !== '' && !is_numeric($dealID)) {
     $result['errorTXT'] = 'deal ID is not valid';
     ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
