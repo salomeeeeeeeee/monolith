@@ -1092,38 +1092,61 @@ var allowedTabStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
         }
 
         // user_irhcfh47 (permission-gated field)
-        var ih = document.querySelector("[data-cid='user_irhcfh47']");
-        if (ih) {
-            if (stage === 'NEW') {
-                ih.style.display = 'none';
-            } else {
-                ih.style.display = '';
-                if (userID != 1 && userID != 3) {
-                    ih.style.pointerEvents = 'none';
-                    ih.style.userSelect = 'none';
-                    ih.style.opacity = '0.7';
-                    ih.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
-                        btn.style.display = 'none';
-                    });
-                    if (!ih._lockBound) {
-                        ih._lockBound = true;
-                        ih.addEventListener('click', function(e) {
-                            if (userID != 1 && userID != 3) {
-                                e.stopPropagation();
-                                e.preventDefault();
-                            }
-                        }, true);
-                    }
-                } else {
-                    ih.style.pointerEvents = '';
-                    ih.style.userSelect = '';
-                    ih.style.opacity = '';
-                    ih.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
+        // user_irhcfh47 (permission-gated field)
+// user_irhcfh47 (permission-gated field)
+var ih = document.querySelector("[data-cid='user_irhcfh47']");
+if (ih) {
+    if (stage === 'NEW') {
+        ih.style.display = 'none';
+    } else {
+        ih.style.display = '';
+
+        var isAdmin = (userID == 1 || userID == 3);
+        var isGroup17 = <?php echo in_array(17, $userGroups) ? 'true' : 'false'; ?>;
+        var group17Fields = ['UF_CRM_1782206133733', 'UF_CRM_1782206163787'];
+
+        if (!isAdmin) {
+            // Do NOT lock ih itself — lock each child field individually
+            ih.style.pointerEvents = '';
+            ih.style.userSelect = '';
+            ih.style.opacity = '';
+
+            ih.querySelectorAll('[data-cid]').forEach(function(field) {
+                var cid = field.getAttribute('data-cid');
+                var isUnlocked = isGroup17 && group17Fields.indexOf(cid) !== -1;
+
+                if (isUnlocked) {
+                    field.style.pointerEvents = '';
+                    field.style.userSelect = '';
+                    field.style.opacity = '';
+                    field.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
                         btn.style.display = '';
                     });
+                } else {
+                    field.style.pointerEvents = 'none';
+                    field.style.userSelect = 'none';
+                    field.style.opacity = '0.7';
+                    field.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
+                        btn.style.display = 'none';
+                    });
                 }
-            }
+            });
+        } else {
+            // Admin: fully unlock everything
+            ih.style.pointerEvents = '';
+            ih.style.userSelect = '';
+            ih.style.opacity = '';
+            ih.querySelectorAll('[data-cid]').forEach(function(field) {
+                field.style.pointerEvents = '';
+                field.style.userSelect = '';
+                field.style.opacity = '';
+                field.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
+                    btn.style.display = '';
+                });
+            });
         }
+    }
+}
 
     }, 500);
 

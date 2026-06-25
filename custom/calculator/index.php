@@ -164,11 +164,7 @@ foreach ($conditionElements as $element) {
             margin-bottom: 24px;
             box-shadow: 0 8px 32px rgba(79, 70, 229, 0.25);
         }
-        .calc-header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            margin: 0 0 6px;
-        }
+        .calc-header h1 { font-size: 24px; font-weight: 700; margin: 0 0 6px; }
         .calc-header p { margin: 0; opacity: 0.8; font-size: 13px; }
         .card-panel {
             background: var(--card);
@@ -179,12 +175,8 @@ foreach ($conditionElements as $element) {
             box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
         }
         .card-panel h3 {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--muted);
-            margin: 0 0 16px;
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--muted); margin: 0 0 16px;
         }
         .form-grid {
             display: grid;
@@ -194,105 +186,77 @@ foreach ($conditionElements as $element) {
         @media (max-width: 1100px) { .form-grid { grid-template-columns: repeat(4, 1fr); } }
         @media (max-width: 600px)  { .form-grid { grid-template-columns: 1fr; } }
         .field label {
-            display: block;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--muted);
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
+            display: block; font-size: 11px; font-weight: 600;
+            color: var(--muted); margin-bottom: 5px;
+            text-transform: uppercase; letter-spacing: 0.04em;
         }
         .field input, .field select, .field textarea {
-            width: 100%;
-            height: 38px;
-            padding: 0 12px;
-            border: 1.5px solid var(--border);
-            border-radius: 8px;
-            font-size: 13px;
-            background: #fff;
-            transition: border-color 0.15s;
+            width: 100%; height: 38px; padding: 0 12px;
+            border: 1.5px solid var(--border); border-radius: 8px;
+            font-size: 13px; background: #fff; transition: border-color 0.15s;
         }
         .field input:focus, .field select:focus {
-            outline: none;
-            border-color: var(--primary);
+            outline: none; border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
         }
         .field input:disabled, .field select:disabled {
-            background: #f8fafc;
-            color: var(--text);
-            font-weight: 600;
-            cursor: not-allowed;
+            background: #f8fafc; color: var(--text); font-weight: 600; cursor: not-allowed;
         }
         .field input.date-field {
             cursor: pointer;
             background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM2 2a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H2z'/%3E%3Cpath d='M2.5 4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V4z'/%3E%3C/svg%3E") no-repeat right 10px center;
             padding-right: 34px;
         }
-        .field input.date-field:disabled {
-            cursor: not-allowed;
-            background-color: #f8fafc;
-        }
+        .field input.date-field:disabled { cursor: not-allowed; background-color: #f8fafc; }
         .flatpickr-calendar { z-index: 99999 !important; }
         .field textarea { height: auto; padding: 10px 12px; }
-        .field.frozen input {
-            background: #f0f4ff;
-            border-color: #c7d2fe;
-            color: var(--primary-dark);
-        }
+        .field.frozen input { background: #f0f4ff; border-color: #c7d2fe; color: var(--primary-dark); }
         .btn-calc {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            padding: 11px 28px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.15s, box-shadow 0.15s;
+            color: #fff; border: none; border-radius: 10px;
+            padding: 11px 28px; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
         }
         .btn-calc:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(79,70,229,0.35); }
         .btn-save {
             background: linear-gradient(135deg, #059669, #047857);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            padding: 11px 28px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
+            color: #fff; border: none; border-radius: 10px;
+            padding: 11px 28px; font-size: 14px; font-weight: 600; cursor: pointer;
         }
         .btn-save:hover { box-shadow: 0 6px 20px rgba(5,150,105,0.35); }
+
+        /* ── ოფერის ღილაკები ── */
+        .btn-offer-ka {
+            background: linear-gradient(135deg, #0b3860, #1a5a9a);
+            color: #fff; border: none; border-radius: 10px;
+            padding: 11px 28px; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: box-shadow 0.15s;
+            display: flex; align-items: center; gap: 7px;
+        }
+        .btn-offer-ka:hover { box-shadow: 0 6px 20px rgba(11,56,96,0.4); }
+        .btn-offer-en {
+            background: linear-gradient(135deg, #6d3a9c, #4a2570);
+            color: #fff; border: none; border-radius: 10px;
+            padding: 11px 28px; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: box-shadow 0.15s;
+            display: flex; align-items: center; gap: 7px;
+        }
+        .btn-offer-en:hover { box-shadow: 0 6px 20px rgba(109,58,156,0.4); }
+
         .table-graph {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 1px solid var(--border);
-            margin-top: 8px;
+            width: 100%; border-collapse: separate; border-spacing: 0;
+            border-radius: 10px; overflow: hidden; border: 1px solid var(--border); margin-top: 8px;
         }
         .table-graph th {
-            background: var(--primary-dark);
-            color: #fff;
-            padding: 10px 14px;
-            font-size: 12px;
-            font-weight: 600;
-            text-align: center;
+            background: var(--primary-dark); color: #fff;
+            padding: 10px 14px; font-size: 12px; font-weight: 600; text-align: center;
         }
         .table-graph td {
-            padding: 8px 12px;
-            text-align: center;
-            border-top: 1px solid var(--border);
-            background: #fff;
+            padding: 8px 12px; text-align: center;
+            border-top: 1px solid var(--border); background: #fff;
         }
         .table-graph tbody tr:hover td { background: #f8fafc; }
-        .table-graph input {
-            border: none;
-            width: 100%;
-            text-align: center;
-            background: transparent;
-            font-size: 13px;
-        }
+        .table-graph input { border: none; width: 100%; text-align: center; background: transparent; font-size: 13px; }
         .weekend-red { color: #dc2626 !important; }
         .error-msg { color: #dc2626; font-weight: 600; margin: 8px 0; }
         .confirm-msg { color: #d97706; font-weight: 600; }
@@ -301,20 +265,16 @@ foreach ($conditionElements as $element) {
         .deal-link { color: var(--primary); font-weight: 700; text-decoration: none; }
         .deal-link:hover { text-decoration: underline; }
         .mode-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.15);
-            border-radius: 20px;
-            padding: 3px 12px;
-            font-size: 11px;
-            margin-top: 8px;
+            display: inline-block; background: rgba(255,255,255,0.15);
+            border-radius: 20px; padding: 3px 12px; font-size: 11px; margin-top: 8px;
         }
+
     </style>
 </head>
 <body>
 
 <div class="calc-header">
     <h1>განვადების კალკულატორი</h1>
-    <!-- <p>Monolith 24 &mdash; გადახდის გრაფიკის დაგეგმვა და დასტურისთვის გაგზავნა</p> -->
     <span class="mode-badge" id="modeBadge">არასტანდარტული</span>
 </div>
 
@@ -323,7 +283,6 @@ foreach ($conditionElements as $element) {
 
 <!-- საინფორმაციო ველები -->
 <div class="card-panel">
-    <!-- <h3>საინფორმაციო ველები</h3> -->
     <div class="form-grid">
         <div class="field frozen">
             <label>დილი</label>
@@ -347,13 +306,11 @@ foreach ($conditionElements as $element) {
             <label>საწყისი ჯამური ღირებულება ($)</label>
             <input id="startPrice" value="<?= number_format($oldPrice, 2, '.', ',') ?>" disabled>
         </div>
-
     </div>
 </div>
 
 <!-- გადახდის ტიპი -->
 <div class="card-panel">
-    <!-- <h3>გადახდის ტიპი</h3> -->
     <div class="form-grid">
         <div class="field">
             <label>ტიპი</label>
@@ -387,13 +344,11 @@ foreach ($conditionElements as $element) {
 
 <!-- ფასები -->
 <div class="card-panel">
-    <!-- <h3>ფასები</h3> -->
     <div class="form-grid">
         <div class="field frozen" style="display:none;">
             <label>სულ ($)</label>
             <input id="totalPrice" value="<?= number_format($oldPrice, 2, '.', ',') ?>" disabled>
         </div>
-
         <div class="field">
             <label>ფასდაკლება კვ.მ ($)</label>
             <input id="discountPerSqm" value="0" oninput="calculateDiscountPerSqm()" onblur="formatDiscountField('discountPerSqm')">
@@ -406,7 +361,6 @@ foreach ($conditionElements as $element) {
             <label>საბოლოო კვ.მ ფასი ($)</label>
             <input id="kvmPrice" disabled>
         </div>
-
         <div class="field">
             <label>საბოლოო ფასი ($)</label>
             <input id="price" disabled>
@@ -420,7 +374,6 @@ foreach ($conditionElements as $element) {
 
 <!-- გადახდები -->
 <div class="card-panel">
-    <!-- <h3>გადახდის პარამეტრები</h3> -->
     <div class="form-grid">
         <div class="field">
             <label>პირველადი შენატანის თარიღი</label>
@@ -438,7 +391,6 @@ foreach ($conditionElements as $element) {
             <label>დაწყების თარიღი</label>
             <input id="startDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
-
         <div class="field" id="fieldLastPayDate">
             <label>ბოლო შენატანის თარიღი</label>
             <input id="lastPayDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
@@ -462,6 +414,11 @@ foreach ($conditionElements as $element) {
             <textarea id="commentInput" rows="2"></textarea>
         </div>
     </div>
+</div>
+
+<div style="position:fixed; top:16px; right:16px; z-index:9999; display:flex; gap:8px;">
+    <button class="btn-offer-ka" onclick="openOffer('ka')">🇬🇪 ქართული ოფერი</button>
+    <button class="btn-offer-en" onclick="openOffer('en')">🇬🇧 English Offer</button>
 </div>
 
 <div class="actions">
@@ -495,6 +452,9 @@ const CONFIG = {
     projectName: <?= json_encode($projectName, JSON_UNESCAPED_UNICODE) ?>,
 };
 
+// Stores the saved dataID returned from saveGraphEndRunWorkflow.php
+let savedDataID = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('header.app__header, header.page__header').forEach(h => h.style.display = 'none');
     if (window !== window.top || (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance.getTopSlider())) {
@@ -505,6 +465,43 @@ document.addEventListener('DOMContentLoaded', () => {
     setDateValue('startDate', dateAddMonth(today(), 1));
     setDateValue('advancePayDate', today());
 });
+
+function openOffer(lang) {
+    const base = lang === 'en'
+        ? '/crm/deal/offer-calc-eng.php'
+        : '/crm/deal/offer-calc.php';
+    const params = new URLSearchParams();
+    if (CONFIG.prodID) params.set('prod_ID', CONFIG.prodID);
+    if (CONFIG.dealID) params.set('dealId', CONFIG.dealID);
+    if (savedDataID)   params.set('dataID', savedDataID);
+
+    // Collect current graph rows from the table
+    const tbody = document.querySelector('#graphData tbody');
+    if (tbody && tbody.rows.length > 0) {
+        const rows = Array.from(tbody.rows).map(row => ({
+            payment: row.dataset.payment || row.cells[0].textContent.trim(),
+            date:    row.cells[1].querySelector('input').value,
+            amount:  parseFormattedNumber(row.cells[2].querySelector('input').value),
+        }));
+        const graphMeta = {
+            data:     rows,
+            PRICE:    parseFormattedNumber(getValue('price')),
+            kvmPrice: parseFormattedNumber(getValue('kvmPrice')),
+            planType: (function() {
+                const mode = getValue('paymentMode');
+                if (mode === 'allCash') return 'ერთიანი გადახდა';
+                if (mode === 'internal') {
+                    const sel = document.getElementById('type_select');
+                    return sel ? sel.options[sel.selectedIndex].text : 'შიდა განვადება';
+                }
+                return 'არასტანდარტული';
+            })(),
+        };
+        params.set('graphJSON', JSON.stringify(graphMeta));
+    }
+
+    window.open(`${base}?${params.toString()}`, '_blank');
+}
 
 function onPaymentModeChange() {
     const mode = getValue('paymentMode');
@@ -638,12 +635,8 @@ function applyPriceFromDiscount(discount, skipField) {
     setValue('price', formatNumber(price));
     setValue('kvmPrice', formatNumber(kvm));
     setValue('priceGel', formatNumber(price * CONFIG.nbgKursi));
-    if (skipField !== 'discountPerSqm') {
-        setValue('discountPerSqm', formatNumber(perSqm));
-    }
-    if (skipField !== 'discountNum') {
-        setValue('discountNum', formatNumber(discount));
-    }
+    if (skipField !== 'discountPerSqm') setValue('discountPerSqm', formatNumber(perSqm));
+    if (skipField !== 'discountNum') setValue('discountNum', formatNumber(discount));
 }
 
 function calculateDiscount() {
@@ -656,8 +649,7 @@ function calculateDiscountPerSqm() {
     const mode = getValue('paymentMode');
     if (mode !== 'customType') return;
     const perSqm = parseFormattedNumber(getValue('discountPerSqm'));
-    const discount = perSqm * CONFIG.totalKVM;
-    applyPriceFromDiscount(discount, 'discountPerSqm');
+    applyPriceFromDiscount(perSqm * CONFIG.totalKVM, 'discountPerSqm');
 }
 
 function formatDiscountField(id) {
@@ -765,15 +757,13 @@ function paymentLabel(row, installmentNum) {
 function fillGraph(data, editable) {
     const rows = data.result.filter(row => row.amount > 0);
     let installmentNum = 0;
-
     let html = `<thead><tr><th>#</th><th>გადახდის თარიღი</th><th>თანხა ($)</th><th>დარჩენილი თანხა ($)</th></tr></thead><tbody>`;
     rows.forEach(row => {
         if (!isAdvanceRow(row) && !isLastRow(row)) installmentNum++;
         const label = paymentLabel(row, installmentNum);
         html += `<tr data-payment="${label}"><td>${label}</td>`;
         html += `<td><input type="text" class="date-field" value="${row.date}" ${editable ? '' : 'disabled'} readonly></td>`;
-        html += `<td><input value="${formatNumber(row.amount)}" ${editable ? '' : 'disabled'}
-            oninput="recalculateDebt()"></td>`;
+        html += `<td><input value="${formatNumber(row.amount)}" ${editable ? '' : 'disabled'} oninput="recalculateDebt()"></td>`;
         html += `<td>${formatNumber(row.leftToPay)}</td></tr>`;
     });
     html += '</tbody>';
@@ -786,18 +776,13 @@ function fillGraph(data, editable) {
 function updateSaveButtonText() {
     const btn = document.getElementById('saveBTN');
     if (!btn) return;
-    if (!CONFIG.dealID) {
-        hide('saveBTN');
-        return;
-    }
+    if (!CONFIG.dealID) { hide('saveBTN'); return; }
     btn.textContent = getValue('paymentMode') === 'customType' ? 'გაგზავნა' : 'შენახვა';
 }
 
 async function saveGraph() {
-    if (!CONFIG.dealID) {
-        hide('saveBTN');
-        return;
-    }
+    if (!CONFIG.dealID) { hide('saveBTN'); return; }
+
     const mode = getValue('paymentMode');
     const typeSelected = mode === 'internal' ? getValue('type_select') : mode;
     const price = parseFormattedNumber(getValue('price'));
@@ -856,13 +841,17 @@ async function saveGraph() {
             body: JSON.stringify(savingJson),
         });
         const data = await res.json();
-        const swalResult = await Swal.fire({ icon: data.status === 200 ? 'success' : 'warning', title: data.TEXT, confirmButtonColor: '#4f46e5' });
-        if (data.status === 200 && swalResult.isConfirmed) {
-            refreshDealPage();
-            if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance.getSliderByWindow(window)) {
-                BX.SidePanel.Instance.close();
-            } else if (window.opener) {
-                window.close();
+
+        const swalResult = await Swal.fire({
+            icon: data.status === 200 ? 'success' : 'warning',
+            title: data.TEXT,
+            confirmButtonColor: '#4f46e5'
+        });
+
+        if (data.status === 200) {
+            savedDataID = data.elementID ?? data.dataID ?? data.ELEMENT_ID ?? null;
+            if (swalResult.isConfirmed) {
+                refreshDealPage();
             }
         }
     } catch (e) {
@@ -878,15 +867,11 @@ function refreshDealPage() {
                 const parentSlider = slider.getParentSlider();
                 if (parentSlider) {
                     const parentWin = parentSlider.getWindow();
-                    if (parentWin && parentWin.location) {
-                        parentWin.location.reload();
-                        return;
-                    }
+                    if (parentWin && parentWin.location) { parentWin.location.reload(); return; }
                 }
             }
         }
     } catch (e) {}
-
     if (window.opener && !window.opener.closed) {
         window.opener.location.reload();
     } else if (window.top && window.top !== window) {
@@ -899,18 +884,13 @@ function recalculateDebt() {
     const table = document.getElementById('graphData');
     const tbody = table.querySelector('tbody');
     if (!tbody) return;
-    let sum = 0;
-    let paid = 0;
+    let sum = 0, paid = 0;
     Array.from(tbody.rows).forEach(row => {
         const amt = parseFormattedNumber(row.cells[2].querySelector('input').value);
-        sum += amt;
-        paid += amt;
+        sum += amt; paid += amt;
         if (row.cells[3]) row.cells[3].textContent = formatNumber(Math.max(0, price - paid));
     });
-    if (!CONFIG.dealID) {
-        hide('saveBTN');
-        return;
-    }
+    if (!CONFIG.dealID) { hide('saveBTN'); return; }
     if (Math.abs(sum - price) <= 0.05) show('saveBTN');
     else hide('saveBTN');
 }
@@ -939,10 +919,7 @@ function getValue(id) { return document.getElementById(id).value; }
 function setValue(id, val) {
     const el = document.getElementById(id);
     if (!el) return;
-    if (DATE_FIELD_IDS.includes(id)) {
-        setDateValue(id, val);
-        return;
-    }
+    if (DATE_FIELD_IDS.includes(id)) { setDateValue(id, val); return; }
     el.value = val;
 }
 function setDateValue(id, val) {
@@ -951,9 +928,7 @@ function setDateValue(id, val) {
     if (el._flatpickr) {
         if (val) el._flatpickr.setDate(val, false, 'd/m/Y');
         else el._flatpickr.clear();
-    } else {
-        el.value = val || '';
-    }
+    } else { el.value = val || ''; }
 }
 function initDatePickers() {
     DATE_FIELD_IDS.forEach(id => {
@@ -974,6 +949,7 @@ function showError(msg) {
 function clearGraph() {
     document.getElementById('graphData').innerHTML = '';
     hide('saveBTN');
+    savedDataID = null;
 }
 function disableFields(ids) {
     ids.forEach(id => {

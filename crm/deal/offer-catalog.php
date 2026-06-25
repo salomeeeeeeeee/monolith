@@ -91,13 +91,11 @@ $misamarti = $salesmeneger["PERSONAL_STREET"];
 $date = date("Y-m-d");
 
 $url = "https://nbg.gov.ge/gw/api/ct/monetarypolicy/currencies?Currencies=USD&date={$date}";
-// printArr($url);
 $seb = file_get_contents($url);
 
 $seb = json_decode($seb);
 
 $seb_currency = $seb[0]->currencies[0]->rate;
-// printArr($seb_currency);
 
 
 if (isset($_GET["prod_ID"]) && !empty($_GET["prod_ID"]))
@@ -153,21 +151,6 @@ if($fartisType1=="ბინა"){
 }
 
 
-// $chabarebisforma = $product[0]['SUBMISSION_TYPE'];
-// $sawyisifasilari = $product[0]['KVM_PRICE'];
-
-
-// if($projectID==21){
-//     $projectName="დიღომი ჭალები";
-// }
-
-
-// $arFilter = array(
-//     "ID" => $projectID,
-// );
-
-
-
 $arFilter = array(
     "ID" => 10953,
 );
@@ -220,38 +203,31 @@ if (count($bade)) {
     #address {
         font-weight: bolder;
         text-transform: none;
-
     }
 
     #sales {
         font-weight: bolder;
         text-transform: none;
-
-
     }
 
     #workphone {
         font-weight: bolder;
         text-transform: none;
-
     }
 
     #phone {
         font-weight: bolder;
         text-transform: none;
-
     }
 
     #mail {
         font-weight: bolder;
         text-transform: none;
-
     }
 
     #link {
         font-weight: bolder;
         text-transform: none;
-
     }
 
     .info {
@@ -261,9 +237,7 @@ if (count($bade)) {
         display: flex;
         justify-content: center;
         padding: 20px;
-
         font-family: "Arial GEO BoldItalic", sans-serif;
-
     }
 
     .column {
@@ -312,10 +286,8 @@ if (count($bade)) {
         width: 100%;
         height: 100vh;
         background-size: 300px;
-
     }
 
-    
     .foto2 {
         background-image: url("<?php echo $zionfoto ?>");
         background-repeat: no-repeat;
@@ -326,8 +298,6 @@ if (count($bade)) {
         margin-top: 30px;
         position: absolute;
         display: flex;
-
-
     }
 
     .foto3 {
@@ -339,8 +309,6 @@ if (count($bade)) {
         width: 100%;
         height: 100%;
         background-size: 340px;
-
-
     }
 
     .foto4 {
@@ -353,8 +321,6 @@ if (count($bade)) {
         margin-top: 30px;
         position: absolute;
         display: flex;
-
-
     }
 
     .foto5 {
@@ -367,8 +333,6 @@ if (count($bade)) {
         margin-top: 500px;
         position: absolute;
         display: flex;
-
-
     }
 
     .foto6 {
@@ -381,7 +345,6 @@ if (count($bade)) {
         margin-top: 750px;
         position: absolute;
         display: flex;
-
     }
 
 
@@ -430,7 +393,6 @@ if (count($bade)) {
 
     .rounded-cell {
         width: auto;
-        /* max-width: 900px; */
         height: 0px;
         background-color: #0b3860;
         border-radius: 50px;
@@ -438,17 +400,14 @@ if (count($bade)) {
         align-items: center;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         padding: 20px;
-        /* Adds padding inside the cell */
         margin-left: 450px;
         margin-top: 20px;
         margin-right: 30px;
-
-
     }
 
     .footer {
         width: auto;
-        max-width:100%;
+        max-width: 100%;
         height: 50px;
         background-color: #0b3860;
         border-radius: 50px;
@@ -478,9 +437,7 @@ if (count($bade)) {
         display: flex;
         align-items: center;
         padding: 20px;
-        /* Adds padding inside the cell */
         margin-top: 13px;
-
     }
 
     .cell-text {
@@ -510,30 +467,24 @@ if (count($bade)) {
         color: #95c084;
         margin-top: 28px;
         margin-left: 20px;
-
     }
 
     .rounded-cell3 {
         width: auto;
         max-width: 800px;
-        /* Increased from 400px to 600px */
         height: 0px;
         background-color: #b2c2e1;
         border-radius: 50px;
         display: flex;
         align-items: center;
         padding: 20px;
-        /* Adds padding inside the cell */
         margin-top: 5px;
-
     }
 
     .rounded-cell4 {
         width: auto;
         max-width: 800px;
-        /* Increased from 400px to 600px */
         height: 0px;
-        /* Increase height to ensure content fits */
         background-color: #b2c2e1;
         border-radius: 50px;
         display: flex;
@@ -541,15 +492,12 @@ if (count($bade)) {
         padding: 20px;
         margin-top: 5px;
         margin-right: 30px;
-
     }
 
     .rounded-cell5 {
         width: auto;
         max-width: 800px;
-        /* Adjust this if needed */
         height: 0px;
-        /* Increase height to ensure content fits */
         background-color: #b2c2e1;
         border-radius: 50px;
         display: flex;
@@ -557,7 +505,6 @@ if (count($bade)) {
         padding: 20px;
         margin-top: 13px;
         margin-right: 30px;
-
     }
 
     .column-container {
@@ -609,7 +556,6 @@ if (count($bade)) {
         width: 100%;
         height: auto;
     }
-    
 
     .xedi_1 img {
         width: 100%;
@@ -620,15 +566,56 @@ if (count($bade)) {
         width: 100%;
         height: auto;
     }
-    
+
     .xedi_3 img {
         width: 100%;
         height: auto;
     }
+
+    /* ===== PDF EXPORT BUTTON ===== */
+    .pdf-export-btn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        background-color: #0b3860;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 50px;
+        font-family: "BPG WEB 001 Caps", sans-serif;
+        font-size: 13px;
+        text-transform: uppercase;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        transition: background-color 0.2s;
+    }
+
+    .pdf-export-btn:hover {
+        background-color: #95c084;
+    }
+
+    .pdf-export-btn:disabled {
+        background-color: #888;
+        cursor: not-allowed;
+    }
+
+    @media print {
+        .pdf-export-btn {
+            display: none !important;
+        }
+    }
 </style>
+
+<!-- PDF Export Button -->
+<button class="pdf-export-btn" id="pdfBtn" onclick="downloadPDF()">&#8595; PDF გადმოწერა</button>
 
 <div class="foto"></div>
 <div class="foto2"> </div>
+
+<!-- Wrap all offer content in .page-content for html2canvas capture -->
+<div class="page-content">
+
 <div>
     <div class="rounded-cell">
         <p class="cell-text"><?php echo htmlspecialchars($fartisType); ?>ს დეტალები</p>
@@ -660,9 +647,6 @@ if (count($bade)) {
             <div class="rounded-cell3" id="sazafxuloDiv">
                 <p class="cell-text2">საზაფხულო ფართი</p>
             </div>
-            <!-- <div class="rounded-cell3">
-                <p class="cell-text2">ჩაბარების მდგომარეობა</p>
-            </div> -->
 
         </div>
 
@@ -691,80 +675,66 @@ if (count($bade)) {
             <div class="rounded-cell4" id="sazafxuloValueDiv">
                 <p class="cell-text2"><span id="aivani"> </span> </p>
             </div>
-            <!-- <div class="rounded-cell4">
-                <p class="cell-text2"> პრე რემონტი </p>
-            </div> -->
         </div>
     </div>
     <div class="rounded-cell">
         <p class="cell-text"><?php echo htmlspecialchars($fartisType); ?>ს ღირებულება</p>
     </div>
     <div class="column-container">
-    <div class="column">
-    <div class="rounded-cell2" id="kvmPriceDiv">
-        <p class="cell-text2">საცხოვრებელი ფართის ფასი 1 კვ.მ</p>
-    </div>
-
-    <?php if (($projectName == "PETRA SEA RESORT K" && $sartuli == "1" ) || ($projectName == "PETRA SEA RESORT D" && $sartuli == "1")) : ?>
-        <div class="rounded-cell2" id="kvmPriceDiv">
-            <p class="cell-text2">ეზოს ფართის ფასი 1 კვ.მ</p>
-        </div>
-        <div class="rounded-cell2" id="kvmPriceDiv">
-            <p class="cell-text2">ტერასის ფართის ფასი 1 კვ.მ</p>
-        </div>
-    <?php endif; ?>
-
-    <div class="rounded-cell2" id="totalpriceDiv">
-        <p class="cell-text2">ჯამური ფასი</p>
-    </div>
-</div>
-
-<div class="column">
-    <div class="rounded-cell5" id="kvmPriceValueDiv">
-        <p class="cell-text2"><span id="kvmPrice"> </span></p>
-    </div>
-
-    <?php if (($projectName == "PETRA SEA RESORT K" && $sartuli == "1" ) || ($projectName == "PETRA SEA RESORT D" && $sartuli == "1")) : ?>
-        <div class="rounded-cell5" id="kvmPriceValueDiv">
-            <p class="cell-text2"><span id="kvmEzo"> </span></p>
-        </div>
-        <div class="rounded-cell5" id="kvmPriceValueDiv">
-            <p class="cell-text2"><span id="kvmterasa"> </span></p>
-        </div>
-    <?php endif; ?>
-
-    <div class="rounded-cell5" id="totalPriceValueDiv">
-        <p class="cell-text2"><span id="totalprice"> </span></p>
-    </div>
-</div>
-        <!-- <div class="column">
-            <div class="rounded-cell5" id="kvmPriceGelValueDiv">
-                <p class="cell-text2">₾ <span id="kvmPriceGel"> </span> </p>
-            </div>
-            <div class="rounded-cell4" id="totalPriceGelValueDiv">
-                <p class="cell-text2">₾ <span id="totalpriceGel"> </span></p>
+        <div class="column">
+            <div class="rounded-cell2" id="kvmPriceDiv">
+                <p class="cell-text2">საცხოვრებელი ფართის ფასი 1 კვ.მ</p>
             </div>
 
-        </div> -->
+            <?php if (($projectName == "PETRA SEA RESORT K" && $sartuli == "1") || ($projectName == "PETRA SEA RESORT D" && $sartuli == "1")) : ?>
+                <div class="rounded-cell2" id="kvmPriceDiv">
+                    <p class="cell-text2">ეზოს ფართის ფასი 1 კვ.მ</p>
+                </div>
+                <div class="rounded-cell2" id="kvmPriceDiv">
+                    <p class="cell-text2">ტერასის ფართის ფასი 1 კვ.მ</p>
+                </div>
+            <?php endif; ?>
+
+            <div class="rounded-cell2" id="totalpriceDiv">
+                <p class="cell-text2">ჯამური ფასი</p>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="rounded-cell5" id="kvmPriceValueDiv">
+                <p class="cell-text2"><span id="kvmPrice"> </span></p>
+            </div>
+
+            <?php if (($projectName == "PETRA SEA RESORT K" && $sartuli == "1") || ($projectName == "PETRA SEA RESORT D" && $sartuli == "1")) : ?>
+                <div class="rounded-cell5" id="kvmPriceValueDiv">
+                    <p class="cell-text2"><span id="kvmEzo"> </span></p>
+                </div>
+                <div class="rounded-cell5" id="kvmPriceValueDiv">
+                    <p class="cell-text2"><span id="kvmterasa"> </span></p>
+                </div>
+            <?php endif; ?>
+
+            <div class="rounded-cell5" id="totalPriceValueDiv">
+                <p class="cell-text2"><span id="totalprice"> </span></p>
+            </div>
+        </div>
     </div>
 
     <div class="column-container">
-       
-
         <div class="column">
             <div class="footer">
                 <p class="footertext">
                     <?php echo htmlspecialchars($salesmenegername); ?><br>
-                    ტელეფონი: 032 230 99 77 <br>
-                    <!-- მისამართი: ჭაბუა ამირეჯიბის გზატკეცილი N2, ბიზნეს ცენტრი მზიური სართული 2  -->
+                    ტელეფონი: <?php echo htmlspecialchars($salesmenegerphone); ?><br>
                 </p>
             </div>
         </div>
-
-
     </div>
 
 </div>
+
+</div><!-- /page-content -->
+
 <div style="page-break-before: always;"></div>
 <div class="mtavari_foto" id="mtavari_foto"> </div>
 
@@ -782,28 +752,17 @@ if (count($bade)) {
 
 <script>
 
-    function addCellNextToProject(content) {
-        let table = document.getElementById("myTable");
-        let row = table.rows[2];
-        let cell = row.insertCell(-1);
-        cell.innerHTML = content;
-
-    }
-
     function formatNumber(num) {
         const options = {
             useGrouping: true,
         };
 
-        // Check if the number has decimals
         if (num % 1 !== 0) {
             options.minimumFractionDigits = 2;
             options.maximumFractionDigits = 2;
         }
 
-        return num
-            .toLocaleString('en', options)  // Format with commas
-        // Replace commas with single quotes
+        return num.toLocaleString('en', options);
     }
 
     let projectName = <?php echo json_encode($projectName); ?>;
@@ -815,59 +774,48 @@ if (count($bade)) {
     let sacxovrebelifarti = <?php echo json_encode($sacxovrebelifarti); ?>;
     let aivani = <?php echo json_encode($aivani); ?>;
 
-    // let kursi = <?php echo json_encode($seb_currency); ?>;
-
-    let kvmdollar = Number(<?php echo json_encode($kvmdollar); ?>)
-    kvmdollar = Math.floor(kvmdollar)
+    let kvmdollar = Number(<?php echo json_encode($kvmdollar); ?>);
+    kvmdollar = Math.floor(kvmdollar);
     let kvmdollarFormated = formatNumber(kvmdollar);
 
-    let kvmezo = Number(<?php echo json_encode($kvmezo); ?>)
-    kvmezo = Math.floor(kvmezo)
+    let kvmezo = Number(<?php echo json_encode($kvmezo); ?>);
+    kvmezo = Math.floor(kvmezo);
     let kvmezoFormated = formatNumber(kvmezo);
 
-    let kvmterasa = Number(<?php echo json_encode($kvmterasa); ?>)
-    kvmterasa = Math.floor(kvmterasa)
+    let kvmterasa = Number(<?php echo json_encode($kvmterasa); ?>);
+    kvmterasa = Math.floor(kvmterasa);
     let kvmterasaFormated = formatNumber(kvmterasa);
-    
-    
-    let totalprice = <?php echo json_encode($totalprice); ?>;
-    totalprice = Math.floor(totalprice)
-    let totalpriceFormated = formatNumber(totalprice);
 
+    let totalprice = <?php echo json_encode($totalprice); ?>;
+    totalprice = Math.floor(totalprice);
+    let totalpriceFormated = formatNumber(totalprice);
 
     let threeD = <?php echo json_encode($threeD); ?>;
     let floorplan = <?php echo json_encode($floorplan); ?>;
     let sartulinew = <?php echo json_encode($sartulinew); ?>;
     let mtavari_foto = <?php echo json_encode($mtavari_foto); ?>;
 
-
-    
     let xedi_1 = <?php echo json_encode($xedi_1); ?>;
     let xedi_2 = <?php echo json_encode($xedi_2); ?>;
     let xedi_3 = <?php echo json_encode($xedi_3); ?>;
 
-
-
     document.getElementById("projectName").innerText = ` ${projectName} `;
-
     document.getElementById("kvmPrice").innerText = ` $ ${kvmdollarFormated} `;
 
-  if (document.getElementById("kvmEzo")) {
-    document.getElementById("kvmEzo").innerText = ` $ ${kvmezoFormated} `;
-}
+    if (document.getElementById("kvmEzo")) {
+        document.getElementById("kvmEzo").innerText = ` $ ${kvmezoFormated} `;
+    }
 
-if (document.getElementById("kvmterasa")) {
-    document.getElementById("kvmterasa").innerText = ` $ ${kvmterasaFormated} `;
-}
+    if (document.getElementById("kvmterasa")) {
+        document.getElementById("kvmterasa").innerText = ` $ ${kvmterasaFormated} `;
+    }
+
     document.getElementById("totalprice").innerText = ` $ ${totalpriceFormated} `;
-
 
     document.getElementById("threeDRender").innerHTML = `<img src='${threeD}' alt='project picture' >`;
     document.getElementById("floorplan").innerHTML = `<img src='${floorplan}' alt='2D render'>`;
     document.getElementById("sartulinew").innerHTML = `<img src='${sartulinew}' alt='2D render'>`;
     document.getElementById("mtavari_foto").innerHTML = `<img src='${mtavari_foto}' alt='2D render'>`;
-
-    
 
     if (xedi_1) {
         document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='2D render'>`;
@@ -880,33 +828,6 @@ if (document.getElementById("kvmterasa")) {
     if (xedi_3) {
         document.getElementById("xedi_3").innerHTML = `<img src='${xedi_3}' alt='2D render'>`;
     }
-
-
-
-
-    if (xedi_1){
-        document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='2D render'>`;
-    }
-
-    if (xedi_2){
-        document.getElementById("xedi_2").innerHTML = `<img src='${xedi_2}' alt='2D render'>`;
-    }
-
-    if (xedi_3){
-        document.getElementById("xedi_3").innerHTML = `<img src='${xedi_3}' alt='2D render'>`;
-    }
-    
-    
-    
-    //  document.getElementById("chabarebisforma").innerText = ` ${chabarebisforma} ` ;
-    //  document.getElementById("sales").innerText = ` Sales manager: ${salesmenegername} ` ;
-    //  document.getElementById("phone").innerText = ` M.: ${salesmenegerphone} ` ;
-    //  document.getElementById("workphone").innerText = ` T.: ${salesmenegerworkphone} ` ;
-    //  document.getElementById("address").innerText = ` Address: ${misamarti} ` ;
-    //  document.getElementById("mail").innerText = ` E.: ${salesmenegermail} ` ;
-    //  document.getElementById("fasi").innerText = ` $ ${sawyisifasilari} ` ;
-    //  document.getElementById("tanxaGEL").innerText = ` ₾  ${tanxaGEL} ` ;
-
 
     if (!korpusi) {
         document.getElementById("korpusiDiv").style.display = "none";
@@ -930,30 +851,24 @@ if (document.getElementById("kvmterasa")) {
     }
 
     if (!flatNum) {
-        document.getElementById("flatNumDiv").style.display = "none";
-        document.getElementById("flatNumValueDiv").style.display = "none";
+        document.getElementById("binisNomeriDiv").style.display = "none";
+        document.getElementById("binisNomeriValueDiv").style.display = "none";
     } else {
         document.getElementById("flatNum").innerText = ` ${flatNum} `;
     }
 
     if (!totalspace) {
-        document.getElementById("totalspaceDiv").style.display = "none";
+        document.getElementById("binisJamuriFasiDiv").style.display = "none";
         document.getElementById("totalspaceValueDiv").style.display = "none";
     } else {
         document.getElementById("totalspace").innerText = ` ${totalspace} კვ.მ`;
     }
 
-    // if (!sacxovrebelifarti) {
-    //     document.getElementById("sacxovrebelifartiDiv").style.display = "none";
-    //     document.getElementById("sacxovrebelifartiValueDiv").style.display = "none";
-    // } else {
-        let sacxovrebeliFartiCalculated = sacxovrebelifarti;
+    let sacxovrebeliFartiCalculated = sacxovrebelifarti;
     if (!sacxovrebelifarti && totalspace) {
         sacxovrebeliFartiCalculated = (parseFloat(totalspace) - parseFloat(aivani || 0)).toFixed(2);
     }
     document.getElementById("sacxovrebelifarti").innerText = `${sacxovrebeliFartiCalculated} კვ.მ`;
-    
-    // }
 
     if (!aivani) {
         document.getElementById("sazafxuloDiv").style.display = "none";
@@ -962,5 +877,55 @@ if (document.getElementById("kvmterasa")) {
         document.getElementById("aivani").innerText = ` ${aivani} კვ.მ`;
     }
 
+</script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<script>
+async function downloadPDF() {
+    const btn = document.getElementById('pdfBtn');
+    btn.textContent = 'იტვირთება...';
+    btn.disabled = true;
+
+    const { jsPDF } = window.jspdf;
+    // A4 landscape: 297 x 210 mm
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    const pdfW = 297;
+    const pdfH = 210;
+
+    const pages = document.querySelectorAll('.page-content');
+
+    for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+
+        const canvas = await html2canvas(page, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#f9faf8',
+            logging: false
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+        const canvasW = canvas.width;
+        const canvasH = canvas.height;
+        const ratio = Math.min(pdfW / canvasW, pdfH / canvasH);
+        const imgW = canvasW * ratio;
+        const imgH = canvasH * ratio;
+        const offsetX = (pdfW - imgW) / 2;
+        const offsetY = (pdfH - imgH) / 2;
+
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', offsetX, offsetY, imgW, imgH);
+    }
+
+    pdf.save('offer.pdf');
+
+    btn.textContent = '✓ გადმოწერილია';
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = '↓ PDF გადმოწერა'; }, 3000);
+}
 </script>

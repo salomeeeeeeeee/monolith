@@ -855,7 +855,7 @@ const SKIP_CODES = new Set([
     "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME","DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","QUEUE",
     "PRICE","PRICE_GEL",
     "_P64GYD","Number","FLOOR","__X1GCRZ","_L24CUB",
-    "__51MODL","__6ZWTER", "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL"
+    "__51MODL","__6ZWTER", "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL", "threedrender","floorplan","mtavari_foto"
 ]);
 const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA"];
 
@@ -2390,7 +2390,7 @@ async function exportToExcel() {
         const seen=new Set(), apts=[];
         visibleIds.forEach(id=>{const a=all.find(p=>p["ID"]==id);if(a&&!seen.has(id)){seen.add(id);apts.push(a);}});
 
-        const skipExport=new Set([...SKIP_CODES,"~ID","~NAME","~IBLOCK_ID","~IBLOCK_SECTION_ID","MORE_PHOTO","PREVIEW_PICTURE","DETAIL_PICTURE","~DETAIL_PICTURE","image","image2","image3","image4","image5","binis_gegmareba","render_3D","sartulis2D","binisNaxazi2D","erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo"]);
+        const skipExport=new Set([...SKIP_CODES,"~ID","~NAME","~IBLOCK_ID","~IBLOCK_SECTION_ID","MORE_PHOTO","PREVIEW_PICTURE","DETAIL_PICTURE","~DETAIL_PICTURE","image","image2","image3","image4","image5","binis_gegmareba","render_3D","sartulis2D","binisNaxazi2D","erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo","threedrender","floorplan","mtavari_foto"]);
         const priorityKeys = ["ID","_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA","PRICE","PRICE_GEL", F_KVM_USD];
 
         const dataKeys = new Set();
