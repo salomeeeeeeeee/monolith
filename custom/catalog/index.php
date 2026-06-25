@@ -1979,7 +1979,8 @@ function renderBlockSections(apt) {
         "Number","FLOOR","TOTAL_AREA",
         "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME",
         "DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","OWNER_PERSONAL_CONTACT","QUEUE",
-        "__51MODL","__6ZWTER",  "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL","RESERVATION_STAGE_ID","RESERVATION_DATE"
+        "__51MODL","__6ZWTER",  "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL","RESERVATION_STAGE_ID","RESERVATION_DATE",
+        "threedrender","floorplan","mtavari_foto"
     ]);
     // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
