@@ -194,7 +194,7 @@ if (count($z)) $zfoto = CFile::GetPath($z[0]["PHOTO"]);
 
     /* ── Schedule table ── */
     .schedule-section { margin-left: 0; margin-right: 0; margin-top: 24px; padding: 0 30px; }
-    
+
     .schedule-table {
         width: 100%; border-collapse: separate; border-spacing: 0;
         border-radius: 12px; overflow: hidden; border: 1px solid #b2c2e1;
@@ -335,17 +335,61 @@ if (count($z)) $zfoto = CFile::GetPath($z[0]["PHOTO"]);
     </div>
     <?php endif; ?>
 
- 
-</div><!-- /page-content -->
 
+</div><!-- /page-content (page 1: details + pricing + schedule) -->
+
+<!-- Pages 2+: one image per PDF page. Each wrapper is only emitted when that
+     image actually has a value, and downloadPDF() turns every .page-content
+     element into its own PDF page. -->
+
+<?php if ($mtavari_foto) : ?>
 <div style="page-break-before: always;"></div>
-<div class="mtavari_foto" id="mtavari_foto"></div>
-<div class="sartulinew" id="sartulinew"></div>
-<div class="floorplan" id="floorplan"></div>
-<div class="threeDRender" id="threeDRender"></div>
-<div class="xedi_1" id="xedi_1"></div>
-<div class="xedi_2" id="xedi_2"></div>
-<div class="xedi_3" id="xedi_3"></div>
+<div class="page-content">
+    <div class="mtavari_foto" id="mtavari_foto"></div>
+</div>
+<?php endif; ?>
+
+<?php if ($sartulinew) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="sartulinew" id="sartulinew"></div>
+</div>
+<?php endif; ?>
+
+<?php if ($floorplan) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="floorplan" id="floorplan"></div>
+</div>
+<?php endif; ?>
+
+<?php if ($threeD) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="threeDRender" id="threeDRender"></div>
+</div>
+<?php endif; ?>
+
+<?php if ($xedi_1) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="xedi_1" id="xedi_1"></div>
+</div>
+<?php endif; ?>
+
+<?php if ($xedi_2) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="xedi_2" id="xedi_2"></div>
+</div>
+<?php endif; ?>
+
+<?php if ($xedi_3) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="xedi_3" id="xedi_3"></div>
+</div>
+<?php endif; ?>
 
 <script>
 function formatNumber(num) {
@@ -376,13 +420,30 @@ document.getElementById("projectName").innerText = ` ${projectName} `;
 document.getElementById("kvmPriceDisplay").innerText = `$ ${formatNumber(Math.floor(calcKvmPrice))}`;
 document.getElementById("totalPriceDisplay").innerText = `$ ${formatNumber(Math.floor(calcPrice))}`;
 
-document.getElementById("threeDRender").innerHTML = threeD ? `<img src='${threeD}' alt='3D render'>` : '';
-document.getElementById("floorplan").innerHTML    = floorplan ? `<img src='${floorplan}' alt='floor plan'>` : '';
-document.getElementById("sartulinew").innerHTML   = sartulinew ? `<img src='${sartulinew}' alt='floor'>` : '';
-document.getElementById("mtavari_foto").innerHTML = mtavari_foto ? `<img src='${mtavari_foto}' alt='photo'>` : '';
-if (xedi_1) document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='view'>`;
-if (xedi_2) document.getElementById("xedi_2").innerHTML = `<img src='${xedi_2}' alt='view'>`;
-if (xedi_3) document.getElementById("xedi_3").innerHTML = `<img src='${xedi_3}' alt='view'>`;
+// Only insert an <img> when the URL actually exists and only into elements
+// that exist on this page (a page/element for an empty image is never
+// rendered at all now, so these checks also guard against null elements).
+if (threeD && document.getElementById("threeDRender")) {
+    document.getElementById("threeDRender").innerHTML = `<img src='${threeD}' alt='3D render' crossorigin='anonymous'>`;
+}
+if (floorplan && document.getElementById("floorplan")) {
+    document.getElementById("floorplan").innerHTML = `<img src='${floorplan}' alt='floor plan' crossorigin='anonymous'>`;
+}
+if (sartulinew && document.getElementById("sartulinew")) {
+    document.getElementById("sartulinew").innerHTML = `<img src='${sartulinew}' alt='floor' crossorigin='anonymous'>`;
+}
+if (mtavari_foto && document.getElementById("mtavari_foto")) {
+    document.getElementById("mtavari_foto").innerHTML = `<img src='${mtavari_foto}' alt='photo' crossorigin='anonymous'>`;
+}
+if (xedi_1 && document.getElementById("xedi_1")) {
+    document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='view' crossorigin='anonymous'>`;
+}
+if (xedi_2 && document.getElementById("xedi_2")) {
+    document.getElementById("xedi_2").innerHTML = `<img src='${xedi_2}' alt='view' crossorigin='anonymous'>`;
+}
+if (xedi_3 && document.getElementById("xedi_3")) {
+    document.getElementById("xedi_3").innerHTML = `<img src='${xedi_3}' alt='view' crossorigin='anonymous'>`;
+}
 
 if (!korpusi) { document.getElementById("korpusiDiv").style.display = "none"; document.getElementById("korpusiValueDiv").style.display = "none"; }
 else { document.getElementById("korpusi").innerText = ` ${korpusi} `; }
@@ -412,30 +473,80 @@ else { document.getElementById("aivani").innerText = ` ${aivani} SQ.M`; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
+
+// Waits until every <img> inside a given container has either finished
+// loading or errored out, so html2canvas never captures a container while
+// its images are still mid-request. Each image gets a hard timeout so one
+// stuck request can never hang the whole export forever.
+function waitForImages(container, timeoutMs = 8000) {
+    const imgs = Array.from(container.querySelectorAll('img'));
+    return Promise.all(imgs.map(img => {
+        if (img.complete && img.naturalWidth !== 0) return Promise.resolve();
+        return new Promise(resolve => {
+            const done = (reason) => {
+                if (reason) console.warn('Image did not finish loading in time:', img.src, reason);
+                resolve();
+            };
+            const timer = setTimeout(() => done('timeout'), timeoutMs);
+            img.addEventListener('load', () => { clearTimeout(timer); resolve(); }, { once: true });
+            img.addEventListener('error', () => { clearTimeout(timer); done('error event'); }, { once: true });
+        });
+    }));
+}
+
+// Rejects after ms milliseconds so a hung step can't freeze the export forever.
+function withTimeout(promise, ms, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out: ${label}`)), ms))
+    ]);
+}
+
 async function downloadPDF() {
     const btn = document.getElementById('pdfBtn');
     btn.textContent = 'Loading...';
     btn.disabled = true;
 
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const pdfW = 297, pdfH = 210;
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const pdfW = 297, pdfH = 210;
 
-    const pages = document.querySelectorAll('.page-content');
-    for (let i = 0; i < pages.length; i++) {
-        const canvas = await html2canvas(pages[i], {
-            scale: 2, useCORS: true, allowTaint: true,
-            backgroundColor: '#f9faf8', logging: false
-        });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
-        const imgW = canvas.width * ratio, imgH = canvas.height * ratio;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', (pdfW - imgW) / 2, (pdfH - imgH) / 2, imgW, imgH);
+        const pages = document.querySelectorAll('.page-content');
+
+        if (pages.length === 0) {
+            throw new Error('No .page-content elements found to export.');
+        }
+
+        for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+
+            await withTimeout(waitForImages(page), 15000, `waiting for images on page ${i + 1}`);
+
+            const canvas = await withTimeout(
+                html2canvas(page, {
+                    scale: 2, useCORS: true, allowTaint: true,
+                    backgroundColor: '#f9faf8', logging: false
+                }),
+                20000,
+                `rendering page ${i + 1} to canvas`
+            );
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
+            const imgW = canvas.width * ratio, imgH = canvas.height * ratio;
+            if (i > 0) pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', (pdfW - imgW) / 2, (pdfH - imgH) / 2, imgW, imgH);
+        }
+
+        pdf.save('offer.pdf');
+        btn.textContent = '✓ Downloaded';
+    } catch (err) {
+        console.error('PDF export failed:', err);
+        btn.textContent = '⚠ Error, try again';
+    } finally {
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = '↓ Download PDF'; }, 3000);
     }
-    pdf.save('offer.pdf');
-    btn.textContent = '✓ Downloaded';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = '↓ Download PDF'; }, 3000);
 }
 </script>

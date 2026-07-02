@@ -733,21 +733,60 @@ if (count($bade)) {
 
 </div>
 
-</div><!-- /page-content -->
+</div><!-- /page-content (page 1: details + pricing) -->
 
+<!-- Pages 2+: one image per PDF page. Each image gets its own .page-content
+     wrapper (only emitted when that image actually exists), so downloadPDF()
+     turns every <img> into a separate page instead of stacking them together. -->
+
+<?php if ($mtavari_foto) : ?>
 <div style="page-break-before: always;"></div>
-<div class="mtavari_foto" id="mtavari_foto"> </div>
+<div class="page-content">
+    <div class="mtavari_foto" id="mtavari_foto"> </div>
+</div>
+<?php endif; ?>
 
-<div class="sartulinew" id="sartulinew"> </div>
+<?php if ($sartulinew) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="sartulinew" id="sartulinew"> </div>
+</div>
+<?php endif; ?>
 
+<?php if ($floorplan) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="floorplan" id="floorplan"></div>
+</div>
+<?php endif; ?>
 
-<div class="floorplan" id="floorplan"></div>
-<div class="threeDRender" id="threeDRender"></div>
+<?php if ($threeD) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="threeDRender" id="threeDRender"></div>
+</div>
+<?php endif; ?>
 
+<?php if ($xedi_1) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="xedi_1" id="xedi_1"> </div>
+</div>
+<?php endif; ?>
 
-<div class="xedi_1" id="xedi_1"> </div>
-<div class="xedi_2" id="xedi_2"></div>
-<div class="xedi_3" id="xedi_3"></div>
+<?php if ($xedi_2) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="xedi_2" id="xedi_2"></div>
+</div>
+<?php endif; ?>
+
+<?php if ($xedi_3) : ?>
+<div style="page-break-before: always;"></div>
+<div class="page-content">
+    <div class="xedi_3" id="xedi_3"></div>
+</div>
+<?php endif; ?>
 
 
 <script>
@@ -812,21 +851,32 @@ if (count($bade)) {
 
     document.getElementById("totalprice").innerText = ` $ ${totalpriceFormated} `;
 
-    document.getElementById("threeDRender").innerHTML = `<img src='${threeD}' alt='project picture' >`;
-    document.getElementById("floorplan").innerHTML = `<img src='${floorplan}' alt='2D render'>`;
-    document.getElementById("sartulinew").innerHTML = `<img src='${sartulinew}' alt='2D render'>`;
-    document.getElementById("mtavari_foto").innerHTML = `<img src='${mtavari_foto}' alt='2D render'>`;
+    // Only create an <img> tag when there's an actual URL. An <img src="">
+    // never reliably fires 'load' or 'error' in every browser, which is what
+    // causes the PDF export to hang forever on "იტვირთება".
+    if (threeD) {
+        document.getElementById("threeDRender").innerHTML = `<img src='${threeD}' alt='project picture' crossorigin='anonymous'>`;
+    }
+    if (floorplan) {
+        document.getElementById("floorplan").innerHTML = `<img src='${floorplan}' alt='2D render' crossorigin='anonymous'>`;
+    }
+    if (sartulinew) {
+        document.getElementById("sartulinew").innerHTML = `<img src='${sartulinew}' alt='2D render' crossorigin='anonymous'>`;
+    }
+    if (mtavari_foto) {
+        document.getElementById("mtavari_foto").innerHTML = `<img src='${mtavari_foto}' alt='2D render' crossorigin='anonymous'>`;
+    }
 
     if (xedi_1) {
-        document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='2D render'>`;
+        document.getElementById("xedi_1").innerHTML = `<img src='${xedi_1}' alt='2D render' crossorigin='anonymous'>`;
     }
 
     if (xedi_2) {
-        document.getElementById("xedi_2").innerHTML = `<img src='${xedi_2}' alt='2D render'>`;
+        document.getElementById("xedi_2").innerHTML = `<img src='${xedi_2}' alt='2D render' crossorigin='anonymous'>`;
     }
 
     if (xedi_3) {
-        document.getElementById("xedi_3").innerHTML = `<img src='${xedi_3}' alt='2D render'>`;
+        document.getElementById("xedi_3").innerHTML = `<img src='${xedi_3}' alt='2D render' crossorigin='anonymous'>`;
     }
 
     if (!korpusi) {
@@ -883,49 +933,96 @@ if (count($bade)) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <script>
+
+// Waits until every <img> inside a given container has either finished
+// loading or errored out, so html2canvas never captures a container
+// while its images are still mid-request (the root cause of "pictures
+// missing from the PDF"). Each image gets a hard timeout so one stuck
+// request can never hang the whole export forever.
+function waitForImages(container, timeoutMs = 8000) {
+    const imgs = Array.from(container.querySelectorAll('img'));
+    return Promise.all(imgs.map(img => {
+        if (img.complete && img.naturalWidth !== 0) return Promise.resolve();
+        return new Promise(resolve => {
+            const done = (reason) => {
+                if (reason) console.warn('Image did not finish loading in time:', img.src, reason);
+                resolve();
+            };
+            const timer = setTimeout(() => done('timeout'), timeoutMs);
+            img.addEventListener('load', () => { clearTimeout(timer); resolve(); }, { once: true });
+            img.addEventListener('error', () => { clearTimeout(timer); done('error event'); }, { once: true });
+        });
+    }));
+}
+
+// Rejects after ms milliseconds so a hung step can't freeze the export forever.
+function withTimeout(promise, ms, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out: ${label}`)), ms))
+    ]);
+}
+
 async function downloadPDF() {
     const btn = document.getElementById('pdfBtn');
     btn.textContent = 'იტვირთება...';
     btn.disabled = true;
 
-    const { jsPDF } = window.jspdf;
-    // A4 landscape: 297 x 210 mm
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    try {
+        const { jsPDF } = window.jspdf;
+        // A4 landscape: 297 x 210 mm
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-    const pdfW = 297;
-    const pdfH = 210;
+        const pdfW = 297;
+        const pdfH = 210;
 
-    const pages = document.querySelectorAll('.page-content');
+        const pages = document.querySelectorAll('.page-content');
 
-    for (let i = 0; i < pages.length; i++) {
-        const page = pages[i];
+        if (pages.length === 0) {
+            throw new Error('No .page-content elements found to export.');
+        }
 
-        const canvas = await html2canvas(page, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#f9faf8',
-            logging: false
-        });
+        for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
 
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            // Make sure all images in THIS page are actually loaded before we snapshot it.
+            await withTimeout(waitForImages(page), 15000, `waiting for images on page ${i + 1}`);
 
-        const canvasW = canvas.width;
-        const canvasH = canvas.height;
-        const ratio = Math.min(pdfW / canvasW, pdfH / canvasH);
-        const imgW = canvasW * ratio;
-        const imgH = canvasH * ratio;
-        const offsetX = (pdfW - imgW) / 2;
-        const offsetY = (pdfH - imgH) / 2;
+            const canvas = await withTimeout(
+                html2canvas(page, {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#f9faf8',
+                    logging: false
+                }),
+                20000,
+                `rendering page ${i + 1} to canvas`
+            );
 
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', offsetX, offsetY, imgW, imgH);
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+            const canvasW = canvas.width;
+            const canvasH = canvas.height;
+            const ratio = Math.min(pdfW / canvasW, pdfH / canvasH);
+            const imgW = canvasW * ratio;
+            const imgH = canvasH * ratio;
+            const offsetX = (pdfW - imgW) / 2;
+            const offsetY = (pdfH - imgH) / 2;
+
+            if (i > 0) pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', offsetX, offsetY, imgW, imgH);
+        }
+
+        pdf.save('offer.pdf');
+
+        btn.textContent = '✓ გადმოწერილია';
+    } catch (err) {
+        console.error('PDF export failed:', err);
+        btn.textContent = '⚠ შეცდომა, სცადეთ ხელახლა';
+    } finally {
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = '↓ PDF გადმოწერა'; }, 3000);
     }
-
-    pdf.save('offer.pdf');
-
-    btn.textContent = '✓ გადმოწერილია';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = '↓ PDF გადმოწერა'; }, 3000);
 }
 </script>
