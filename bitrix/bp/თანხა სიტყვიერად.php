@@ -250,7 +250,7 @@ if(!function_exists('convertToText96')){
 if(!function_exists('getDealsByFilter96')){
     function getDealsByFilter96($arFilter, $arSelect = array(), $arSort = array("ID"=>"DESC")) {
         $arDeals = array();
-        $res = CCrmDeal::GetList($arSort, $arFilter, array("ID","OPPORTUNITY","UF_CRM_1781860218697"));
+        $res = CCrmDeal::GetList($arSort, $arFilter, array("ID","OPPORTUNITY","UF_CRM_1781860218697", "UF_CRM_1783341661927", "UF_CRM_1783341678448"));
         while($arDeal = $res->Fetch()) array_push($arDeals, $arDeal);
         return (count($arDeals) > 0) ? $arDeals : false;
     }
@@ -321,8 +321,8 @@ foreach($deals as $deal){
     $CCrmDeal = new CCrmDeal();
     $upd = array(
         "UF_CRM_1781860218697" => $tanxasityvierad,
-        // "UF_CRM_1756992081" => $tanxasityvieradeng,
-        // "UF_CRM_1756992015" => $tanxasityvieradru,
+        "UF_CRM_1783341661927" => $tanxasityvieradeng,
+        "UF_CRM_1783341678448" => $tanxasityvieradru,
 
     );
 

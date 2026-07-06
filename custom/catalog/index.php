@@ -679,6 +679,10 @@ ob_end_clean();
             <div class="dropdown-header">ბლოკი</div>
             <div class="dropdown-content"></div>
         </div>
+        <div class="dropdown-checkbox" id="sectorFilter">
+    <div class="dropdown-header">სექტორი</div>
+    <div class="dropdown-content"></div>
+</div>
         <div class="dropdown-checkbox" id="statusFilter">
             <div class="dropdown-header">სტატუსი</div>
             <div class="dropdown-content"></div>
@@ -1006,6 +1010,7 @@ projectSelect.addEventListener("change", function() {
             });
 
             buildBlockCheckboxes(data.blocks || []);
+            buildSectorCheckboxes();              
             renderProductsByBlock(productsCache, data.blocks || []);
             updateDynamicFilters(productsCache);
             fillAdditionalFilters();
@@ -1068,10 +1073,37 @@ function buildBlockCheckboxes(blocks) {
     }
 }
 
+
+function buildSectorCheckboxes() {
+    const c = document.querySelector("#sectorFilter .dropdown-content");
+    c.innerHTML = "";
+
+    const sectors = new Set();
+    productsCache.forEach(p => {
+        const sec = p[F_SECTOR] || p["_3BU0JH"];
+        if (sec) sectors.add(sec);
+    });
+
+    if (sectors.size === 0) {
+        document.getElementById("sectorFilter").style.display = "none";
+        return;
+    }
+    document.getElementById("sectorFilter").style.display = "";
+
+    Array.from(sectors)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+        .forEach(sec => {
+            const lbl = document.createElement("label");
+            lbl.innerHTML = `<input type="checkbox" value="${sec}"> სექტ. ${sec}`;
+            c.appendChild(lbl);
+        });
+}
+
+
 // ══════════════════════════════════════════
 //  RENDER ROUTER
 // ══════════════════════════════════════════
-function renderProductsByBlock(allProducts, selectedBlocks) {
+function renderProductsByBlock(allProducts, selectedBlocks, selectedSectors = []) {
     const container = document.getElementById("apsDisplay");
     container.innerHTML = "";
 
@@ -1084,9 +1116,9 @@ function renderProductsByBlock(allProducts, selectedBlocks) {
     const hasSectors = allProducts.some(p => p[F_SECTOR] && p[F_SECTOR] !== "");
 
     if (hasSectors) {
-        renderBySectors(allProducts, selectedBlocks, container);
+        renderBySectors(allProducts, selectedBlocks, container, selectedSectors);
     } else {
-        renderByBlocks(allProducts, selectedBlocks, container);
+        renderByBlocks(allProducts, selectedBlocks, container, selectedSectors);
     }
 
     updateLegendCounts(allProducts);
@@ -1095,21 +1127,19 @@ function renderProductsByBlock(allProducts, selectedBlocks) {
 // ══════════════════════════════════════════
 //  RENDER: BLOCK MODE (original logic)
 // ══════════════════════════════════════════
-function renderByBlocks(allProducts, selectedBlocks, container) {
+function renderByBlocks(allProducts, selectedBlocks, container, selectedSectors = []) {
     const seenIds = new Set();
-    
-    // Replace the entire outer wrapper content
     const outer = document.getElementById("apsOuter");
     outer.innerHTML = "";
-    // Also clear the passed container reference since we're bypassing it
     container.innerHTML = "";
-    // Revert to sector-style rendering by treating each block as a sector
-renderBySectors(
-    allProducts.map(p => ({ ...p, [F_SECTOR]: p[F_BLOCK] || p["_L24CUB"] || "–" })),
-    selectedBlocks,
-    container
-);
-return;
+    renderBySectors(
+        allProducts.map(p => ({ ...p, [F_SECTOR]: p[F_BLOCK] || p["_L24CUB"] || "–" })),
+        selectedBlocks,
+        container,
+        selectedSectors
+    );
+    return;
+
 
     const products = allProducts.filter(p => {
         if (seenIds.has(p["ID"])) return false;
@@ -1270,7 +1300,8 @@ return;
 // ══════════════════════════════════════════
 //  RENDER: SECTOR MODE
 // ══════════════════════════════════════════
-function renderBySectors(allProducts, selectedBlocks, container) {
+function renderBySectors(allProducts, selectedBlocks, container, selectedSectors = []) {
+    
     const seenIds  = new Set();
     container.style.flexDirection = "";
 container.style.flexWrap = "";
@@ -1334,8 +1365,8 @@ container.style.gap = "";
     sectorsWrapper.style.cssText = "display:flex;flex-direction:row;gap:16px;align-items:flex-start;overflow-x:auto;padding-bottom:6px;flex-wrap:nowrap;";
 
     const sectorNames = Object.keys(sectorMap).sort((a, b) =>
-        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
-    );
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+).filter(s => selectedSectors.length === 0 || selectedSectors.includes(s));  
 
     // ── helpers ───────────────────────────────────────────────────────
 
@@ -1667,6 +1698,7 @@ function fillAdditionalFilters() {
 function getAllFilters() {
     return {
         blocks:   getCheckboxValues("blockFilter"),
+        sectors:  getCheckboxValues("sectorFilter"),  
         status:   getCheckboxValues("statusFilter"),
         aptType:  getCheckboxValues("apartmentTypeFilter"),
         aptRange: { min:$("#aptMin").val(), max:$("#aptMax").val() },
@@ -1696,10 +1728,10 @@ function applyFilters() {
 
     if (hasSectors) {
         container.innerHTML = "";
-        renderBySectors(productsCache, f.blocks, container);
+        renderBySectors(productsCache, f.blocks, container, f.sectors);   // ← pass f.sectors
     } else {
         container.innerHTML = "";
-        renderByBlocks(productsCache, f.blocks, container);
+        renderByBlocks(productsCache, f.blocks, container, f.sectors);    // ← pass f.sectors
     }
 
     ["#apsDisplay .apt","#gareAvtosadgomebi .apt"].forEach(sel => {
@@ -1717,6 +1749,7 @@ function matchesFilters(apt, f) {
     if (f.status.length>0  && !f.status.includes(apt["_P64GYD"]))        return false;
     if (f.aptType.length>0 && !f.aptType.includes(apt["__X1GCRZ"]))      return false;
     if (f.blocks.length>0  && !f.blocks.includes(apt["_L24CUB"]))        return false;
+    if (f.sectors.length>0 && !f.sectors.includes(apt["_3BU0JH"] || apt[F_SECTOR])) return false; 
     const area=parseFloat(apt["TOTAL_AREA"]);
     if (f.aptRange.min!==""&&area<parseFloat(f.aptRange.min)) return false;
     if (f.aptRange.max!==""&&area>parseFloat(f.aptRange.max)) return false;
@@ -1740,18 +1773,19 @@ function matchesFilters(apt, f) {
 document.getElementById("search").addEventListener("click", applyFilters);
 
 $("#clean").on("click", function() {
-    $("#statusFilter input,#apartmentTypeFilter input,#blockFilter input").prop("checked",false);
+    $("#statusFilter input,#apartmentTypeFilter input,#blockFilter input,#sectorFilter input").prop("checked",false); // ← add sectorFilter
     $("#aptMin,#aptMax").val("");
     $("#statusFilter .dropdown-header").text("სტატუსი");
     $("#apartmentTypeFilter .dropdown-header").text("ფართის ტიპი");
     $("#blockFilter .dropdown-header").text("ბლოკი");
+    $("#sectorFilter .dropdown-header").text("სექტორი");   // ← add this
     document.querySelectorAll("#extraFilterChips .filter-chip").forEach(chip => {
         const btn=chip._sourceButton;
         if(btn){btn.disabled=false;btn.classList.remove("disabled-button");btn.style.background="";}
         chip.remove();
     });
     document.querySelectorAll("#legendBar .legend-item").forEach(i=>i.classList.remove("legend-active"));
-    renderProductsByBlock(productsCache, []);
+    renderProductsByBlock(productsCache, [], []);   // ← pass empty sectors array too
     $(".dropdown-content").slideUp(150);
 });
 

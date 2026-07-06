@@ -1321,3 +1321,287 @@ var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
     };
 })();
 </script>
+
+<script>
+(function() {
+    var pathname = window.location.pathname.split("/");
+
+    if (pathname[2] == "deal" && pathname[3] == "details") {
+
+        if (!document.getElementById('dmg-activity-type-styles')) {
+            var activityTypeStyles = document.createElement('style');
+            activityTypeStyles.id = 'dmg-activity-type-styles';
+            activityTypeStyles.textContent = `
+                .dmg-activity-type-select {
+                    position: relative;
+                    flex: 1;
+                    min-width: 0;
+                    max-width: 100%;
+                    font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+                    font-size: 13px;
+                    user-select: none;
+                }
+                [class*="todo-editor-v2__header"] .dmg-activity-type-select {
+                    margin-right: 8px;
+                }
+                input[data-dmg-title-hidden="true"] {
+                    display: none !important;
+                }
+                .dmg-activity-type-trigger {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                    width: 100%;
+                    min-height: 36px;
+                    padding: 7px 12px;
+                    background: #fff;
+                    border: 1px solid #c6cdd3;
+                    border-radius: 4px;
+                    color: #525c69;
+                    cursor: pointer;
+                    box-sizing: border-box;
+                    transition: border-color .15s ease, box-shadow .15s ease;
+                }
+                .dmg-activity-type-trigger:hover {
+                    border-color: #9fa4ab;
+                }
+                .dmg-activity-type-select.is-open .dmg-activity-type-trigger {
+                    border-color: #2fc6f6;
+                    box-shadow: 0 0 0 1px rgba(47, 198, 246, .25);
+                }
+                .dmg-activity-type-trigger.is-placeholder {
+                    color: #a8adb4;
+                }
+                .dmg-activity-type-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    text-overflow: ellipsis;
+                }
+                .dmg-activity-type-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 18px;
+                    height: 18px;
+                    flex-shrink: 0;
+                    font-size: 14px;
+                    line-height: 1;
+                }
+                .dmg-activity-type-arrow {
+                    flex-shrink: 0;
+                    width: 8px;
+                    height: 8px;
+                    border-right: 2px solid #828b95;
+                    border-bottom: 2px solid #828b95;
+                    transform: rotate(45deg) translateY(-2px);
+                    transition: transform .15s ease;
+                }
+                .dmg-activity-type-select.is-open .dmg-activity-type-arrow {
+                    transform: rotate(-135deg) translateY(2px);
+                }
+                .dmg-activity-type-menu {
+                    position: absolute;
+                    top: calc(100% + 4px);
+                    left: 0;
+                    right: 0;
+                    z-index: 1200;
+                    display: none;
+                    margin: 0;
+                    padding: 4px 0;
+                    list-style: none;
+                    background: #fff;
+                    border: 1px solid #e0e4e8;
+                    border-radius: 4px;
+                    box-shadow: 0 8px 20px rgba(0, 0, 0, .12);
+                    overflow: hidden;
+                }
+                .dmg-activity-type-select.is-open .dmg-activity-type-menu {
+                    display: block;
+                }
+                .dmg-activity-type-option {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 9px 12px;
+                    color: #333;
+                    cursor: pointer;
+                    transition: background-color .12s ease;
+                }
+                .dmg-activity-type-option:hover,
+                .dmg-activity-type-option.is-selected {
+                    background: #f0f7fb;
+                    color: #2067b0;
+                }
+            `;
+            document.head.appendChild(activityTypeStyles);
+        }
+
+        var activityTypeOptions = [
+            { value: 'ზარი', icon: '📞' },
+            { value: 'ოფისში ვიზიტი', icon: '🏢' },
+            { value: 'ონლაინ შეხვედრა', icon: '💻' }
+        ];
+
+        var setActivityTitleValue = function(titleInput, value) {
+            if (!titleInput || !value) {
+                return;
+            }
+
+            titleInput.value = value;
+            titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+            titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+
+        var findActivityEditor = function(saveButton) {
+            return saveButton.closest('[class*="todo-editor-v2"]') ||
+                saveButton.closest('.ui-text-editor') ||
+                (saveButton.parentElement && saveButton.parentElement.children[0]);
+        };
+
+        var findTitleInput = function(activityEditor) {
+            if (!activityEditor) {
+                return null;
+            }
+
+            return activityEditor.querySelector('input[class*="--title"]') ||
+                activityEditor.querySelector('[class*="todo-editor-v2__header"] input[type="text"]');
+        };
+
+        if (!window.__dmgActivityTypeCloseHandler) {
+            window.__dmgActivityTypeCloseHandler = true;
+            document.addEventListener('click', function() {
+                document.querySelectorAll('.dmg-activity-type-select.is-open').forEach(function(el) {
+                    el.classList.remove('is-open');
+                });
+            });
+        }
+
+        var createActivityTypeSelect = function(onChange) {
+            var selectedValue = '';
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'dmg-activity-type-select';
+
+            var trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'dmg-activity-type-trigger is-placeholder';
+
+            var label = document.createElement('span');
+            label.className = 'dmg-activity-type-label';
+            label.innerHTML = '<span class="dmg-activity-type-icon">📋</span><span class="dmg-activity-type-text">აირჩიეთ ტიპი</span>';
+
+            var arrow = document.createElement('span');
+            arrow.className = 'dmg-activity-type-arrow';
+            trigger.appendChild(label);
+            trigger.appendChild(arrow);
+
+            var menu = document.createElement('ul');
+            menu.className = 'dmg-activity-type-menu';
+
+            activityTypeOptions.forEach(function(option) {
+                var item = document.createElement('li');
+                item.className = 'dmg-activity-type-option';
+                item.dataset.value = option.value;
+                item.innerHTML = '<span class="dmg-activity-type-icon">' + option.icon + '</span><span>' + option.value + '</span>';
+
+                item.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    selectedValue = option.value;
+                    label.innerHTML = '<span class="dmg-activity-type-icon">' + option.icon + '</span><span class="dmg-activity-type-text">' + option.value + '</span>';
+                    trigger.classList.remove('is-placeholder');
+                    menu.querySelectorAll('.dmg-activity-type-option').forEach(function(el) {
+                        el.classList.remove('is-selected');
+                    });
+                    item.classList.add('is-selected');
+                    wrapper.classList.remove('is-open');
+
+                    if (typeof onChange === 'function') {
+                        onChange(option.value);
+                    }
+                });
+
+                menu.appendChild(item);
+            });
+
+            trigger.addEventListener('click', function(event) {
+                event.stopPropagation();
+                document.querySelectorAll('.dmg-activity-type-select.is-open').forEach(function(el) {
+                    if (el !== wrapper) {
+                        el.classList.remove('is-open');
+                    }
+                });
+                wrapper.classList.toggle('is-open');
+            });
+
+            wrapper.appendChild(trigger);
+            wrapper.appendChild(menu);
+
+            return {
+                element: wrapper,
+                getValue: function() { return selectedValue; }
+            };
+        };
+
+        setInterval(function() {
+            var saveButtons = document.querySelectorAll('.crm-entity-stream-content-new-comment-btn-container');
+            var editorFooter = document.querySelector('.ui-text-editor-slot.ui-text-editor-footer');
+            var isVisible = false;
+
+            if (editorFooter) {
+                var computedStyle = window.getComputedStyle(editorFooter);
+                isVisible = computedStyle.display !== 'none' &&
+                    computedStyle.visibility !== 'hidden' &&
+                    computedStyle.opacity !== '0';
+            }
+
+            saveButtons.forEach(function(saveButton) {
+                var buttonText = saveButton && saveButton.children[0] && saveButton.children[0].innerText;
+                if (buttonText !== 'SAVE' || !isVisible || saveButton.hasAttribute('data-listener-added')) {
+                    return;
+                }
+
+                var activityEditor = findActivityEditor(saveButton);
+                var titleInput = findTitleInput(activityEditor);
+                if (!titleInput) {
+                    return;
+                }
+
+                var header = titleInput.closest('[class*="todo-editor-v2__header"]') || titleInput.parentElement;
+                if (!header) {
+                    return;
+                }
+
+                titleInput.setAttribute('data-dmg-title-hidden', 'true');
+
+                var activityTypeSelect = titleInput.__dmgActivityTypeSelect;
+                if (!activityTypeSelect && !header.querySelector('.dmg-activity-type-select')) {
+                    activityTypeSelect = createActivityTypeSelect(function(value) {
+                        setActivityTitleValue(titleInput, value);
+                    });
+                    header.insertBefore(activityTypeSelect.element, titleInput);
+                    titleInput.__dmgActivityTypeSelect = activityTypeSelect;
+                } else if (!activityTypeSelect) {
+                    activityTypeSelect = titleInput.__dmgActivityTypeSelect = {
+                        getValue: function() { return titleInput.value || ''; }
+                    };
+                }
+
+                saveButton.addEventListener('click', function() {
+                    var selectedOption = activityTypeSelect.getValue();
+                    if (!selectedOption) {
+                        return;
+                    }
+
+                    setActivityTitleValue(titleInput, selectedOption);
+                });
+
+                saveButton.setAttribute('data-listener-added', 'true');
+            });
+        }, 500);
+    }
+})();
+</script>
