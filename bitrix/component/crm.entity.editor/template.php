@@ -1018,14 +1018,29 @@ button.ui-btn.ui-btn-icon-setting {
 BX.ready(function() {
     var lastStage = null;
 
-    setInterval(function() {
-        var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
-        var model = editor && editor.getModel && editor.getModel();
-        var stage = model && model.getField('STAGE_ID');
+	setInterval(function() {
+    var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
+    var model = editor && editor.getModel && editor.getModel();
+    var stage = model && model.getField('STAGE_ID');
 
-        // Skip if nothing changed
-        if (stage === lastStage) return;
-        lastStage = stage;
+    // Company field 
+    var companyAllowedStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
+    var clientBlock = document.querySelector("[data-cid='CLIENT']");
+    if (clientBlock) {
+        var titleEls = clientBlock.querySelectorAll('.crm-entity-widget-content-block-title');
+        titleEls.forEach(function(titleEl) {
+            var text = (titleEl.textContent || '').trim().toLowerCase();
+            if (text === 'company' || text === 'კომპანია') {
+                var row = titleEl.closest('.crm-entity-widget-content-inner-row');
+                if (row) {
+                    row.style.display = companyAllowedStages.indexOf(stage) !== -1 ? '' : 'none';
+                }
+            }
+        });
+    }
+
+    if (stage === lastStage) return;
+    lastStage = stage;
 
         // user_lld2uqra
         var el = document.querySelector("[data-cid='user_lld2uqra']");
@@ -1058,6 +1073,21 @@ BX.ready(function() {
         var catalog = document.getElementById('crm_scope_detail_c_deal__catalog');
         if (catalog) catalog.style.display = stage === 'NEW' ? 'none' : '';
 
+		// Company field — visible only on EXECUTING, UC_NSTB3H, UC_NJ7A78, WON
+		var companyAllowedStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
+		var clientBlock = document.querySelector("[data-cid='CLIENT']");
+		if (clientBlock) {
+			var titleEls = clientBlock.querySelectorAll('.crm-entity-widget-content-block-title');
+			titleEls.forEach(function(titleEl) {
+				var text = (titleEl.textContent || '').trim().toLowerCase();
+				if (text === 'company' || text === 'კომპანია') {
+					var row = titleEl.closest('.crm-entity-widget-content-inner-row');
+					if (row) {
+						row.style.display = companyAllowedStages.indexOf(stage) !== -1 ? '' : 'none';
+					}
+				}
+			});
+		}
 		// tab_lists_21 and tab_lists_22 — visible only on EXECUTING, UC_NSTB3H, UC_NJ7A78
 var allowedTabStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
 ['crm_scope_detail_c_deal__tab_lists_21', 'crm_scope_detail_c_deal__tab_lists_22'].forEach(function(tabId) {

@@ -1893,9 +1893,11 @@ function openPopup(aptId, fromBox=false) {
     selectBtn.textContent   = "წაშლა";
     selectBtn.style.background = "var(--red)";
     selectBtn.dataset.mode  = "delete";
-} else {
+}  else {
     const canAdd = !alreadyAdded
-                   && apt["_P64GYD"] !== "გაყიდული" && apt["_P64GYD"] !== "NFS";
+                   && apt["_P64GYD"] !== "გაყიდული" 
+                   && apt["_P64GYD"] !== "NFS"
+                   && apt["_P64GYD"] !== "ჯავშნის რიგში";
     selectBtn.style.display    = canAdd ? "flex" : "none";
     selectBtn.textContent      = "დამატება";
     selectBtn.style.background = "var(--accent)";
@@ -2319,8 +2321,10 @@ function addSelectedApartment() {
     const pt = document.getElementById("popupTitle");
     const aptId = pt.dataset.id, status = pt.dataset.status;
     if (status === "გაყიდული") { alert("ბინა უკვე გაყიდულია."); return; }
+    if (status === "ჯავშნის რიგში") { alert("ბინა ჯავშნის რიგშია და ვერ დაემატება."); return; }
     if (pb.querySelector(`.apt[data-id="${aptId}"]`)) { alert("ბინა უკვე დამატებულია."); return; }
-    if (productsIds.includes(aptId) || productsIds.includes(Number(aptId))) return; // ← add this
+   
+    if (productsIds.includes(aptId) || productsIds.includes(Number(aptId))) return; 
     const apt = productsCache.find(p => p["ID"] == aptId);
     if (!apt) return;
     if (inAllowedStages)
