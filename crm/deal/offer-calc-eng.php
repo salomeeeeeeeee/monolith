@@ -42,11 +42,31 @@ function getUsersdsByID($id)
     return array();
 }
 
+
+function transliterateGeorgianToLatin($text)
+{
+    static $map = [
+        'ა' => 'a',  'ბ' => 'b',  'გ' => 'g',  'დ' => 'd',  'ე' => 'e',
+        'ვ' => 'v',  'ზ' => 'z',  'თ' => 't',  'ი' => 'i',  'კ' => 'k',
+        'ლ' => 'l',  'მ' => 'm',  'ნ' => 'n',  'ო' => 'o',  'პ' => 'p',
+        'ჟ' => 'zh', 'რ' => 'r',  'ს' => 's',  'ტ' => 't',  'უ' => 'u',
+        'ფ' => 'p',  'ქ' => 'k',  'ღ' => 'gh', 'ყ' => 'q',  'შ' => 'sh',
+        'ჩ' => 'ch', 'ც' => 'ts', 'ძ' => 'dz', 'წ' => 'ts', 'ჭ' => 'ch',
+        'ხ' => 'kh', 'ჯ' => 'j',  'ჰ' => 'h',
+    ];
+
+    $result = strtr($text, $map);
+    return mb_convert_case($result, MB_CASE_TITLE, "UTF-8");
+}
+
+
+
+
 global $USER;
 $userID = $USER->GetID();
 $salesmeneger = getUsersdsByID($userID);
 $salesmenegerphone = $salesmeneger["PERSONAL_MOBILE"];
-$salesmenegername = $salesmeneger["NAME"] . " " . $salesmeneger["LAST_NAME"];
+$salesmenegername = transliterateGeorgianToLatin($salesmeneger["NAME"] . " " . $salesmeneger["LAST_NAME"]);
 
 $date = date("Y-m-d");
 $url = "https://nbg.gov.ge/gw/api/ct/monetarypolicy/currencies?Currencies=USD&date={$date}";

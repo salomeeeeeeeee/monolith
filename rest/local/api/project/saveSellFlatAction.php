@@ -92,8 +92,13 @@ $arrForDeal = [
 $dealObj = new CCrmDeal();
 $dealObj->Update($dealId, $arrForDeal);
 
-// ── Workflow params ──────────────────────────────────────────────────
+$dealUrl = "https://" . $_SERVER["HTTP_HOST"] . "/crm/deal/details/{$dealId}/";
+$dealLinkBBCode = "[URL={$dealUrl}]Deal #{$dealId}[/URL]";
+
 $params = [
+    "dealId"           => $dealId,
+    "dealUrl"          => $dealUrl,
+    "dealLink"         => $dealLinkBBCode,   
     "contrDate"        => $contrDateForBitrix,
     "firstName"        => $firstName,
     "lastName"         => $lastName,
@@ -101,7 +106,6 @@ $params = [
     "passportFile"     => ($passportFilePath ? CFile::MakeFileArray($passportFilePath) : ''),
     "passportFileLink" => $passportFileLink,
 ];
-
 // ── Start workflow ───────────────────────────────────────────────────
 $arErrorsTmp = [];
 $wfId = CBPDocument::StartWorkflow(

@@ -1019,6 +1019,36 @@ BX.ready(function() {
     var lastStage = null;
 
 	setInterval(function() {
+
+
+		// Restricted stages for user group 17
+var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
+var isGroup17 = <?php echo in_array(17, $userGroups) ? 'true' : 'false'; ?>;
+var isAdmin = (userID == 1 || userID == 3);
+
+if (isGroup17 && !isAdmin) {
+    // Bitrix24 renders the stage/phase bar with cells carrying data-id = stage code.
+    // Common containers: .crm-entity-widget-status, .crm-entity-stream-section-status
+    var stageCells = document.querySelectorAll('[data-id]');
+    stageCells.forEach(function(cell) {
+        var cellStageId = cell.getAttribute('data-id');
+        if (restrictedStagesForGroup17.indexOf(cellStageId) !== -1) {
+            if (!cell.hasAttribute('data-dmg-stage-locked')) {
+                cell.setAttribute('data-dmg-stage-locked', 'true');
+                cell.style.pointerEvents = 'none';
+                cell.style.cursor = 'not-allowed';
+
+                // Belt-and-suspenders: block the click itself in capture phase
+                cell.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }, true);
+            }
+        }
+    });
+}
+
     var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
     var model = editor && editor.getModel && editor.getModel();
     var stage = model && model.getField('STAGE_ID');
