@@ -1022,7 +1022,7 @@ BX.ready(function() {
 
 
 		// Restricted stages for user group 17
-var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
+var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
 var isGroup17 = <?php echo in_array(17, $userGroups) ? 'true' : 'false'; ?>;
 var isAdmin = (userID == 1 || userID == 3);
 

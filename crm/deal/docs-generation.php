@@ -112,10 +112,23 @@ function updateDealGadaxdebi($dealid) {
 function parseDocFileMeta($name) {
     $parts = explode('$', $name);
     if (count($parts) < 5) return null;
+
+    $langs = explode('-', $parts[1]); // e.g. ['GEO','ENG']
+
+    // For bilingual docs (GEO-ENG, GEO-RUS), GEO is just the base/reference
+    // text — the doc should only be offered under its target language (ENG/RUS),
+    // not under GEO too. Pure GEO-only docs still match GEO normally.
+    $filterLangs = $langs;
+    if (count($langs) > 1) {
+        $nonGeo = array_values(array_diff($langs, array('GEO')));
+        $filterLangs = !empty($nonGeo) ? $nonGeo : $langs;
+    }
+
     return array(
         'sale_type'    => $parts[0],
         'lang_raw'     => $parts[1],
-        'langs'        => explode('-', $parts[1]), // e.g. ['GEO','ENG']
+        'langs'        => $langs,
+        'filter_langs' => $filterLangs,
         'project'      => $parts[2],
         'product_type' => $parts[3],                // e.g. 'ბინა' / 'საოფისე' / 'ავტოსადგომი'
         'display_name' => $parts[4],
@@ -135,33 +148,15 @@ function parseDocFileMeta($name) {
  *    If it's an ID, we'll need a small ID -> label map here instead
  *    of returning it directly.
  */
-function getDealProductType($deal) {
-    $propFieldName = 'UF_CRM_1779277898205'; // <-- TODO CONFIRM: real field name
+function getDealProductType($deal, &$debugTrace = null) {
+    $propFieldName = 'UF_CRM_1779277898205';
 
     $raw = $deal[$propFieldName] ?? '';
-    if (empty($raw)) return '';
+    $debugTrace['raw'] = $raw;
 
-    // Some Bitrix CRM link fields store a plain numeric ID, others store
-    // a prefixed value like "14_123". Handle both safely.
-    if (is_numeric($raw)) {
-        $elementId = (int)$raw;
-    } else {
-        $bits = explode('_', $raw);
-        $elementId = (int)($bits[1] ?? $bits[0] ?? 0);
-    }
-    if (!$elementId) return '';
-
-    $arProp = getCIBlockElementsByFilter(array('IBLOCK_ID' => 14, 'ID' => $elementId));
-    if (empty($arProp)) return '';
-
-    $value = trim($arProp[0]['__X1GCRZ'] ?? '');
-
-    // TODO CONFIRM: if $value is numeric here (an enum ID rather than
-    // the label text), map it like:
-    // $enumMap = array('123' => 'ბინა', '124' => 'საოფისე', '125' => 'ავტოსადგომი');
-    // return $enumMap[$value] ?? '';
-
-    return $value;
+    // This field stores the product type label directly
+    // (ბინა / საოფისე / ავტოსადგომი) — no IBlock lookup needed.
+    return trim((string)$raw);
 }
 
 // ============================================================
@@ -204,24 +199,48 @@ function generateProductsTable($dealId, $geo = true) {
     return $t;
 }
 
+/**
+ * Payment schedule table.
+ * $lang accepts 'GEO', 'ENG', 'RUS' (anything else falls back to ENG labels).
+ */
 function generateScheduleTable($data, $totalPrice, $lang) {
     mb_internal_encoding('UTF-8');
 
-    $labelDate      = $lang === 'GEO' ? 'გადახდის დრო'    : 'payment date';
-    $labelAmount    = $lang === 'GEO' ? 'თანხა $'          : 'amount $';
-    $labelRemaining = $lang === 'GEO' ? 'დარჩენილი თანხა $' : 'remaining amount $';
+    $lang = strtoupper($lang);
 
-    $paymentLabels = array(
-        'პირველადი შენატანი' => 'Initial payment',
-        'ბოლო გადახდა'       => 'Final payment',
-        'პირველი გადახდა'    => 'First payment',
-        'რესტრუქტურიზაცია'   => 'Restructured',
+    $headerLabels = array(
+        'GEO' => array('date' => 'გადახდის დრო',   'amount' => 'თანხა $',           'remaining' => 'დარჩენილი თანხა $'),
+        'ENG' => array('date' => 'payment date',    'amount' => 'amount $',          'remaining' => 'remaining amount $'),
+        'RUS' => array('date' => 'дата платежа',    'amount' => 'сумма $',           'remaining' => 'остаток $'),
     );
+    $h = $headerLabels[$lang] ?? $headerLabels['ENG'];
+    $labelDate      = $h['date'];
+    $labelAmount    = $h['amount'];
+    $labelRemaining = $h['remaining'];
+
+    // Georgian source text -> translated payment-type labels, per language
+    $paymentLabelsByLang = array(
+        'ENG' => array(
+            'პირველადი შენატანი' => 'Initial payment',
+            'ბოლო გადახდა'       => 'Final payment',
+            'პირველი გადახდა'    => 'First payment',
+            'რესტრუქტურიზაცია'   => 'Restructured',
+            'ბოლო შენატანი'      => 'Last payment',
+        ),
+        'RUS' => array(
+            'პირველადი შენატანი' => 'Первичная оплата',
+            'ბოლო გადახდა'       => 'Итоговый платёж',
+            'პირველი გადახდა'    => 'Первый платёж',
+            'რესტრუქტურიზაცია'   => 'Реструктуризация',
+            'ბოლო შენატანი'      => 'Последняя оплата',
+        ),
+    );
+    $paymentLabels = $paymentLabelsByLang[$lang] ?? array();
 
     $t  = "<table style='border-collapse:collapse;width:85%;font-family:Arial,sans-serif;margin:auto;'>";
     $t .= "<thead><tr style='background-color:#f2f2f2;'>";
-    foreach (array('#', $labelDate, $labelAmount, $labelRemaining) as $h) {
-        $t .= "<th style='border:1px solid black;padding:2px;text-align:center;font-weight:bold;font-size:10px;font-family:sylfaen;'>" . htmlspecialchars($h) . "</th>";
+    foreach (array('#', $labelDate, $labelAmount, $labelRemaining) as $hd) {
+        $t .= "<th style='border:1px solid black;padding:2px;text-align:center;font-weight:bold;font-size:10px;font-family:sylfaen;'>" . htmlspecialchars($hd) . "</th>";
     }
     $t .= "</tr></thead><tbody>";
 
@@ -643,7 +662,8 @@ if ($dbRes) {
 }
 
 // Product type of the property linked to this deal (ბინა / საოფისე / ავტოსადგომი)
-$dealProductType = getDealProductType($deal);
+$productTypeDebug = array();
+$dealProductType = getDealProductType($deal, $productTypeDebug);
 
 // Build the filtered + parsed file list: matches project AND product type.
 // Language is NOT filtered here — the language dropdown filters client-side
@@ -835,6 +855,7 @@ if (!empty($_POST)) {
 
         $fullarr[] = array('VarName' => 'grapik_geo', 'VarValue' => !empty($scheduleData) ? generateScheduleTable($scheduleData, $fasdaklebuli, 'GEO') : '', 'VarType' => 'T');
         $fullarr[] = array('VarName' => 'grapik_eng', 'VarValue' => !empty($scheduleData) ? generateScheduleTable($scheduleData, $fasdaklebuli, 'ENG') : '', 'VarType' => 'T');
+        $fullarr[] = array('VarName' => 'grapik_rus', 'VarValue' => !empty($scheduleData) ? generateScheduleTable($scheduleData, $fasdaklebuli, 'RUS') : '', 'VarType' => 'T');
 
         // ---- Products table ----
         $fullarr[] = array('VarName' => 'products_geo', 'VarValue' => generateProductsTable($deal['ID'], true),  'VarType' => 'T');
@@ -1017,13 +1038,6 @@ if (!empty($_POST)) {
     }
     var availableFiles = availableFilesJson || [];
 
-    // TEMP DEBUG — remove once dropdowns work
-    console.log('DEBUG dealProductType:', <?= json_encode($dealProductType) ?>);
-    console.log('DEBUG dealProjectField:', <?= json_encode($deal["UF_CRM_1779277729207"] ?? null) ?>);
-    console.log('DEBUG total files scanned:', <?= json_encode(count($filesarr)) ?>);
-    console.log('DEBUG available_files count:', availableFiles.length);
-    console.log('DEBUG availableFiles:', availableFiles);
-
     // Language display labels
     var LANG_LABELS = { GEO: 'ქართული', ENG: 'English', RUS: 'Русский' };
 
@@ -1039,7 +1053,7 @@ if (!empty($_POST)) {
         // Collect distinct languages actually present in the available files
         var langsPresent = [];
         availableFiles.forEach(function (f) {
-            (f.langs || []).forEach(function (l) {
+            (f.filter_langs || []).forEach(function (l) {
                 if (langsPresent.indexOf(l) === -1) langsPresent.push(l);
             });
         });
@@ -1057,7 +1071,7 @@ if (!empty($_POST)) {
         function populateDocs(selectedLang) {
             docsSelect.innerHTML = '';
             availableFiles
-                .filter(function (f) { return !selectedLang || (f.langs || []).indexOf(selectedLang) !== -1; })
+                .filter(function (f) { return !selectedLang || (f.filter_langs || []).indexOf(selectedLang) !== -1; })
                 .forEach(function (f) {
                     var opt = document.createElement('option');
                     opt.value = f.ID;
