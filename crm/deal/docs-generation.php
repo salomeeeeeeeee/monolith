@@ -101,6 +101,70 @@ function updateDealGadaxdebi($dealid) {
 }
 
 // ============================================================
+// DOC FILE NAME PARSING / PRODUCT TYPE + LANGUAGE FILTERING
+// ============================================================
+
+/**
+ * Parses names like:
+ * SALE$GEO-ENG$DIGHOMI$ბინა$წინარე ნასყიდობა ბინა ENG-GEO.docx
+ * into structured pieces so we can filter by project, product type and language.
+ */
+function parseDocFileMeta($name) {
+    $parts = explode('$', $name);
+    if (count($parts) < 5) return null;
+    return array(
+        'sale_type'    => $parts[0],
+        'lang_raw'     => $parts[1],
+        'langs'        => explode('-', $parts[1]), // e.g. ['GEO','ENG']
+        'project'      => $parts[2],
+        'product_type' => $parts[3],                // e.g. 'ბინა' / 'საოფისე' / 'ავტოსადგომი'
+        'display_name' => $parts[4],
+    );
+}
+
+/**
+ * Reads the product type (ბინა / საოფისე / ავტოსადგომი) of the property
+ * linked to the given deal, so the docs dropdown can be restricted to
+ * only the templates relevant to that property.
+ *
+ * TODO CONFIRM (Sal): two things need verifying before this works:
+ * 1) $propFieldName below — the actual deal UF field that holds the
+ *    linked IBlock 14 property element ID. Replace the placeholder.
+ * 2) Whether __X1GCRZ comes back from getCIBlockElementsByFilter() as
+ *    the Georgian label text directly, or as a numeric list-enum ID.
+ *    If it's an ID, we'll need a small ID -> label map here instead
+ *    of returning it directly.
+ */
+function getDealProductType($deal) {
+    $propFieldName = 'UF_CRM_1779277898205'; // <-- TODO CONFIRM: real field name
+
+    $raw = $deal[$propFieldName] ?? '';
+    if (empty($raw)) return '';
+
+    // Some Bitrix CRM link fields store a plain numeric ID, others store
+    // a prefixed value like "14_123". Handle both safely.
+    if (is_numeric($raw)) {
+        $elementId = (int)$raw;
+    } else {
+        $bits = explode('_', $raw);
+        $elementId = (int)($bits[1] ?? $bits[0] ?? 0);
+    }
+    if (!$elementId) return '';
+
+    $arProp = getCIBlockElementsByFilter(array('IBLOCK_ID' => 14, 'ID' => $elementId));
+    if (empty($arProp)) return '';
+
+    $value = trim($arProp[0]['__X1GCRZ'] ?? '');
+
+    // TODO CONFIRM: if $value is numeric here (an enum ID rather than
+    // the label text), map it like:
+    // $enumMap = array('123' => 'ბინა', '124' => 'საოფისე', '125' => 'ავტოსადგომი');
+    // return $enumMap[$value] ?? '';
+
+    return $value;
+}
+
+// ============================================================
 // TABLE GENERATORS
 // ============================================================
 
@@ -574,18 +638,36 @@ $deal = getDealInfo($dealid);
 $filesarr = array();
 $dbRes = $DB->query('SELECT ID, NAME FROM b_disk_object WHERE PARENT_ID = 38');
 
-
 if ($dbRes) {
     while ($object = $dbRes->Fetch()) $filesarr[] = array("NAME" => $object["NAME"], "ID" => $object["ID"]);
 }
 
-// Filter files by project (for non-popup mode)
-$filtered_files = array();
+// Product type of the property linked to this deal (ბინა / საოფისე / ავტოსადგომი)
+$dealProductType = getDealProductType($deal);
+
+// Build the filtered + parsed file list: matches project AND product type.
+// Language is NOT filtered here — the language dropdown filters client-side
+// from this same list so we don't need extra round trips.
+$available_files = array();
 foreach ($filesarr as $f) {
-    $parts = explode("$", $f["NAME"]);
-    if ($parts[0] === "ყველა" || $parts[0] === $deal["UF_CRM_1779277729207"]) {
-        $filtered_files[] = $f;
-    }
+    $meta = parseDocFileMeta($f["NAME"]);
+    if (!$meta) continue;
+
+    $dealProjectRaw = $deal["UF_CRM_1779277729207"] ?? '';
+    $projectMatches = (
+        mb_strtoupper(trim($meta['project'])) === 'ყველა'
+        || mb_strtoupper(trim($meta['project'])) === mb_strtoupper(trim($dealProjectRaw))
+    );
+    if (!$projectMatches) continue;
+
+    // Only enforce product-type filtering once we actually know the deal's
+    // product type; otherwise fall back to showing everything (avoids an
+    // empty dropdown while field #1 above is still unconfirmed).
+    if ($dealProductType !== '' && mb_strtoupper(trim($meta['product_type'])) !== mb_strtoupper(trim($dealProductType))) continue;
+
+    $meta['ID']   = $f['ID'];
+    $meta['NAME'] = $f['NAME'];
+    $available_files[] = $meta;
 }
 
 if (empty($dealid)) {
@@ -682,8 +764,6 @@ if (!empty($_POST)) {
         foreach ($deal as $key => $value) {
             if (is_array($value)) continue;
             $value = ($value === "" || $value === null) ? "" : $value;
-            // Suppress raw OPPORTUNITY – use formatted version below if needed
-            // if ($key === "OPPORTUNITY") $value = " ";
             $fullarr[] = array('VarName' => '$' . $key . '$', 'VarValue' => $value);
         }
 
@@ -696,11 +776,6 @@ if (!empty($_POST)) {
         }
 
         // Contact / company arrays
-        $mapContact     = array('_USER', '_USER');
-        $mapCompany     = array('_COM');
-        $mapOldContact  = array('_OLD_CON');
-        $mapOldCompany  = array('_OLD_COM');
-
         $addArrayVars = function($arr, $suffix) use (&$fullarr) {
             foreach ($arr as $key => $value) {
                 if (is_array($value)) continue;
@@ -770,8 +845,8 @@ if (!empty($_POST)) {
         while ($object = $dbRes->Fetch()) {
             if ((int)$object["ID"] !== (int)$doc_id) continue;
 
-            $nameParts = explode("$", $object["NAME"]);
-            $name_docs = count($nameParts) > 2 ? $nameParts[2] : $object["NAME"];
+            $meta      = parseDocFileMeta($object["NAME"]);
+            $name_docs = $meta ? $meta['display_name'] : $object["NAME"];
 
             $fileRow = $DB->query('SELECT SUBDIR, FILE_NAME FROM b_file WHERE ID = ' . (int)$object["FILE_ID"])->Fetch();
             $filePath = $fileRow
@@ -842,6 +917,7 @@ if (!empty($_POST)) {
     .page-head p  { font-size: 13px; color: #718096; }
     .card { background: #ffffff; border-radius: 16px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,.06), 0 8px 32px rgba(0,0,0,.06); }
     .field-group { margin-bottom: 20px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
     .field-label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .7px; color: #718096; margin-bottom: 7px; }
     select.styled {
         width: 100%; padding: 11px 36px 11px 14px;
@@ -885,15 +961,21 @@ if (!empty($_POST)) {
 <div class="shell">
     <div class="page-head">
         <h1>დოკუმენტის გენერაცია</h1>
-        <p>აირჩიეთ შაბლონი და ფაილის ფორმატი</p>
+        <p>აირჩიეთ ენა და შაბლონი</p>
     </div>
     <div class="card">
         <form method="post" action="<?php echo $_SERVER['PHP_SELF'] . '?dealid=' . $dealid; ?>" id="docForm">
             <input name="deal_id" id="deal_id" type="hidden">
             <input name="popup"   id="popup"   type="hidden">
-            <div class="field-group">
-                <label class="field-label" for="docs">შაბლონი</label>
-                <select name="docs" id="docs" class="styled"></select>
+            <div class="field-row">
+                <div>
+                    <label class="field-label" for="lang">ენა</label>
+                    <select id="lang" class="styled"></select>
+                </div>
+                <div>
+                    <label class="field-label" for="docs">შაბლონი</label>
+                    <select name="docs" id="docs" class="styled"></select>
+                </div>
             </div>
             <div class="field-group">
                 <label class="field-label">ფორმატი</label>
@@ -924,12 +1006,26 @@ if (!empty($_POST)) {
 </div>
 
 <script>
-    var files      = <?= json_encode($filtered_files); ?>;
-    var deal_id    = <?= json_encode($dealid); ?>;
-    var get        = <?= json_encode($empty_get); ?>;
-    var code       = <?= json_encode($error_code); ?>;
-    var pop_up     = <?= json_encode($popup_mode); ?>;
-    var pop_files  = <?= json_encode($filesarr); ?>;
+    var deal_id     = <?= json_encode($dealid); ?>;
+    var get         = <?= json_encode($empty_get); ?>;
+    var code        = <?= json_encode($error_code); ?>;
+    var pop_up      = <?= json_encode($popup_mode); ?>;
+    // Each item: { ID, NAME, sale_type, lang_raw, langs: [...], project, product_type, display_name }
+    var availableFilesJson = <?= json_encode($available_files, JSON_UNESCAPED_UNICODE); ?>;
+    if (typeof availableFilesJson === 'undefined') {
+        console.error('json_encode($available_files) failed — likely invalid UTF-8 in a filename. json_last_error: <?= json_last_error_msg() ?>');
+    }
+    var availableFiles = availableFilesJson || [];
+
+    // TEMP DEBUG — remove once dropdowns work
+    console.log('DEBUG dealProductType:', <?= json_encode($dealProductType) ?>);
+    console.log('DEBUG dealProjectField:', <?= json_encode($deal["UF_CRM_1779277729207"] ?? null) ?>);
+    console.log('DEBUG total files scanned:', <?= json_encode(count($filesarr)) ?>);
+    console.log('DEBUG available_files count:', availableFiles.length);
+    console.log('DEBUG availableFiles:', availableFiles);
+
+    // Language display labels
+    var LANG_LABELS = { GEO: 'ქართული', ENG: 'English', RUS: 'Русский' };
 
     if (get) {
         document.querySelector('.card').innerHTML = '<div class="error-box">&#9888; ' + code + '</div>';
@@ -937,15 +1033,45 @@ if (!empty($_POST)) {
         document.getElementById('popup').value   = pop_up;
         document.getElementById('deal_id').value = deal_id;
 
-        var select = document.getElementById('docs');
-        var list   = pop_files;
-        
-        for (var i = 0; i < list.length; i++) {
+        var langSelect = document.getElementById('lang');
+        var docsSelect = document.getElementById('docs');
+
+        // Collect distinct languages actually present in the available files
+        var langsPresent = [];
+        availableFiles.forEach(function (f) {
+            (f.langs || []).forEach(function (l) {
+                if (langsPresent.indexOf(l) === -1) langsPresent.push(l);
+            });
+        });
+        // Keep a stable, sensible order
+        var langOrder = ['GEO', 'ENG', 'RUS'];
+        langsPresent.sort(function (a, b) { return langOrder.indexOf(a) - langOrder.indexOf(b); });
+
+        langsPresent.forEach(function (l) {
             var opt = document.createElement('option');
-            opt.value       = list[i]["ID"];
-            opt.textContent = list[i]["NAME"];
-            select.appendChild(opt);
+            opt.value = l;
+            opt.textContent = LANG_LABELS[l] || l;
+            langSelect.appendChild(opt);
+        });
+
+        function populateDocs(selectedLang) {
+            docsSelect.innerHTML = '';
+            availableFiles
+                .filter(function (f) { return !selectedLang || (f.langs || []).indexOf(selectedLang) !== -1; })
+                .forEach(function (f) {
+                    var opt = document.createElement('option');
+                    opt.value = f.ID;
+                    opt.textContent = f.display_name || f.NAME;
+                    docsSelect.appendChild(opt);
+                });
         }
+
+        langSelect.addEventListener('change', function () {
+            populateDocs(this.value);
+        });
+
+        // Initial population
+        populateDocs(langSelect.value);
 
         document.getElementById('docForm').addEventListener('submit', function () {
             var btn = this.querySelector('.btn-submit');
