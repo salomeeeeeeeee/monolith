@@ -5,7 +5,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
 ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
     /* Hide Bitrix chrome for this page */
     #header,
@@ -48,26 +48,24 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
     html, body {
         margin: 0 !important;
         padding: 0 !important;
-        background: #ece8df !important;
+        background: #f4f5f7 !important;
         overflow-x: hidden;
     }
 
     :root {
-        --hub-bg: #ece8df;
+        --hub-bg: #f4f5f7;
         --hub-panel: #ffffff;
-        --hub-text: #1a2b27;
-        --hub-muted: #5f726c;
-        --hub-primary: #1f4d3a;
-        --hub-accent: #b8892f;
-        --hub-shadow: 0 10px 28px rgba(26, 43, 39, 0.08);
+        --hub-text: #00335b;
+        --hub-muted: #6b7a8a;
+        --hub-primary: #00335b;
+        --hub-accent: #72c4b1;
+        --hub-shadow: 0 10px 28px rgba(0, 51, 91, 0.08);
     }
 
     .reports-hub {
-        font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+        font-family: "Montserrat", "Segoe UI", sans-serif;
         color: var(--hub-text);
-        background:
-            radial-gradient(circle at top left, rgba(184, 137, 47, 0.12), transparent 28%),
-            linear-gradient(180deg, #f3efe7 0%, var(--hub-bg) 100%);
+        background: linear-gradient(180deg, #ffffff 0%, var(--hub-bg) 100%);
         min-height: 100vh;
         padding: 8px;
         box-sizing: border-box;
@@ -89,8 +87,9 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
     .hub-sidebar,
     .hub-viewer {
         background: var(--hub-panel);
-        border-radius: 14px;
+        border-radius: 4px;
         box-shadow: var(--hub-shadow);
+        border: 1px solid #dde2e8;
         overflow: hidden;
     }
 
@@ -108,7 +107,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
     .hub-brand__eyebrow {
         margin: 0 0 4px;
         font-size: 10px;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
         color: var(--hub-accent);
         font-weight: 700;
@@ -118,6 +117,9 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         margin: 0;
         font-size: 20px;
         line-height: 1.15;
+        color: var(--hub-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
 
     .hub-brand__text {
@@ -130,9 +132,9 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
     .lang-switch {
         display: inline-flex;
         padding: 3px;
-        border-radius: 999px;
-        background: #f3f6f4;
-        border: 1px solid #dfe8e4;
+        border-radius: 2px;
+        background: #f0f2f5;
+        border: 1px solid #dde2e8;
         width: 100%;
     }
 
@@ -140,11 +142,12 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         border: none;
         background: transparent;
         padding: 7px 0;
-        border-radius: 999px;
+        border-radius: 2px;
         cursor: pointer;
         font: inherit;
         font-size: 12px;
         font-weight: 700;
+        letter-spacing: 0.06em;
         color: var(--hub-muted);
         flex: 1;
     }
@@ -161,9 +164,9 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
 
     .report-nav button {
         text-align: left;
-        border: 1px solid #e6ece9;
-        background: #fafbfa;
-        border-radius: 12px;
+        border: 1px solid #dde2e8;
+        background: #fafbfc;
+        border-radius: 2px;
         padding: 10px 11px;
         cursor: pointer;
         transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
@@ -171,13 +174,14 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
 
     .report-nav button:hover {
         transform: translateY(-1px);
-        border-color: #c7d8d0;
+        border-color: #b8e4da;
+        background: #f7faf9;
     }
 
     .report-nav button.active {
-        background: linear-gradient(135deg, #eef6f1, #f8fbfa);
-        border-color: #9ec1af;
-        box-shadow: inset 0 0 0 1px rgba(31, 77, 58, 0.08);
+        background: linear-gradient(135deg, #e8eef4, #f7faf9);
+        border-color: var(--hub-accent);
+        box-shadow: inset 0 0 0 1px rgba(114, 196, 177, 0.25);
     }
 
     .report-nav__label {
@@ -205,30 +209,36 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
 
     .hub-viewer__head {
         padding: 10px 14px;
-        border-bottom: 1px solid #edf1ef;
+        border-bottom: 1px solid #dde2e8;
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 12px;
         flex-shrink: 0;
+        background: #fff;
     }
 
     .hub-viewer__title {
         margin: 0;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 700;
+        color: var(--hub-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
 
     .hub-viewer__meta {
         font-size: 11px;
         color: var(--hub-muted);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
     }
 
     .hub-viewer__body {
         position: relative;
         flex: 1;
         min-height: 0;
-        background: #f7f5f0;
+        background: #f4f5f7;
     }
 
     .hub-viewer iframe {
@@ -236,7 +246,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         height: 100%;
         min-height: calc(100vh - 58px);
         border: 0;
-        background: #f7f5f0;
+        background: #f4f5f7;
         display: block;
         opacity: 1;
         transition: opacity 0.2s ease;
@@ -255,7 +265,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         color: var(--hub-muted);
         padding: 40px;
         text-align: center;
-        background: #f7f5f0;
+        background: #f4f5f7;
         z-index: 2;
     }
 
@@ -264,7 +274,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         inset: 0;
         display: none;
         place-items: center;
-        background: rgba(247, 245, 240, 0.82);
+        background: rgba(244, 245, 247, 0.82);
         backdrop-filter: blur(2px);
         z-index: 5;
     }
@@ -279,10 +289,10 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         align-items: center;
         gap: 14px;
         padding: 28px 34px;
-        border-radius: 18px;
+        border-radius: 4px;
         background: #fff;
-        box-shadow: 0 16px 40px rgba(26, 43, 39, 0.12);
-        border: 1px solid #e6ece9;
+        box-shadow: 0 16px 40px rgba(0, 51, 91, 0.12);
+        border: 1px solid #dde2e8;
         min-width: 220px;
     }
 
@@ -290,7 +300,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         width: 42px;
         height: 42px;
         border-radius: 50%;
-        border: 3px solid #d9e6df;
+        border: 3px solid #d5dde6;
         border-top-color: var(--hub-primary);
         animation: hub-spin 0.75s linear infinite;
     }

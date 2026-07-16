@@ -695,7 +695,7 @@ function reportPageBegin($title, $subtitle = '', $lang = 'ge')
     ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <?php reportCommonStyles(); ?>
     <div class="report-page" lang="<?= htmlspecialchars($lang) ?>">
         <header class="report-hero">
@@ -781,26 +781,24 @@ function reportCommonStyles()
     ?>
     <style>
         :root {
-            --rp-bg: #ece8df;
+            --rp-bg: #f4f5f7;
             --rp-surface: #ffffff;
-            --rp-surface-2: #f7f5f0;
-            --rp-text: #1a2b27;
-            --rp-muted: #5f726c;
-            --rp-border: #d8e0dc;
-            --rp-primary: #1f4d3a;
-            --rp-primary-soft: #e6f2ec;
-            --rp-accent: #b8892f;
-            --rp-accent-soft: #faf3e3;
-            --rp-shadow: 0 14px 40px rgba(26, 43, 39, 0.08);
-            --rp-radius: 18px;
+            --rp-surface-2: #f0f2f5;
+            --rp-text: #00335b;
+            --rp-muted: #6b7a8a;
+            --rp-border: #dde2e8;
+            --rp-primary: #00335b;
+            --rp-primary-soft: #e8eef4;
+            --rp-accent: #72c4b1;
+            --rp-accent-soft: #e8f7f3;
+            --rp-shadow: 0 10px 28px rgba(0, 51, 91, 0.08);
+            --rp-radius: 10px;
         }
 
         .report-page {
-            font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+            font-family: "Montserrat", "Segoe UI", sans-serif;
             color: var(--rp-text);
-            background:
-                radial-gradient(circle at top right, rgba(184, 137, 47, 0.12), transparent 28%),
-                linear-gradient(180deg, #f3efe7 0%, var(--rp-bg) 100%);
+            background: linear-gradient(180deg, #ffffff 0%, var(--rp-bg) 100%);
             padding: 10px;
             min-height: 100vh;
             box-sizing: border-box;
@@ -815,8 +813,8 @@ function reportCommonStyles()
             align-items: flex-start;
             margin-bottom: 10px;
             padding: 16px 18px;
-            border-radius: 14px;
-            background: linear-gradient(135deg, #173529 0%, #245741 55%, #2f6b52 100%);
+            border-radius: 4px;
+            background: linear-gradient(135deg, #002445 0%, #00335b 55%, #0a4a75 100%);
             color: #fff;
             box-shadow: var(--rp-shadow);
             position: relative;
@@ -830,15 +828,17 @@ function reportCommonStyles()
             width: 220px;
             height: 220px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.08);
+            background: rgba(114, 196, 177, 0.18);
         }
 
         .report-hero__eyebrow {
             margin: 0 0 8px;
-            font-size: 12px;
-            letter-spacing: 0.14em;
+            font-size: 11px;
+            letter-spacing: 0.16em;
             text-transform: uppercase;
-            opacity: 0.72;
+            color: var(--rp-accent);
+            font-weight: 700;
+            opacity: 1;
         }
 
         .report-hero__title {
@@ -846,6 +846,8 @@ function reportCommonStyles()
             font-size: clamp(22px, 3vw, 28px);
             line-height: 1.15;
             font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
         }
 
         .report-hero__subtitle {
@@ -853,6 +855,9 @@ function reportCommonStyles()
             max-width: 720px;
             color: rgba(255,255,255,0.82);
             font-size: 13px;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: 0;
         }
 
         .report-main { display: grid; gap: 10px; }
@@ -860,8 +865,8 @@ function reportCommonStyles()
         .report-filter,
         .report-block {
             background: var(--rp-surface);
-            border: 1px solid rgba(255,255,255,0.7);
-            border-radius: 14px;
+            border: 1px solid var(--rp-border);
+            border-radius: 4px;
             box-shadow: var(--rp-shadow);
         }
 
@@ -889,6 +894,9 @@ function reportCommonStyles()
             margin: 0;
             font-size: 18px;
             font-weight: 700;
+            color: var(--rp-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
 
         .report-filter__grid {
@@ -917,9 +925,9 @@ function reportCommonStyles()
         .report-field label {
             display: block;
             margin-bottom: 7px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
             color: var(--rp-muted);
         }
@@ -929,7 +937,7 @@ function reportCommonStyles()
             width: 100%;
             padding: 12px 14px;
             border: 1px solid var(--rp-border);
-            border-radius: 12px;
+            border-radius: 4px;
             background: var(--rp-surface-2);
             color: var(--rp-text);
             font: inherit;
@@ -939,9 +947,9 @@ function reportCommonStyles()
         .report-field select:focus,
         .report-field input[type="date"]:focus {
             outline: none;
-            border-color: #7aa892;
+            border-color: var(--rp-accent);
             background: #fff;
-            box-shadow: 0 0 0 4px rgba(47, 107, 82, 0.12);
+            box-shadow: 0 0 0 4px rgba(114, 196, 177, 0.2);
         }
 
         .report-filter__actions {
@@ -962,19 +970,26 @@ function reportCommonStyles()
             gap: 8px;
             padding: 11px 18px;
             border: none;
-            border-radius: 12px;
+            border-radius: 2px;
             cursor: pointer;
             font: inherit;
             font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-size: 12px;
             transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
         }
 
         .btn:hover { transform: translateY(-1px); }
 
         .btn-primary {
-            background: linear-gradient(135deg, #245741, #1f4d3a);
+            background: var(--rp-primary);
             color: #fff;
-            box-shadow: 0 10px 24px rgba(31, 77, 58, 0.22);
+            box-shadow: 0 8px 20px rgba(0, 51, 91, 0.22);
+        }
+
+        .btn-primary:hover {
+            background: #002445;
         }
 
         .btn-ghost {
@@ -985,8 +1000,8 @@ function reportCommonStyles()
 
         .btn-export {
             background: var(--rp-accent-soft);
-            color: #7a5a17;
-            border: 1px solid #ecdab0;
+            color: #1a6b5c;
+            border: 1px solid #b8e4da;
         }
 
         .btn-icon {
@@ -994,7 +1009,7 @@ function reportCommonStyles()
             height: 22px;
             display: inline-grid;
             place-items: center;
-            border-radius: 999px;
+            border-radius: 2px;
             background: rgba(255,255,255,0.72);
             font-size: 12px;
         }
@@ -1006,8 +1021,11 @@ function reportCommonStyles()
         .report-block__title,
         .table-title {
             margin: 0;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 700;
+            color: var(--rp-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
         }
 
         .table-wrap {
@@ -1035,10 +1053,10 @@ function reportCommonStyles()
             z-index: 1;
             padding: 13px 14px;
             text-align: left;
-            background: #eef5f1;
-            color: #234539;
-            font-size: 12px;
-            letter-spacing: 0.05em;
+            background: var(--rp-primary-soft);
+            color: var(--rp-primary);
+            font-size: 11px;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
             border-bottom: 1px solid var(--rp-border);
         }
@@ -1048,15 +1066,16 @@ function reportCommonStyles()
         .cashflow-table tbody td,
         #table tbody td {
             padding: 13px 14px;
-            border-bottom: 1px solid #edf1ef;
+            border-bottom: 1px solid #eef1f4;
             background: #fff;
+            color: #2a3a4a;
         }
 
         .report-table tbody tr:hover td,
         .sales-table tbody tr:hover td,
         .cashflow-table tbody tr:hover td,
         #table tbody tr:hover td {
-            background: #f8fbf9;
+            background: #f7faf9;
         }
 
         .report-table tbody tr:last-child td,
@@ -1067,16 +1086,16 @@ function reportCommonStyles()
         }
 
         .total-row td {
-            background: linear-gradient(180deg, #f3f8f5, #eaf2ed) !important;
+            background: linear-gradient(180deg, #eef4f9, #e4edf5) !important;
             font-weight: 700;
             color: var(--rp-primary);
         }
 
         .sub-row td {
-            background: #fcfdfc !important;
+            background: #fafbfc !important;
         }
 
-        .row-main { font-weight: 600; }
+        .row-main { font-weight: 600; color: var(--rp-primary); }
         .row-sub {
             display: inline-flex;
             align-items: center;
@@ -1119,7 +1138,7 @@ function reportCommonStyles()
             z-index: 9999;
             display: grid;
             place-items: center;
-            background: rgba(236, 232, 223, 0.78);
+            background: rgba(244, 245, 247, 0.82);
             backdrop-filter: blur(3px);
         }
 
@@ -1134,17 +1153,17 @@ function reportCommonStyles()
             gap: 12px;
             min-width: 220px;
             padding: 26px 32px;
-            border-radius: 16px;
+            border-radius: 4px;
             background: #fff;
-            border: 1px solid #e6ece9;
-            box-shadow: 0 16px 40px rgba(26, 43, 39, 0.12);
+            border: 1px solid var(--rp-border);
+            box-shadow: 0 16px 40px rgba(0, 51, 91, 0.12);
         }
 
         .report-page-loader__spinner {
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            border: 3px solid #d9e6df;
+            border: 3px solid #d5dde6;
             border-top-color: var(--rp-primary);
             animation: report-spin 0.75s linear infinite;
         }
