@@ -102,6 +102,52 @@ function reportGetSoldProducts()
     });
 }
 
+function reportGetReservedProducts()
+{
+    $products = reportGetProducts();
+    return array_filter($products, function ($product) {
+        return ($product[F_STATUS] ?? '') === REPORT_RESERVED_STATUS;
+    });
+}
+
+/**
+ * Attach reservation date/stage from linked OWNER_DEAL onto product rows.
+ */
+function reportEnrichReservationMeta(array $products)
+{
+    $dealIds = [];
+    foreach ($products as $product) {
+        $dealId = reportExtractDealId($product['OWNER_DEAL'] ?? '');
+        if ($dealId !== '') {
+            $dealIds[$dealId] = true;
+        }
+    }
+
+    $dealMeta = [];
+    if (!empty($dealIds)) {
+        $res = CCrmDeal::GetList(
+            ['ID' => 'ASC'],
+            ['ID' => array_keys($dealIds), 'CHECK_PERMISSIONS' => 'N'],
+            ['ID', 'STAGE_ID', D_RESERVATION_DATE, 'CONTACT_ID', 'OPPORTUNITY']
+        );
+        while ($row = $res->Fetch()) {
+            $dealMeta[(string)$row['ID']] = $row;
+        }
+    }
+
+    foreach ($products as $id => $product) {
+        $dealId = reportExtractDealId($product['OWNER_DEAL'] ?? '');
+        $meta = ($dealId !== '' && isset($dealMeta[$dealId])) ? $dealMeta[$dealId] : null;
+        $products[$id]['RESERVATION_DATE'] = $meta[D_RESERVATION_DATE] ?? '';
+        $products[$id]['RESERVATION_STAGE'] = $meta['STAGE_ID'] ?? '';
+        if (empty($products[$id]['OWNER_CONTACT_NAME']) && !empty($meta['CONTACT_ID'])) {
+            $products[$id]['OWNER_CONTACT_NAME'] = reportGetContactName($meta['CONTACT_ID']);
+        }
+    }
+
+    return $products;
+}
+
 function reportGetUniqueValues($items, $field)
 {
     $values = [];

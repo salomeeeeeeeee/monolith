@@ -344,6 +344,10 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
                     <span class="report-nav__label" id="nav-sold-label">გაყიდვების რეპორტი</span>
                     <span class="report-nav__hint" id="nav-sold-hint">გაყიდული ერთეულები და საშ. ფასი</span>
                 </button>
+                <button type="button" data-url="/crm/deal/reports/reservationReport.php" data-key="reservation" onclick="selectReport(this)">
+                    <span class="report-nav__label" id="nav-reservation-label">რეზერვაციის რეპორტი</span>
+                    <span class="report-nav__hint" id="nav-reservation-hint">დაჯავშნილი დილები</span>
+                </button>
                 <button type="button" data-url="/crm/deal/reports/davalianebisReport.php" data-key="debitors" onclick="selectReport(this)">
                     <span class="report-nav__label" id="nav-debitors-label">დავალიანების რეპორტი</span>
                     <span class="report-nav__hint" id="nav-debitors-hint">დარიცხვა vs გადახდა</span>
@@ -388,6 +392,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
             filteringSub: 'გთხოვთ, დაელოდოთ',
             product: ['უძრავი ქონების რეპორტი', 'სტატუსები, ფართი, ფასი'],
             sold: ['გაყიდვების რეპორტი', 'გაყიდული ერთეულები და საშ. ფასი'],
+            reservation: ['რეზერვაციის რეპორტი', 'დაჯავშნილი დილები'],
             debitors: ['დავალიანების რეპორტი', 'დარიცხვა vs გადახდა'],
             cashflow: ['ქეშფლოუ რეპორტი', 'ფინანსური მოძრაობა პერიოდით'],
         },
@@ -402,6 +407,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
             filteringSub: 'Please wait',
             product: ['Property Report', 'Status, area and price'],
             sold: ['Sales Report', 'Sold units and average price'],
+            reservation: ['Reservation Report', 'Reserved deals'],
             debitors: ['Debt Report', 'Scheduled vs paid amounts'],
             cashflow: ['Cashflow Report', 'Financial movement by period'],
         }
@@ -419,7 +425,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         document.getElementById('loaderText').innerText = t.loading;
         document.getElementById('loaderSub').innerText = t.loadingSub;
         if (!currentUrl) document.getElementById('viewerTitle').innerText = t.viewerPick;
-        ['product', 'sold', 'debitors', 'cashflow'].forEach(key => {
+        ['product', 'sold', 'reservation', 'debitors', 'cashflow'].forEach(key => {
             document.getElementById(`nav-${key}-label`).innerText = t[key][0];
             document.getElementById(`nav-${key}-hint`).innerText = t[key][1];
         });
