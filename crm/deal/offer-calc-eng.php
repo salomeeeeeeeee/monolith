@@ -140,16 +140,29 @@ if ($dataID) {
     $rows = [];
 }
 
+$installmentNumber = 0;
 foreach ($rows as $i => $row) {
     $amt = floatval(str_replace(',', '', $row['amount'] ?? 0));
+
+    // Do not include cancelled (zero-amount) payments in the offer.
+    if ($amt == 0.0) {
+        continue;
+    }
+
+    $payment = $row['payment'] ?? null;
+    if ($payment === null || is_numeric($payment)) {
+        $payment = ++$installmentNumber;
+    }
+
     $scheduleRows[] = [
-        'payment' => $row['payment'] ?? ($i + 1),
+        'payment' => $payment,
         'date'    => $row['date']    ?? '',
         'amount'  => $amt,
     ];
     $calcTotal += $amt;
-    if ($i === 0) $calcAdvance = $amt;
-    if ($i === 1) $calcMonthly = $amt;
+    $visibleRowIndex = count($scheduleRows) - 1;
+    if ($visibleRowIndex === 0) $calcAdvance = $amt;
+    if ($visibleRowIndex === 1) $calcMonthly = $amt;
 }
 
 // ── Logo ──

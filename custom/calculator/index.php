@@ -381,14 +381,14 @@ foreach ($conditionElements as $element) {
         </div>
         <div class="field">
             <label>პირველადი შენატანი ($)</label>
-            <input id="advancePayment" oninput="onAdvanceChange('amount')">
+            <input id="advancePayment" inputmode="decimal" oninput="onAdvanceChange('amount')" onkeypress="return isNumericKey(event)">
         </div>
         <div class="field">
             <label>პირველადი შენატანი (%)</label>
-            <input id="advancePaymentPercent" oninput="onAdvanceChange('percent')">
+            <input id="advancePaymentPercent" inputmode="decimal" oninput="onAdvanceChange('percent')" onkeypress="return isNumericKey(event)">
         </div>
         <div class="field" id="fieldStartDate">
-            <label>დაწყების თარიღი</label>
+            <label>განვადების დაწყების თარიღი</label>
             <input id="startDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
         <div class="field" id="fieldLastPayDate">
@@ -397,14 +397,14 @@ foreach ($conditionElements as $element) {
         </div>
         <div class="field" id="fieldLastPayment">
             <label>ბოლო შენატანი ($)</label>
-            <input id="lastPayment" oninput="onLastChange('amount')">
+            <input id="lastPayment" inputmode="decimal" oninput="onLastChange('amount')" onkeypress="return isNumericKey(event)">
         </div>
         <div class="field" id="fieldLastPaymentPercent">
             <label>ბოლო შენატანი (%)</label>
-            <input id="lastPaymentPercent" oninput="onLastChange('percent')">
+            <input id="lastPaymentPercent" inputmode="decimal" oninput="onLastChange('percent')" onkeypress="return isNumericKey(event)">
         </div>
         <div class="field" id="fieldEndDate">
-            <label>დასრულების თარიღი</label>
+            <label>განვადების დასრულების თარიღი</label>
             <input id="endDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
     </div>
@@ -656,7 +656,23 @@ function formatDiscountField(id) {
     setValue(id, formatNumber(parseFormattedNumber(getValue(id))));
 }
 
+function isNumericKey(e) {
+    const key = e.key;
+    if (e.ctrlKey || e.metaKey || e.altKey) return true;
+    if (key.length !== 1) return true;
+    return /[0-9.,]/.test(key);
+}
+
+function sanitizeNumericField(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cleaned = el.value.replace(/[^0-9.,]/g, '');
+    if (el.value !== cleaned) el.value = cleaned;
+}
+
 function onAdvanceChange(type) {
+    if (type === 'amount') sanitizeNumericField('advancePayment');
+    else sanitizeNumericField('advancePaymentPercent');
     const price = parseFormattedNumber(getValue('price'));
     if (!price) return;
     if (type === 'amount') {
@@ -669,6 +685,8 @@ function onAdvanceChange(type) {
 }
 
 function onLastChange(type) {
+    if (type === 'amount') sanitizeNumericField('lastPayment');
+    else sanitizeNumericField('lastPaymentPercent');
     const price = parseFormattedNumber(getValue('price'));
     if (!price) return;
     if (type === 'amount') {
