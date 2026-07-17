@@ -133,7 +133,7 @@ if (!function_exists('allocation_assignProductToDeal')) {
 
 if (!function_exists('allocation_copyDeal')) {
     /**
-     * წყარო დილის ასლი — იგივე სტეიჯი/კონტაქტი/UF, პროდუქტების გარეშე.
+     * წყარო დილის ასლი — იგივე სტეიჯი/კონტაქტი/UF/SOURCE_ID, პროდუქტების გარეშე.
      */
     function allocation_copyDeal($sourceDeal)
     {
@@ -141,7 +141,15 @@ if (!function_exists('allocation_copyDeal')) {
             return 0;
         }
 
-        $fields = $sourceDeal;
+        $sourceId = intval($sourceDeal["ID"]);
+
+        // GetByID იძლევა სრულ ველებს (SOURCE_ID, UF_...), GetList ხშირად აკლებს
+        $fullDeal = CCrmDeal::GetByID($sourceId, false);
+        if (!$fullDeal || empty($fullDeal["ID"])) {
+            $fullDeal = $sourceDeal;
+        }
+
+        $fields = $fullDeal;
         $readonly = array(
             "ID",
             "DATE_CREATE",
@@ -163,7 +171,6 @@ if (!function_exists('allocation_copyDeal')) {
             unset($fields[$key]);
         }
 
-        // ~ პრეფიქსიანი Bitrix ველები
         foreach (array_keys($fields) as $key) {
             if (strpos($key, "~") === 0) {
                 unset($fields[$key]);
@@ -172,29 +179,57 @@ if (!function_exists('allocation_copyDeal')) {
 
         $fields["CLOSED"] = "N";
 
+        // წყარო აშკარად გადავიტანოთ (Add ზოგჯერ ტოვებს ცარიელს)
+        if (!empty($fullDeal["SOURCE_ID"])) {
+            $fields["SOURCE_ID"] = $fullDeal["SOURCE_ID"];
+        }
+        if (isset($fullDeal["SOURCE_DESCRIPTION"])) {
+            $fields["SOURCE_DESCRIPTION"] = $fullDeal["SOURCE_DESCRIPTION"];
+        }
+
         $Deal = new CCrmDeal(false);
         $newId = $Deal->Add($fields, true, array(
             "DISABLE_USER_FIELD_CHECK" => true,
-            "CURRENT_USER" => isset($sourceDeal["ASSIGNED_BY_ID"]) ? intval($sourceDeal["ASSIGNED_BY_ID"]) : 1,
+            "CURRENT_USER" => isset($fullDeal["ASSIGNED_BY_ID"]) ? intval($fullDeal["ASSIGNED_BY_ID"]) : 1,
         ));
 
         if (!$newId) {
             @file_put_contents(
                 $_SERVER["DOCUMENT_ROOT"] . "/debug_allocation.txt",
-                date("Y-m-d H:i:s") . " copyDeal FAILED source=" . $sourceDeal["ID"]
+                date("Y-m-d H:i:s") . " copyDeal FAILED source=" . $sourceId
                     . " err=" . $Deal->LAST_ERROR . "\n",
                 FILE_APPEND
             );
             return 0;
         }
 
-        // კონტაქტების ბაინდინგი
+        // SOURCE_ID უსაფრთხოდ ხელახლა ჩაწერა Update-ით
+        if (!empty($fullDeal["SOURCE_ID"])) {
+            $upd = array(
+                "SOURCE_ID" => $fullDeal["SOURCE_ID"],
+            );
+            if (isset($fullDeal["SOURCE_DESCRIPTION"])) {
+                $upd["SOURCE_DESCRIPTION"] = $fullDeal["SOURCE_DESCRIPTION"];
+            }
+            $Deal->Update($newId, $upd, true, true, array(
+                "DISABLE_USER_FIELD_CHECK" => true,
+                "CURRENT_USER" => 1,
+            ));
+        }
+
         if (class_exists('\Bitrix\Crm\Binding\DealContactTable')) {
-            $contactIds = \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs(intval($sourceDeal["ID"]));
+            $contactIds = \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($sourceId);
             if (!empty($contactIds)) {
                 \Bitrix\Crm\Binding\DealContactTable::bindContactIDs($newId, $contactIds);
             }
         }
+
+        @file_put_contents(
+            $_SERVER["DOCUMENT_ROOT"] . "/debug_allocation.txt",
+            date("Y-m-d H:i:s") . " copyDeal OK source={$sourceId} new={$newId}"
+                . " SOURCE_ID=" . ($fullDeal["SOURCE_ID"] ?? "") . "\n",
+            FILE_APPEND
+        );
 
         return intval($newId);
     }
@@ -217,8 +252,7 @@ if (!function_exists('allocation_distributeProducts')) {
             $arProducts = CCrmDeal::LoadProductRows($dealID);
         }
         if ($deal === null) {
-            $res = CCrmDeal::GetList(array("ID" => "ASC"), array("ID" => $dealID, "CHECK_PERMISSIONS" => "N"), array());
-            $deal = $res ? $res->Fetch() : false;
+            $deal = CCrmDeal::GetByID($dealID, false);
         }
         if (!$deal) {
             return "დილი ვერ მოიძებნა";

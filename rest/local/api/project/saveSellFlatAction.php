@@ -9,6 +9,20 @@ CModule::IncludeModule('crm');
 
 date_default_timezone_set('Asia/Tbilisi');
 
+/** Absolute public URL with encoded filename (spaces, (), etc.) */
+function buildPassportFileLink($fileId) {
+    $path = CFile::GetPath($fileId);
+    if (!$path) {
+        return '';
+    }
+    $parts = explode('/', $path);
+    $encoded = array_map(function ($part) {
+        return $part === '' ? '' : rawurlencode($part);
+    }, $parts);
+    $host = preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]);
+    return "https://" . $host . implode('/', $encoded);
+}
+
 // ── Inputs ──────────────────────────────────────────────────────────
 $dealId    = intval($_POST['deal_id']    ?? 0);
 $contactId = intval($_POST['contact_id'] ?? 0);
@@ -42,7 +56,7 @@ if (!empty($_FILES['passport']['tmp_name'])) {
     if ($savedId) {
         $passportFileId   = $savedId;
         $passportFilePath = $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath($savedId);
-        $passportFileLink = "https://" . preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]) . CFile::GetPath($savedId);
+        $passportFileLink = buildPassportFileLink($savedId);
     }
 }
 

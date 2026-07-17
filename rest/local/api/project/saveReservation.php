@@ -31,6 +31,20 @@ function getContactInfo($contactId) {
     return $arContact;
 }
 
+/** Absolute public URL with encoded filename (spaces, (), etc.) */
+function buildPassportFileLink($fileId) {
+    $path = CFile::GetPath($fileId);
+    if (!$path) {
+        return '';
+    }
+    $parts = explode('/', $path);
+    $encoded = array_map(function ($part) {
+        return $part === '' ? '' : rawurlencode($part);
+    }, $parts);
+    $host = preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]);
+    return "https://" . $host . implode('/', $encoded);
+}
+
 $userSelect      = $_POST['userSelect']  ?? '';
 $dealId          = $_POST['deal_id']     ?? '';
 $comment         = $_POST['comment']     ?? '';
@@ -62,7 +76,7 @@ $params = array(
     "lastName"    => $lastName,
     "idNumber"    => $idNumber,
     "passportFile"     => $filePath ? CFile::MakeFileArray($filePath) : '',
-    "passportFileLink" => $passportFileId ? "https://" . preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]) . CFile::GetPath($passportFileId) : '',
+    "passportFileLink" => $passportFileId ? buildPassportFileLink($passportFileId) : '',
 );
 
 // ── Update contact: NAME, LAST_NAME, ID number, PHONE, passport file ──
