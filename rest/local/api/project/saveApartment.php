@@ -74,11 +74,11 @@ if ($deal_id) {
                 "UF_CRM_1779277919090" => "",
                 "UF_CRM_1761658642424" => "",
                 "UF_CRM_1761658662573" => "",
-                "UF_CRM_1764317005"    => "",
                 "UF_CRM_1779277786379" => "",
                 "UF_CRM_1779277838333" => "",
                 "UF_CRM_1779277860291" => "",
                 "UF_CRM_1779277690404" => "",
+                "UF_CRM_1782206163787" => "",
                 "PRODUCT_ID"           => "",
             ];
             $Deal   = new CCrmDeal(false);
@@ -99,8 +99,8 @@ if ($deal_id) {
     // ── NON-EMPTY: save products and update deal fields ──
     $KVM_PRICE = $project = $block = $PRODUCT_TYPE = $sadarbazo = "";
     $prodFLOOR = $prodNumber = $prodTOTAL_AREA = $LIVING_SPACE = "";
-    $sawyisiGirebuleba = $phase = $productIdsForAdd = "";
-    $summerspace = $bedrooms = $bathrooms = $rooms = "";
+    $sawyisiGirebuleba = $productIdsForAdd = "";
+    $summerspace = $bedrooms = $bathrooms = $rooms = $cadastralCode = "";
 
     $rows = [];
     foreach ($productIds as $pid) {
@@ -129,8 +129,8 @@ if ($deal_id) {
         $prodNumber        = $prodNumber        ? $prodNumber        . " /" . $productData["__6KWOWZ"]  : $productData["__6KWOWZ"];
         $prodTOTAL_AREA    = $prodTOTAL_AREA    ? $prodTOTAL_AREA    . " /" . $productData["__173JA5"]  : $productData["__173JA5"];
         $LIVING_SPACE      = $LIVING_SPACE      ? $LIVING_SPACE      . " /" . $productData["__US58ND"]  : $productData["__US58ND"];
-        $sawyisiGirebuleba = $sawyisiGirebuleba ? $sawyisiGirebuleba . " /" . $productData["PRICE"]     : $productData["PRICE"];
-        $phase             = $phase             ? $phase             . " /" . $productData["phase"]     : $productData["phase"];
+        $sawyisiGirebuleba = $sawyisiGirebuleba ? $sawyisiGirebuleba . " /" . $productData["__9YCWGZ"] : $productData["__9YCWGZ"];
+        $cadastralCode     = $cadastralCode     ? $cadastralCode     . " /" . $productData["__51MODL"]  : $productData["__51MODL"];
         $productIdsForAdd  = $productIdsForAdd  ? $productIdsForAdd  . " /" . $productData["ID"]        : $productData["ID"];
     }
 
@@ -146,11 +146,11 @@ if ($deal_id) {
         "UF_CRM_1779277919090" => $LIVING_SPACE,
         "UF_CRM_1761658642424" => $sawyisiGirebuleba,
         "UF_CRM_1761658662573" => $KVM_PRICE,
-        "UF_CRM_1764317005"    => $phase,
         "UF_CRM_1779277786379" => $summerspace,
         "UF_CRM_1779277838333" => $bedrooms,
         "UF_CRM_1779277860291" => $bathrooms,
         "UF_CRM_1779277690404" => $rooms,
+        "UF_CRM_1782206163787" => $cadastralCode,
         "PRODUCT_ID"           => $productIdsForAdd,
     ];
 
