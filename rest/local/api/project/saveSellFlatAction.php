@@ -42,7 +42,7 @@ if (!empty($_FILES['passport']['tmp_name'])) {
     if ($savedId) {
         $passportFileId   = $savedId;
         $passportFilePath = $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath($savedId);
-        $passportFileLink = "https://" . $_SERVER["HTTP_HOST"] . CFile::GetPath($savedId);
+        $passportFileLink = "https://" . preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]) . CFile::GetPath($savedId);
     }
 }
 
@@ -92,7 +92,7 @@ $arrForDeal = [
 $dealObj = new CCrmDeal();
 $dealObj->Update($dealId, $arrForDeal);
 
-$dealUrl = "https://" . $_SERVER["HTTP_HOST"] . "/crm/deal/details/{$dealId}/";
+$dealUrl = "https://" . preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]) . "/crm/deal/details/{$dealId}/";
 $dealLinkBBCode = "[URL={$dealUrl}]Deal #{$dealId}[/URL]";
 
 $params = [

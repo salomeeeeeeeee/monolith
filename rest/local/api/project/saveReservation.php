@@ -62,7 +62,7 @@ $params = array(
     "lastName"    => $lastName,
     "idNumber"    => $idNumber,
     "passportFile"     => $filePath ? CFile::MakeFileArray($filePath) : '',
-    "passportFileLink" => $passportFileId ? "https://" . $_SERVER["HTTP_HOST"] . CFile::GetPath($passportFileId) : '',
+    "passportFileLink" => $passportFileId ? "https://" . preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]) . CFile::GetPath($passportFileId) : '',
 );
 
 // ── Update contact: NAME, LAST_NAME, ID number, PHONE, passport file ──
