@@ -664,31 +664,53 @@ if ($dbRes) {
 // Product type of the property linked to this deal (ბინა / საოფისე / ავტოსადგომი)
 $productTypeDebug = array();
 $dealProductType = getDealProductType($deal, $productTypeDebug);
+$dealProjectRaw  = $deal["UF_CRM_1779277729207"] ?? '';   // add once here
+$dealProj        = mb_strtoupper(trim($dealProjectRaw));
 
-// Build the filtered + parsed file list: matches project AND product type.
-// Language is NOT filtered here — the language dropdown filters client-side
-// from this same list so we don't need extra round trips.
 $available_files = array();
+$productTypeOverrides = array(
+    89 => 'ავტოსადგომი',
+    90 => 'ავტოსადგომი',
+);
+
 foreach ($filesarr as $f) {
     $meta = parseDocFileMeta($f["NAME"]);
     if (!$meta) continue;
 
-    $dealProjectRaw = $deal["UF_CRM_1779277729207"] ?? '';
+    if (isset($productTypeOverrides[(int)$f['ID']])) {
+        $meta['product_type'] = $productTypeOverrides[(int)$f['ID']];
+    }
+
+    $metaProj = mb_strtoupper(trim($meta['project']));
     $projectMatches = (
-        mb_strtoupper(trim($meta['project'])) === 'ყველა'
-        || mb_strtoupper(trim($meta['project'])) === mb_strtoupper(trim($dealProjectRaw))
+        $metaProj === 'ყველა'
+        || $metaProj === $dealProj
+        || mb_strpos($dealProj, $metaProj) !== false
     );
     if (!$projectMatches) continue;
 
-    // Only enforce product-type filtering once we actually know the deal's
-    // product type; otherwise fall back to showing everything (avoids an
-    // empty dropdown while field #1 above is still unconfirmed).
     if ($dealProductType !== '' && mb_strtoupper(trim($meta['product_type'])) !== mb_strtoupper(trim($dealProductType))) continue;
 
     $meta['ID']   = $f['ID'];
     $meta['NAME'] = $f['NAME'];
     $available_files[] = $meta;
 }
+
+if (isset($_GET['debug'])) {
+    echo '<pre style="background:#111;color:#0f0;padding:16px;white-space:pre-wrap;">';
+    echo "dealProductType raw: " . htmlspecialchars(var_export($productTypeDebug['raw'] ?? null, true)) . "\n";
+    echo "dealProductType parsed: " . htmlspecialchars(var_export($dealProductType, true)) . "\n";
+    echo "dealProjectRaw: " . htmlspecialchars(var_export($deal["UF_CRM_1779277729207"] ?? null, true)) . "\n";
+    echo "filesarr count: " . count($filesarr) . "\n";
+    echo "available_files count: " . count($available_files) . "\n\n";
+    foreach ($filesarr as $f) {
+        $m = parseDocFileMeta($f['NAME']);
+        echo htmlspecialchars($f['NAME']) . " => " . ($m ? htmlspecialchars(json_encode($m, JSON_UNESCAPED_UNICODE)) : 'PARSE FAILED') . "\n";
+    }
+    echo '</pre>';
+    exit;
+}
+
 
 if (empty($dealid)) {
     $empty_get  = true;
