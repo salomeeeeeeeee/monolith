@@ -863,17 +863,23 @@ if (!empty($_POST)) {
             );
         }
 
-        $firstPayment     = !empty($scheduleData) ? number_format($scheduleData[0]["amount"], 2, '.', ',') : '';
+        $firstPaymentRaw   = !empty($scheduleData) ? (float)$scheduleData[0]["amount"] : 0;
+        $lastPaymentRaw    = !empty($scheduleData) ? (float)end($scheduleData)["amount"] : 0;
+        
+        $fasdaklebuli      = (float)$deal['OPPORTUNITY'];
+        $paymentDifference = $fasdaklebuli - $lastPaymentRaw - $firstPaymentRaw;
+        
+        $firstPayment     = !empty($scheduleData) ? number_format($firstPaymentRaw, 2, '.', ',') : '';
         $firstPaymentDate = !empty($scheduleData) ? $scheduleData[0]["date"] : '';
-        $lastPayment      = !empty($scheduleData) ? number_format(end($scheduleData)["amount"], 2, '.', ',') : '';
+        $lastPayment      = !empty($scheduleData) ? number_format($lastPaymentRaw, 2, '.', ',') : '';
         $lastPaymentDate  = !empty($scheduleData) ? end($scheduleData)["date"] : '';
+        
+        $fullarr[] = array('VarName' => '$FIRST_PAYMENT$',       'VarValue' => $firstPayment);
+        $fullarr[] = array('VarName' => '$FIRST_PAYMENT_DATE$',  'VarValue' => $firstPaymentDate);
+        $fullarr[] = array('VarName' => '$LAST_PAYMENT$',        'VarValue' => $lastPayment);
+        $fullarr[] = array('VarName' => '$LAST_PAYMENT_DATE$',   'VarValue' => $lastPaymentDate);
+        $fullarr[] = array('VarName' => '$PAYMENT_DIFFERENCE$',  'VarValue' => number_format($paymentDifference, 2, '.', ','));
 
-        $fullarr[] = array('VarName' => '$FIRST_PAYMENT$',      'VarValue' => $firstPayment);
-        $fullarr[] = array('VarName' => '$FIRST_PAYMENT_DATE$', 'VarValue' => $firstPaymentDate);
-        $fullarr[] = array('VarName' => '$LAST_PAYMENT$',       'VarValue' => $lastPayment);
-        $fullarr[] = array('VarName' => '$LAST_PAYMENT_DATE$',  'VarValue' => $lastPaymentDate);
-
-        $fasdaklebuli = (float)$deal['OPPORTUNITY'];
 
         $fullarr[] = array('VarName' => 'grapik_geo', 'VarValue' => !empty($scheduleData) ? generateScheduleTable($scheduleData, $fasdaklebuli, 'GEO') : '', 'VarType' => 'T');
         $fullarr[] = array('VarName' => 'grapik_eng', 'VarValue' => !empty($scheduleData) ? generateScheduleTable($scheduleData, $fasdaklebuli, 'ENG') : '', 'VarType' => 'T');
