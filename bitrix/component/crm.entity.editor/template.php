@@ -1285,9 +1285,8 @@ var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
     }
 	
 
-    function getDealsByPhone(phone, id) {
+	function getDealsByPhone(phone, id) {
         var type = "deal";
-        if (pathname[2] == "lead") type = "lead";
 
         fetch(location.origin + "/rest/local/api/deal/getByPhone.php?id=" + id + "&phone=" + phone + "&type=" + type)
             .then(function(response) { return response.json(); })
@@ -1298,10 +1297,9 @@ var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
                     if (document.getElementById("checkSamePhoneInDeals")) {
                         document.getElementById("checkSamePhoneInDeals").innerHTML = "";
                         drawDivs += drawFields(data.res.DEALS, "deal");
-                        drawDivs += drawFields(data.res.LEADS, "lead");
                     }
 
-                    var total = data.res.DEALS.length + data.res.LEADS.length;
+                    var total = data.res.DEALS.length;
                     document.getElementById("checkSamePhoneInDeals").innerHTML =
                         '<div style="margin-top:10px; font-family: sans-serif;">' +
                             '<div style="' +
