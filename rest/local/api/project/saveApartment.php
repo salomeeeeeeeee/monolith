@@ -39,7 +39,6 @@ $arrForAdd = [];
 if ($deal_id) {
 
     // ── EMPTY: clear all products and wipe deal fields ──
-   // ── EMPTY: clear all products and wipe deal fields ──
    if (empty($productIds)) {
     // Load BEFORE clearing
     $prevProds = CCrmDeal::LoadProductRows($deal_id);
@@ -79,6 +78,7 @@ if ($deal_id) {
                 "UF_CRM_1779277860291" => "",
                 "UF_CRM_1779277690404" => "",
                 "UF_CRM_1782206163787" => "",
+                "UF_CRM_1781768590754" => "",
                 "PRODUCT_ID"           => "",
             ];
             $Deal   = new CCrmDeal(false);
@@ -100,7 +100,7 @@ if ($deal_id) {
     $KVM_PRICE = $project = $block = $PRODUCT_TYPE = $sadarbazo = "";
     $prodFLOOR = $prodNumber = $prodTOTAL_AREA = $LIVING_SPACE = "";
     $sawyisiGirebuleba = $productIdsForAdd = "";
-    $summerspace = $bedrooms = $bathrooms = $rooms = $cadastralCode = "";
+    $summerspace = $bedrooms = $bathrooms = $rooms = $cadastralCode = $sector = "";
 
     $rows = [];
     foreach ($productIds as $pid) {
@@ -130,7 +130,12 @@ if ($deal_id) {
         $prodTOTAL_AREA    = $prodTOTAL_AREA    ? $prodTOTAL_AREA    . " /" . $productData["__173JA5"]  : $productData["__173JA5"];
         $LIVING_SPACE      = $LIVING_SPACE      ? $LIVING_SPACE      . " /" . $productData["__US58ND"]  : $productData["__US58ND"];
         $sawyisiGirebuleba = $sawyisiGirebuleba ? $sawyisiGirebuleba . " /" . $productData["__9YCWGZ"] : $productData["__9YCWGZ"];
-        $cadastralCode     = $cadastralCode     ? $cadastralCode     . " /" . $productData["__51MODL"]  : $productData["__51MODL"];
+
+        // FIXED: cadastralCode and sector were swapped — cadastralCode now correctly pulls __51MODL,
+        // sector now correctly pulls _3BU0JH (the sector property code used elsewhere in catalog.php/get.php)
+        $cadastralCode     = $cadastralCode     ? $cadastralCode     . " /" . $productData["__51MODL"] : $productData["__51MODL"];
+        $sector            = $sector            ? $sector            . " /" . $productData["_3BU0JH"]  : $productData["_3BU0JH"];
+
         $productIdsForAdd  = $productIdsForAdd  ? $productIdsForAdd  . " /" . $productData["ID"]        : $productData["ID"];
     }
 
@@ -151,6 +156,8 @@ if ($deal_id) {
         "UF_CRM_1779277860291" => $bathrooms,
         "UF_CRM_1779277690404" => $rooms,
         "UF_CRM_1782206163787" => $cadastralCode,
+        "UF_CRM_1781768590754" => $sector,
+
         "PRODUCT_ID"           => $productIdsForAdd,
     ];
 
@@ -182,7 +189,7 @@ if ($deal_id) {
         }
         $resArray["status"]  = 200;
         $resArray["message"] = "მონაცემები შენახულია";
-        
+
         CModule::IncludeModule('bizproc');
         $errors = array();
         CBPDocument::StartWorkflow(
