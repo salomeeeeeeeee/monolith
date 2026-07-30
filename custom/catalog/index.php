@@ -1728,10 +1728,10 @@ function applyFilters() {
 
     if (hasSectors) {
         container.innerHTML = "";
-        renderBySectors(productsCache, f.blocks, container, f.sectors);   // ← pass f.sectors
+        renderBySectors(productsCache, f.blocks, container, f.sectors);
     } else {
         container.innerHTML = "";
-        renderByBlocks(productsCache, f.blocks, container, f.sectors);    // ← pass f.sectors
+        renderByBlocks(productsCache, f.blocks, container, f.sectors);
     }
 
     ["#apsDisplay .apt","#gareAvtosadgomebi .apt"].forEach(sel => {
@@ -1742,9 +1742,9 @@ function applyFilters() {
         });
     });
 
-    updateLegendCounts(productsCache);
+    const filteredProducts = productsCache.filter(apt => matchesFilters(apt, f));
+    updateLegendCounts(filteredProducts);
 }
-
 function matchesFilters(apt, f) {
     if (f.status.length>0  && !f.status.includes(apt["_P64GYD"]))        return false;
     if (f.aptType.length>0 && !f.aptType.includes(apt["__X1GCRZ"]))      return false;
