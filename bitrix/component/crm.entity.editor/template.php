@@ -1022,7 +1022,7 @@ BX.ready(function() {
 
 
 		// Restricted stages for user group 17
-var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
+var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'UC_NSTB3H', 'UC_NJ7A78'];
 var isGroup17 = <?php echo in_array(17, $userGroups) ? 'true' : 'false'; ?>;
 var isAdmin = (userID == 1 || userID == 3);
 
@@ -1047,7 +1047,20 @@ if (isGroup17 && !isAdmin) {
             }
         }
     });
+
+
+setInterval(() => {
+                saveGilaki=document.querySelector('.webform-small-button.webform-small-button-accept');
+        
+                if(saveGilaki){    
+                    saveGilaki.style.display = "none";        
+                }
+
+            },100);
+			
 }
+
+
 
     var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
     var model = editor && editor.getModel && editor.getModel();
