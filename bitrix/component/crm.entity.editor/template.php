@@ -1018,6 +1018,39 @@ button.ui-btn.ui-btn-icon-setting {
 BX.ready(function() {
     var lastStage = null;
 
+    // Reads a field straight from the rendered card: the editor model keeps stale/opaque
+    // values for list fields, so the DOM is the only reliable source here.
+    function dmgFieldHasValue(scope, fieldCode) {
+        var field = scope.querySelector("[data-cid='" + fieldCode + "']");
+        if (!field) return false;
+
+        var text = function(el) {
+            return (el ? (el.textContent || '') : '').replace(/\s+/g, ' ').trim();
+        };
+
+        var control = field.querySelector('select, textarea, input[type="text"]');
+        if (control) {
+            var value = (control.value === null || control.value === undefined) ? '' : String(control.value).trim();
+            return value !== '' && value !== '0';
+        }
+
+        var title = text(field.querySelector('.ui-entity-editor-block-title-text, .ui-entity-editor-block-title'));
+        var value = text(field);
+        if (title && value.indexOf(title) === 0) {
+            value = value.slice(title.length).trim();
+        }
+
+        var emptyMarkers = [
+            'field is empty',
+            'ველი ცარიელია',
+            'поле не заполнено',
+            'not selected',
+            'არ არის არჩეული',
+            'не выбрано'
+        ];
+        return value !== '' && emptyMarkers.indexOf(value.toLowerCase()) === -1;
+    }
+
 	setInterval(function() {
 
 
@@ -1080,6 +1113,12 @@ setInterval(() => {
                 }
             }
         });
+    }
+
+    // user_6egiznyo — the section is shown only when UF_CRM_1785330209796 has a value
+    var detailedLeadBlock = document.querySelector("[data-cid='user_6egiznyo']");
+    if (detailedLeadBlock) {
+        detailedLeadBlock.style.display = dmgFieldHasValue(detailedLeadBlock, 'UF_CRM_1785330209796') ? '' : 'none';
     }
 
     if (stage === lastStage) return;
