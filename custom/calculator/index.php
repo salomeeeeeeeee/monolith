@@ -527,7 +527,7 @@ function onPaymentModeChange() {
         scheduleField.classList.add('hidden');
         ALL_CASH_HIDDEN_FIELDS.forEach(show);
         fillCustomTypeData();
-        confirmTxt.classList.remove('hidden');
+        // confirmTxt.classList.remove('hidden');
     }
     updateSaveButtonText();
     clearGraph();
