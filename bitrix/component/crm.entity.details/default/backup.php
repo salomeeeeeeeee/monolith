@@ -152,27 +152,6 @@ array_unshift(
 );
 $messages = $fillDefaultMessages($entityTypeName, $arResult['MESSAGES']);
 
-// ==== ჩვენი დამატებული  ==== ///
-
-
-
-$url = explode("/", $_SERVER["SCRIPT_URL"]);
-if($url[2]=="deal") {
-    $dealId = intval($url[4]);
-    $catalog = array(
-        "id" => "catalog",
-        "name" => "Catalog",
-        "loader" => array(
-            "serviceUrl" => "/custom/catalog/index.php?dealid=$dealId"
-        )
-    );
-    array_push($tabs, $catalog);
-}
-
-
-// ===  ====  === //
-
-
 $containerId = "{$guid}_container";
 $tabContainerId = "{$guid}_tabs";
 ?><div id="<?=htmlspecialcharsbx($containerId)?>" class="crm-entity-wrap"><?
