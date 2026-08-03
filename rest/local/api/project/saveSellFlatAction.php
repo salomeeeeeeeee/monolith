@@ -23,6 +23,40 @@ function buildPassportFileLink($fileId) {
     return "https://" . $host . implode('/', $encoded);
 }
 
+
+// ── Helper: reuse the same IBlock element fetch logic as docs_generation ──
+function getCIBlockElementsByFilter($arFilter) {
+    $arElements = array();
+    $res = CIBlockElement::GetList(array("ID" => "ASC"), $arFilter, false, array("nPageSize" => 99999), array());
+    while ($ob = $res->GetNextElement()) {
+        $arFields = $ob->GetFields();
+        $arProps  = $ob->GetProperties();
+        $row = array();
+        foreach ($arFields as $k => $v) $row[$k] = $v;
+        foreach ($arProps  as $k => $p) $row[$k] = $p["VALUE"];
+        $arElements[] = $row;
+    }
+    return $arElements;
+}
+
+// ── First payment lookup for this deal (IBlock 22) ──
+CModule::IncludeModule('iblock');
+
+$scheduleRows = getCIBlockElementsByFilter(array("IBLOCK_ID" => 22, "PROPERTY_DEAL" => $dealId));
+usort($scheduleRows, function($a, $b) {
+    $dateA = DateTime::createFromFormat('d/m/Y', $a['TARIGI'] ?? '');
+    $dateB = DateTime::createFromFormat('d/m/Y', $b['TARIGI'] ?? '');
+    if (!$dateA && !$dateB) return 0;
+    if (!$dateA) return 1;
+    if (!$dateB) return -1;
+    return $dateA <=> $dateB;
+});
+
+$firstPaymentRaw  = !empty($scheduleRows) ? (float)explode("|", $scheduleRows[0]["TANXA"] ?? "")[0] : 0;
+$firstPayment     = !empty($scheduleRows) ? number_format($firstPaymentRaw, 2, '.', ',') : '';
+$firstPaymentDate = !empty($scheduleRows) ? ($scheduleRows[0]["TARIGI"] ?? '') : '';
+
+
 // ── Inputs ──────────────────────────────────────────────────────────
 $dealId    = intval($_POST['deal_id']    ?? 0);
 $contactId = intval($_POST['contact_id'] ?? 0);
@@ -119,6 +153,8 @@ $params = [
     "idNumber"         => $idNumber,
     "passportFile"     => ($passportFilePath ? CFile::MakeFileArray($passportFilePath) : ''),
     "passportFileLink" => $passportFileLink,
+    "firstPayment"      => $firstPayment,      
+    "firstPaymentDate"  => $firstPaymentDate,   
 ];
 // ── Start workflow ───────────────────────────────────────────────────
 $arErrorsTmp = [];
