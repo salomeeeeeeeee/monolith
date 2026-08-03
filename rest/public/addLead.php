@@ -531,20 +531,21 @@ if (!is_numeric($dealId) || $dealId <= 0) {
 
 // ── Start the workflow matching the lead source ─────────────────────────
 
-$workflowId = $WORKFLOW_ID_MAP[$sourceId] ?? $WORKFLOW_ID_MAP[DEFAULT_SOURCE_ID];
+// $workflowId = $WORKFLOW_ID_MAP[$sourceId] ?? $WORKFLOW_ID_MAP[DEFAULT_SOURCE_ID];
+$workflowId = 86;
 $workflowErrors = [];
 $startedWorkflow = null;
 
-// try {
-//     $startedWorkflow = CBPDocument::StartWorkflow(
-//         $workflowId,
-//         ['crm', 'CCrmDocumentDeal', 'DEAL_' . $dealId],
-//         [],
-//         $workflowErrors
-//     );
-// } catch (Exception $e) {
-//     $workflowErrors[] = $e->getMessage();
-// }
+try {
+    $startedWorkflow = CBPDocument::StartWorkflow(
+        $workflowId,
+        ['crm', 'CCrmDocumentDeal', 'DEAL_' . $dealId],
+        [],
+        $workflowErrors
+    );
+} catch (Exception $e) {
+    $workflowErrors[] = $e->getMessage();
+}
 
 if ($authorizedHere) {
     $USER->Logout();
