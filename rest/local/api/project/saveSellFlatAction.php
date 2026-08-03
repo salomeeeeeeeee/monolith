@@ -75,6 +75,7 @@ if (!$contactId && $dealId) {
 $passportFileId   = null;
 $passportFilePath = null;
 $passportFileLink = '';
+$passportFileName = '';
 
 if (!empty($_FILES['passport']['tmp_name'])) {
     $file     = $_FILES['passport'];
@@ -91,6 +92,7 @@ if (!empty($_FILES['passport']['tmp_name'])) {
         $passportFileId   = $savedId;
         $passportFilePath = $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath($savedId);
         $passportFileLink = buildPassportFileLink($savedId);
+        $passportFileName = $origName ?: (CFile::GetFileArray($savedId)['ORIGINAL_NAME'] ?? 'file.pdf');
     }
 }
 
@@ -143,6 +145,11 @@ $dealObj->Update($dealId, $arrForDeal);
 $dealUrl = "https://" . preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]) . "/crm/deal/details/{$dealId}/";
 $dealLinkBBCode = "[URL={$dealUrl}]Deal #{$dealId}[/URL]";
 
+// Short clickable label with real filename (same pattern as dealLink)
+$passportFileLinkBBCode = $passportFileLink
+    ? "[URL={$passportFileLink}]{$passportFileName}[/URL]"
+    : '';
+
 $params = [
     "dealId"           => $dealId,
     "dealUrl"          => $dealUrl,
@@ -151,8 +158,9 @@ $params = [
     "firstName"        => $firstName,
     "lastName"         => $lastName,
     "idNumber"         => $idNumber,
-    "passportFile"     => ($passportFilePath ? CFile::MakeFileArray($passportFilePath) : ''),
-    "passportFileLink" => $passportFileLink,
+    // File-type BP param expects file ID (not MakeFileArray — that prints as "name")
+    "passportFile"     => $passportFileId ?: '',
+    "passportFileLink" => $passportFileLinkBBCode,
     "firstPayment"      => $firstPayment,      
     "firstPaymentDate"  => $firstPaymentDate,   
 ];
