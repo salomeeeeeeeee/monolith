@@ -1,4 +1,18 @@
 <?php
+
+define('API_TOKEN', 'MonolithFMGWonDeal2026');
+
+$authHeader = $_SERVER['HTTP_AUTHORIZATION']
+    ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+    ?? (function_exists('apache_request_headers') ? (apache_request_headers()['Authorization'] ?? '') : '');
+
+if (!preg_match('/^Bearer\s+(\S+)$/i', $authHeader, $tokenMatch) || $tokenMatch[1] !== API_TOKEN) {
+    header('Content-Type: application/json; charset=utf-8');
+    http_response_code(401);
+    echo json_encode(['status' => 401, 'error' => 'Unauthorized — Bearer token is required'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 ob_start();
 require_once($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_before.php');
 require_once($_SERVER['DOCUMENT_ROOT'] . '/rest/local/api/calculator/helpers.php');
