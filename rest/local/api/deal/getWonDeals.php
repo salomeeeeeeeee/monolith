@@ -2,11 +2,49 @@
 
 define('API_TOKEN', 'MonolithFMGWonDeal2026');
 
-$authHeader = $_SERVER['HTTP_AUTHORIZATION']
-    ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
-    ?? (function_exists('apache_request_headers') ? (apache_request_headers()['Authorization'] ?? '') : '');
+function wonDealsGetRequestToken()
+{
+    $candidates = [
+        $_SERVER['HTTP_AUTHORIZATION'] ?? '',
+        $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '',
+        $_SERVER['HTTP_X_API_TOKEN'] ?? '',
+        $_GET['token'] ?? '',
+        $_POST['token'] ?? '',
+    ];
 
-if (!preg_match('/^Bearer\s+(\S+)$/i', $authHeader, $tokenMatch) || $tokenMatch[1] !== API_TOKEN) {
+    if (function_exists('apache_request_headers')) {
+        foreach (apache_request_headers() as $name => $value) {
+            $key = strtolower((string)$name);
+            if ($key === 'authorization' || $key === 'x-api-token') {
+                $candidates[] = $value;
+            }
+        }
+    }
+
+    if (function_exists('getallheaders')) {
+        foreach (getallheaders() as $name => $value) {
+            $key = strtolower((string)$name);
+            if ($key === 'authorization' || $key === 'x-api-token') {
+                $candidates[] = $value;
+            }
+        }
+    }
+
+    foreach ($candidates as $raw) {
+        $raw = trim((string)$raw);
+        if ($raw === '') {
+            continue;
+        }
+        if (preg_match('/^Bearer\s+(\S+)$/i', $raw, $m)) {
+            return $m[1];
+        }
+        return $raw;
+    }
+
+    return '';
+}
+
+if (wonDealsGetRequestToken() !== API_TOKEN) {
     header('Content-Type: application/json; charset=utf-8');
     http_response_code(401);
     echo json_encode(['status' => 401, 'error' => 'Unauthorized — Bearer token is required'], JSON_UNESCAPED_UNICODE);
