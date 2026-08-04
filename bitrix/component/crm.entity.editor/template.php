@@ -1155,7 +1155,9 @@ var allowedTabStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
         // more_button
         var hideMoreStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
         var moreBtn = document.getElementById('crm_scope_detail_c_deal__more_button');
-        if (moreBtn) moreBtn.style.display = hideMoreStages.indexOf(stage) !== -1 ? 'none' : '';
+		if(userID != 1){
+			if (moreBtn) moreBtn.style.display = hideMoreStages.indexOf(stage) !== -1 ? 'none' : '';
+		}
 
 		// Hide document button
         var dealId = <?= isset($dealInfo['ID']) ? intval($dealInfo['ID']) : 0 ?>;
