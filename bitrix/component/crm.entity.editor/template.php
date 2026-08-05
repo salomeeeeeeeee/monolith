@@ -1151,6 +1151,10 @@ var allowedTabStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
     if (tab) tab.style.display = allowedTabStages.indexOf(stage) !== -1 ? '' : 'none';
 });
 
+// tab_event — always visible regardless of stage
+var eventTab = document.getElementById('crm_scope_detail_c_deal__tab_event');
+if (eventTab) eventTab.style.display = '';
+
 
         // more_button
         var hideMoreStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
