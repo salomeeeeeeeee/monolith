@@ -1687,52 +1687,7 @@ var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
 
                 saveButton.setAttribute('data-listener-added', 'true');
             });
-	var reqPopup = document.getElementById('progressbar-entity-editor');
-        var reqPopupVisible = !!(
-            reqPopup
-            && reqPopup.getBoundingClientRect().width > 0
-            && reqPopup.getBoundingClientRect().height > 0
-            && window.getComputedStyle(reqPopup).display !== 'none'
-        );
-
-        if (reqPopupVisible) {
-            var otherFieldContainer = reqPopup.querySelector("[data-cid='UF_CRM_1780473790937']");
-            var commentField = reqPopup.querySelector("[data-cid='UF_CRM_1785490802086']");
-            var commentInput = reqPopup.querySelector("input[name='UF_CRM_1785490802086']");
-
-            if (otherFieldContainer && commentField) {
-                var otherControl = otherFieldContainer.querySelector("[data-name='UF_CRM_1780473790937']");
-                var isOther = false;
-
-                if (otherControl) {
-                    try {
-                        var raw = otherControl.getAttribute('data-value');
-                        var parsed = raw ? JSON.parse(raw) : null;
-                        if (parsed && String(parsed.VALUE) === '84') {
-                            isOther = true;
-                        }
-                    } catch (e) {}
-                }
-
-                commentField.style.display = isOther ? '' : 'none';
-
-                if (commentInput) {
-                    if (!isOther) {
-                        if (commentInput.value === '') {
-                            commentInput.value = '-';
-                            commentInput.dispatchEvent(new Event('input', { bubbles: true }));
-                            commentInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    } else {
-                        if (commentInput.value === '-') {
-                            commentInput.value = '';
-                            commentInput.dispatchEvent(new Event('input', { bubbles: true }));
-                            commentInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    }
-                }
-            }
-        }
+	
         }, 500);
     }
 })();
