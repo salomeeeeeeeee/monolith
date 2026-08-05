@@ -11,8 +11,11 @@ require($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/prolog_before.
 
 CModule::IncludeModule('crm');
 CModule::IncludeModule('bizproc');
+CModule::IncludeModule('iblock');
 
 // ── Configuration ───────────────────────────────────────────────────────
+
+const DAILO_LOG_IBLOCK_ID = 26;
 
 const LEAD_CATEGORY_ID    = 0;
 const LEAD_STAGE_ID       = "NEW";
@@ -60,20 +63,26 @@ const SOURCE_NAME_ENUM_OTHER = 482;
 
 function leadReadInput()
 {
+    global $leadRequestRaw;
+    $leadRequestRaw = '';
+
     $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
 
     if (stripos($contentType, 'application/json') !== false) {
         $raw = file_get_contents('php://input');
+        $leadRequestRaw = is_string($raw) ? $raw : '';
         $data = json_decode($raw, true);
         return is_array($data) ? $data : [];
     }
 
     if (!empty($_POST)) {
+        $leadRequestRaw = json_encode($_POST, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         return $_POST;
     }
 
     $raw = file_get_contents('php://input');
     if ($raw !== '' && $raw !== false) {
+        $leadRequestRaw = $raw;
         $data = json_decode($raw, true);
         if (is_array($data)) {
             return $data;
@@ -294,8 +303,40 @@ function leadIsEmptyValue($value)
     return trim((string)$value) === '';
 }
 
-function leadRespond(array $payload, $httpCode = 200)
+function leadLogApiCall(array $input, array $response, $createdDealId = null)
 {
+    global $leadRequestRaw;
+
+    $jsonValue = trim((string)$leadRequestRaw);
+    if ($jsonValue === '') {
+        $jsonValue = json_encode($input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    $dealIdValue = (is_numeric($createdDealId) && (int)$createdDealId > 0)
+        ? (string)(int)$createdDealId
+        : 'დილი არ შეიქმნა';
+
+    $el = new CIBlockElement();
+    $el->Add([
+        'IBLOCK_ID'         => DAILO_LOG_IBLOCK_ID,
+        'NAME'              => 'Dailo API — ' . date('d/m/Y H:i:s'),
+        'ACTIVE'            => 'Y',
+        'PROPERTY_VALUES'   => [
+            'JSON'          => $jsonValue,
+            'DEAL_ID'       => $dealIdValue,
+            'API_RESPONSE'  => json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ],
+    ]);
+}
+
+function leadRespond(array $payload, $httpCode = 200, $createdDealId = null)
+{
+    global $leadRequestInput;
+
+    if (isset($leadRequestInput)) {
+        leadLogApiCall($leadRequestInput, $payload, $createdDealId);
+    }
+
     ob_end_clean();
     http_response_code($httpCode);
     header('Content-Type: application/json; charset=utf-8');
@@ -306,6 +347,7 @@ function leadRespond(array $payload, $httpCode = 200)
 // ── Request ─────────────────────────────────────────────────────────────
 
 $input = leadReadInput();
+$leadRequestInput = $input;
 
 if (empty($input)) {
     leadRespond(['status' => 400, 'message' => 'Empty or invalid request body'], 400);
@@ -568,4 +610,4 @@ $response = [
 //     $response['workflowErrors']  = $workflowErrors;
 // }
 
-leadRespond($response);
+leadRespond($response, 200, $dealId);
