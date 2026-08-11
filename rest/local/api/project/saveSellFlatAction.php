@@ -6,6 +6,7 @@ define('NO_AGENT_CHECK', true);
 define('DisableEventsCheck', true);
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
 CModule::IncludeModule('crm');
+CModule::IncludeModule('iblock');
 
 date_default_timezone_set('Asia/Tbilisi');
 
@@ -23,7 +24,6 @@ function buildPassportFileLink($fileId) {
     return "https://" . $host . implode('/', $encoded);
 }
 
-
 // ── Helper: reuse the same IBlock element fetch logic as docs_generation ──
 function getCIBlockElementsByFilter($arFilter) {
     $arElements = array();
@@ -39,9 +39,24 @@ function getCIBlockElementsByFilter($arFilter) {
     return $arElements;
 }
 
-// ── First payment lookup for this deal (IBlock 22) ──
-CModule::IncludeModule('iblock');
+// ── Inputs ──────────────────────────────────────────────────────────
+$dealId    = intval($_POST['deal_id']  ?? 0);
+$contrDate = trim($_POST['contr_date'] ?? '');   // YYYY-MM-DD from <input type="date">
 
+// clients: [{contact_id, firstName, lastName, idNumber}, ...]
+$clientsRaw = $_POST['clients'] ?? '[]';
+$clients    = json_decode($clientsRaw, true);
+if (!is_array($clients)) $clients = [];
+
+// fallback: if no client rows came through at all, resolve contacts from deal
+if (empty($clients) && $dealId) {
+    $contactIds = \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($dealId);
+    foreach ($contactIds as $cid) {
+        $clients[] = ['contact_id' => intval($cid), 'firstName' => '', 'lastName' => '', 'idNumber' => ''];
+    }
+}
+
+// ── First payment lookup for this deal (IBlock 22) — now runs AFTER $dealId is set ──
 $scheduleRows = getCIBlockElementsByFilter(array("IBLOCK_ID" => 22, "PROPERTY_DEAL" => $dealId));
 usort($scheduleRows, function($a, $b) {
     $dateA = DateTime::createFromFormat('d/m/Y', $a['TARIGI'] ?? '');
@@ -56,22 +71,7 @@ $firstPaymentRaw  = !empty($scheduleRows) ? (float)explode("|", $scheduleRows[0]
 $firstPayment     = !empty($scheduleRows) ? number_format($firstPaymentRaw, 2, '.', ',') : '';
 $firstPaymentDate = !empty($scheduleRows) ? ($scheduleRows[0]["TARIGI"] ?? '') : '';
 
-
-// ── Inputs ──────────────────────────────────────────────────────────
-$dealId    = intval($_POST['deal_id']    ?? 0);
-$contactId = intval($_POST['contact_id'] ?? 0);
-$contrDate = trim($_POST['contr_date']   ?? '');   // YYYY-MM-DD from <input type="date">
-$firstName = trim($_POST['firstName']    ?? '');
-$lastName  = trim($_POST['lastName']     ?? '');
-$idNumber  = trim($_POST['idNumber']     ?? '');
-
-// fallback: resolve contact from deal
-if (!$contactId && $dealId) {
-    $contactIds = \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($dealId);
-    $contactId  = intval($contactIds[0] ?? 0);
-}
-
-// ── Passport file upload ─────────────────────────────────────────────
+// ── Passport file upload (single shared file for all clients) ─────────
 $passportFileId   = null;
 $passportFilePath = null;
 $passportFileLink = '';
@@ -112,15 +112,36 @@ if ($contrDate) {
     $contrDateForBitrix = CDatabase::FormatDate($contrDate, 'YYYY-MM-DD', $shortFormat);
 }
 
-// ── Update contact ───────────────────────────────────────────────────
-$contactUpdateLog = "no contact update\n";
-if ($contactId > 0) {
-    $contactFields = [];
+// ── Update each contact ────────────────────────────────────────────────
+$contactUpdateLog = '';
+$updatedContactIds = [];
+$namesForParams    = [];
+$idNumbersForParams = [];
 
+foreach ($clients as $client) {
+    $contactId = intval($client['contact_id'] ?? 0);
+    $firstName = trim($client['firstName'] ?? '');
+    $lastName  = trim($client['lastName']  ?? '');
+    $idNumber  = trim($client['idNumber']  ?? '');
+
+    if ($firstName !== '' || $lastName !== '') {
+        $namesForParams[] = trim($firstName . ' ' . $lastName);
+    }
+    if ($idNumber !== '') {
+        $idNumbersForParams[] = $idNumber;
+    }
+
+    if ($contactId <= 0) {
+        $contactUpdateLog .= "skip: no contact_id for client " . print_r($client, true) . "\n";
+        continue;
+    }
+
+    $contactFields = [];
     if ($firstName !== '') $contactFields['NAME']      = $firstName;
     if ($lastName  !== '') $contactFields['LAST_NAME'] = $lastName;
     if ($idNumber  !== '') $contactFields['UF_CRM_1781244744534'] = $idNumber;
 
+    // Same uploaded passport file attached to every contact on the deal
     if ($passportFileId && $passportFilePath) {
         $contactFields['UF_CRM_1779873020955'] = CFile::MakeFileArray($passportFilePath);
     }
@@ -128,10 +149,14 @@ if ($contactId > 0) {
     if (!empty($contactFields)) {
         $contactObj   = new CCrmContact(false);
         $updateResult = $contactObj->Update($contactId, $contactFields);
-        $contactUpdateLog = "contact update result: " . var_export($updateResult, true) . "\n"
+        $updatedContactIds[] = $contactId;
+        $contactUpdateLog .= "contact $contactId update result: " . var_export($updateResult, true) . "\n"
             . "fields: " . print_r($contactFields, true) . "\n";
     }
 }
+
+$namesJoined     = implode(', ', $namesForParams);
+$idNumbersJoined = implode(', ', $idNumbersForParams);
 
 // ── Update deal ──────────────────────────────────────────────────────
 $arrForDeal = [
@@ -153,17 +178,18 @@ $passportFileLinkBBCode = $passportFileLink
 $params = [
     "dealId"           => $dealId,
     "dealUrl"          => $dealUrl,
-    "dealLink"         => $dealLinkBBCode,   
+    "dealLink"         => $dealLinkBBCode,
     "contrDate"        => $contrDateForBitrix,
-    "firstName"        => $firstName,
-    "lastName"         => $lastName,
-    "idNumber"         => $idNumber,
-    // File-type BP param expects file ID (not MakeFileArray — that prints as "name")
+    // Combined across all clients — e.g. "Giorgi Beridze, Nino Beridze"
+    "firstName"        => $namesJoined,
+    "lastName"         => '', // kept as separate BP param for compatibility; now folded into firstName above
+    "idNumber"         => $idNumbersJoined,
     "passportFile"     => $passportFileId ?: '',
     "passportFileLink" => $passportFileLinkBBCode,
-    "firstPayment"      => $firstPayment,      
-    "firstPaymentDate"  => $firstPaymentDate,   
+    "firstPayment"      => $firstPayment,
+    "firstPaymentDate"  => $firstPaymentDate,
 ];
+
 // ── Start workflow ───────────────────────────────────────────────────
 $arErrorsTmp = [];
 $wfId = CBPDocument::StartWorkflow(
@@ -176,7 +202,7 @@ $wfId = CBPDocument::StartWorkflow(
 // ── Debug log ────────────────────────────────────────────────────────
 file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/savesell_errors.txt",
     "dealId: $dealId\n" .
-    "contactId: $contactId\n" .
+    "clients: " . print_r($clients, true) . "\n" .
     "contrDate: $contrDate → $contrDateForBitrix\n" .
     "wfId: " . var_export($wfId, true) . "\n" .
     $contactUpdateLog .
@@ -203,4 +229,3 @@ if ($dealId > 0) {
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 echo json_encode($resArr, JSON_UNESCAPED_UNICODE);
-?>

@@ -16,16 +16,26 @@ if (!$deal_id) die("No deal ID");
 $contactId = 0;
 $firstName = $lastName = $idNumber = '';
 
+$contacts = [];
 $contactIds = \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($deal_id);
-$contactId  = intval($contactIds[0] ?? 0);
 
-if ($contactId > 0) {
-    $res = CCrmContact::GetList([], ["ID" => $contactId], ["NAME", "LAST_NAME", "UF_CRM_1781244744534"]);
+foreach ($contactIds as $cid) {
+    $cid = intval($cid);
+    if ($cid <= 0) continue;
+
+    $res = CCrmContact::GetList([], ["ID" => $cid], ["NAME", "LAST_NAME", "UF_CRM_1781244744534"]);
     if ($arContact = $res->Fetch()) {
-        $firstName = $arContact["NAME"] ?? '';
-        $lastName  = $arContact["LAST_NAME"] ?? '';
-        $idNumber  = $arContact["UF_CRM_1781244744534"] ?? '';
+        $contacts[] = [
+            'id'        => $cid,
+            'firstName' => $arContact["NAME"] ?? '',
+            'lastName'  => $arContact["LAST_NAME"] ?? '',
+            'idNumber'  => $arContact["UF_CRM_1781244744534"] ?? '',
+        ];
     }
+}
+
+if (empty($contacts)) {
+    $contacts[] = ['id' => 0, 'firstName' => '', 'lastName' => '', 'idNumber' => ''];
 }
 
 ob_end_clean();
@@ -284,23 +294,29 @@ ob_end_clean();
       <input type="date" id="contr_date" onclick="this.showPicker()" />
     </div>
 
-    <div class="section-label">კლიენტის მონაცემები</div>
+    <?php foreach ($contacts as $i => $c): ?>
+  <div class="section-label">
+    კლიენტის მონაცემები<?= count($contacts) > 1 ? ' #' . ($i + 1) : '' ?>
+  </div>
 
+  <div class="client-block" data-contact-id="<?= (int)$c['id'] ?>">
     <div class="grid2">
       <div class="field">
         <label>სახელი <span class="req">*</span></label>
-        <input type="text" id="firstName" value="<?= htmlspecialchars($firstName) ?>" placeholder="სახელი" />
+        <input type="text" class="firstName" value="<?= htmlspecialchars($c['firstName']) ?>" placeholder="სახელი" />
       </div>
       <div class="field">
         <label>გვარი <span class="req">*</span></label>
-        <input type="text" id="lastName" value="<?= htmlspecialchars($lastName) ?>" placeholder="გვარი" />
+        <input type="text" class="lastName" value="<?= htmlspecialchars($c['lastName']) ?>" placeholder="გვარი" />
       </div>
     </div>
 
     <div class="field">
       <label>პირადი ნომერი <span class="req">*</span></label>
-      <input type="text" id="idNumber" value="<?= htmlspecialchars($idNumber) ?>" placeholder="00000000000" />
+      <input type="text" class="idNumber" value="<?= htmlspecialchars($c['idNumber']) ?>" placeholder="00000000000" />
     </div>
+  </div>
+<?php endforeach; ?>
 
     <div class="section-label">ხელშეკრულება</div>
 
@@ -374,14 +390,30 @@ function setStatus(type, msg) {
 
 function saveSell() {
   var deal_id    = <?= json_encode($deal_id) ?>;
-  var contact_id = <?= json_encode($contactId) ?>;
   var contr_date = document.getElementById('contr_date').value;
-  var firstName  = document.getElementById('firstName').value.trim();
-  var lastName   = document.getElementById('lastName').value.trim();
-  var idNumber   = document.getElementById('idNumber').value.trim();
   var btn        = document.getElementById('saveBtn');
 
-  if (!contr_date || !firstName || !lastName || !idNumber || !selectedFile) {
+  var clientBlocks = document.querySelectorAll('.client-block');
+  var clients = [];
+  var allValid = !!contr_date;
+
+  clientBlocks.forEach(function(block){
+    var contactId  = block.getAttribute('data-contact-id');
+    var firstName  = block.querySelector('.firstName').value.trim();
+    var lastName   = block.querySelector('.lastName').value.trim();
+    var idNumber   = block.querySelector('.idNumber').value.trim();
+
+    if (!firstName || !lastName || !idNumber) allValid = false;
+
+    clients.push({
+      contact_id: contactId,
+      firstName: firstName,
+      lastName: lastName,
+      idNumber: idNumber
+    });
+  });
+
+  if (!allValid || !selectedFile) {
     setStatus('error', 'გთხოვთ შეავსოთ ყველა სავალდებულო ველი');
     return;
   }
@@ -391,11 +423,8 @@ function saveSell() {
 
   var fd = new FormData();
   fd.append('deal_id',    deal_id);
-  fd.append('contact_id', contact_id);
   fd.append('contr_date', contr_date);
-  fd.append('firstName',  firstName);
-  fd.append('lastName',   lastName);
-  fd.append('idNumber',   idNumber);
+  fd.append('clients',    JSON.stringify(clients));
   fd.append('passport',   selectedFile, selectedFile.name);
 
   fetch(location.origin + '/rest/local/api/projects/saveSellFlatAction.php', {
