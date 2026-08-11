@@ -1,0 +1,299 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<meta name=ProgId content=Word.Document>
+<meta name=Generator content="Microsoft Word 15">
+<title>Monolith CRM — გაყიდვების API დოკუმენტაცია</title>
+<style>
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.4; margin: 2cm; }
+h1 { font-size: 18pt; color: #1a365d; border-bottom: 2px solid #1a365d; padding-bottom: 6px; }
+h2 { font-size: 14pt; color: #2c5282; margin-top: 24px; border-bottom: 1px solid #cbd5e0; padding-bottom: 4px; }
+h3 { font-size: 12pt; color: #2d3748; margin-top: 16px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10pt; }
+th { background: #edf2f7; border: 1px solid #a0aec0; padding: 6px 8px; text-align: left; }
+td { border: 1px solid #cbd5e0; padding: 5px 8px; vertical-align: top; }
+code, pre { font-family: Consolas, monospace; font-size: 9pt; background: #f7fafc; }
+pre { border: 1px solid #e2e8f0; padding: 10px; white-space: pre-wrap; }
+.note { background: #ebf8ff; border-left: 4px solid #3182ce; padding: 10px 14px; margin: 12px 0; }
+.warn { background: #fffaf0; border-left: 4px solid #dd6b20; padding: 10px 14px; margin: 12px 0; }
+ul { margin: 8px 0; }
+li { margin: 4px 0; }
+.meta { color: #718096; font-size: 10pt; }
+</style>
+</head>
+<body>
+
+<h1>Monolith CRM — გაყიდვების სინქრონიზაციის API</h1>
+<p class="meta">ვერსია: 1.0 &nbsp;|&nbsp; თარიღი: 11.08.2026 &nbsp;|&nbsp; TFS Task: #16421</p>
+
+<p>ეს დოკუმენტაცია აღწერს Monolith CRM-ის REST API-ებს, რომლებიც განკუთვნილია <strong>გაყიდული (WON)</strong> გარიგებების, გადახდის გრაფიკებისა და უძრავი ქონების ერთეულების მონაცემების გადაცემისთვის გარე ბონუს/ტარგეტ სისტემაში.</p>
+
+<h2>1. სერვისების მიმოხილვა</h2>
+<table>
+<tr><th>№</th><th>ენდპოინტი</th><th>დანიშნულება</th></tr>
+<tr><td>1</td><td><code>getWonDeals.php</code></td><td>გაყიდული გარიგებების სია (WON)</td></tr>
+<tr><td>2</td><td><code>getPaymentsByDeal.php</code></td><td>კონკრეტული deal-ის გადახდის გრაფიკი</td></tr>
+<tr><td>3</td><td><code>getProducts.php</code></td><td>პროდუქტის/ბინის სრული ინფორმაცია (საკადასტრო, ბლოკი, სართული და ა.შ.)</td></tr>
+<tr><td>4</td><td><code>getProjects.php</code></td><td>პროექტების სია (ID + სახელი)</td></tr>
+</table>
+
+<h2>2. ავტორიზაცია</h2>
+
+<h3>2.1. გაყიდვები + გადახდები</h3>
+<table>
+<tr><th>პარამეტრი</th><th>მნიშვნელობა</th></tr>
+<tr><td>Token</td><td><code>MonolithFMGWonDeal2026</code></td></tr>
+<tr><td>Header</td><td><code>Authorization: Bearer MonolithFMGWonDeal2026</code></td></tr>
+<tr><td>Fallback (query)</td><td><code>?token=MonolithFMGWonDeal2026</code></td></tr>
+</table>
+
+<h3>2.2. პროდუქტი + პროექტები</h3>
+<table>
+<tr><th>პარამეტრი</th><th>მნიშვნელობა</th></tr>
+<tr><td>Token</td><td><code>MONOLIGHTFMG2026</code></td></tr>
+<tr><td>Header</td><td><code>Authorization: Bearer MONOLIGHTFMG2026</code></td></tr>
+</table>
+
+<div class="note">
+<strong>შენიშვნა:</strong> ყველა პასუხი JSON ფორმატშია (<code>Content-Type: application/json; charset=utf-8</code>).
+</div>
+
+<h2>3. API #1 — გაყიდული გარიგებები (getWonDeals)</h2>
+
+<p><strong>URL:</strong><br>
+<code>GET https://crm.monolith.ge/rest/local/api/deal/getWonDeals.php</code></p>
+
+<p><strong>აღწერა:</strong> აბრუნებს CRM-ში <strong>WON</strong> სტატუსის ყველა აქტიურ გარიგებას. გაუქმებული/შეწყვეტილი გარიგებები ამ ეტაპზე არ შედის — ეს ფუნქციონალი მომავალ მოდულში დაემატება.</p>
+
+<h3>3.1. Query პარამეტრები</h3>
+<table>
+<tr><th>პარამეტრი</th><th>ტიპი</th><th>აღწერა</th></tr>
+<tr><td><code>from</code></td><td>string</td><td>გარიგების შექმნის თარიღი &gt;= (DATE_CREATE)</td></tr>
+<tr><td><code>to</code></td><td>string</td><td>გარიგების შექმნის თარიღი &lt;= (DATE_CREATE)</td></tr>
+<tr><td><code>updatedSince</code></td><td>string</td><td>ბოლო ცვლილების თარიღი &gt;= (DATE_MODIFY) — ინკრემენტული სინქისთვის</td></tr>
+<tr><td><code>limit</code></td><td>int</td><td>ჩანაწერების ლიმიტი (default: 5000, max: 5000)</td></tr>
+<tr><td><code>offset</code></td><td>int</td><td>პაგინაციის offset (default: 0)</td></tr>
+</table>
+
+<h3>3.2. მაგალითები</h3>
+<pre>GET .../getWonDeals.php
+GET .../getWonDeals.php?updatedSince=2026-01-01&amp;limit=100&amp;offset=0
+GET .../getWonDeals.php?from=2026-01-01&amp;to=2026-12-31</pre>
+
+<h3>3.3. Response სტრუქტურა</h3>
+<pre>{
+  "status": 200,
+  "count": 1,
+  "limit": 5000,
+  "offset": 0,
+  "deals": [ { ... } ]
+}</pre>
+
+<h3>3.4. Deal ობიექტის ველები</h3>
+<table>
+<tr><th>ველი</th><th>ტიპი</th><th>CRM წყარო</th><th>აღწერა</th></tr>
+<tr><td><code>dealId</code></td><td>int</td><td>Deal ID</td><td>გარიგების უნიკალური ID</td></tr>
+<tr><td><code>saleDate</code></td><td>string</td><td>DATE_CREATE</td><td>ხელშეკრულების/გაფორმების თარიღი</td></tr>
+<tr><td><code>totalAmount</code></td><td>float</td><td>OPPORTUNITY</td><td>ხელმოწერილი კონტრაქტის ჯამური თანხა*</td></tr>
+<tr><td><code>totalArea</code></td><td>float | null</td><td>UF_CRM_1779277886804</td><td>საერთო ფართობი</td></tr>
+<tr><td><code>installmentType</code></td><td>string | null</td><td>IBlock 21 → planType</td><td>განვადების ტიპი (დადასტურებული უახლესი გეგმიდან)</td></tr>
+<tr><td><code>scheduleType</code></td><td>string | null</td><td>IBlock 21 → SELECTID_GRAPH</td><td>გრაფიკის ტიპი</td></tr>
+<tr><td><code>scheduleStartDate</code></td><td>string | null</td><td>IBlock 22 → TARIGI (პირველი)</td><td>გადახდის გრაფიკის დაწყება</td></tr>
+<tr><td><code>firstTransferAmount</code></td><td>float | null</td><td>IBlock 22 → TANXA (პირველი)</td><td>პირველი გადახდის თანხა</td></tr>
+<tr><td><code>scheduleEndDate</code></td><td>string | null</td><td>IBlock 22 → TARIGI (ბოლო)</td><td>გრაფიკის დასრულება</td></tr>
+<tr><td><code>lastTransferAmount</code></td><td>float | null</td><td>IBlock 22 → TANXA (ბოლო)</td><td>ბოლო გადახდის თანხა</td></tr>
+<tr><td><code>managerId</code></td><td>int | null</td><td>ASSIGNED_BY_ID</td><td>მენეჯერის სისტემური ID CRM-ში</td></tr>
+<tr><td><code>manager</code></td><td>string | null</td><td>ASSIGNED_BY_NAME + LAST_NAME</td><td>მენეჯერის სახელი</td></tr>
+<tr><td><code>managerPersonalId</code></td><td>string | null</td><td>User → UF_USR_1786440559828</td><td>პირადი/პასპორტის ნომერი</td></tr>
+<tr><td><code>dealType</code></td><td>string | null</td><td>SOURCE_ID</td><td>წყარო (სტრინგად) — A/B/C კლასიფიკაცია მიმღების მხარეს</td></tr>
+<tr><td><code>brokerId</code></td><td>int | null</td><td>UF_CRM_1785491867</td><td>ბროკერის/სააგენტოს ID</td></tr>
+<tr><td><code>brokerName</code></td><td>string | null</td><td>UF_CRM_1785491867</td><td>ბროკერის/სააგენტოს სახელი</td></tr>
+<tr><td><code>clientName</code></td><td>string | null</td><td>Contact NAME + LAST_NAME</td><td>მყიდველის სახელი</td></tr>
+<tr><td><code>clientPersonalId</code></td><td>string | null</td><td>Contact → UF_CRM_1781244744534</td><td>მყიდველის პირადი ნომერი</td></tr>
+<tr><td><code>clientPhone</code></td><td>string | null</td><td>Contact PHONE</td><td>მყიდველის ტელეფონი</td></tr>
+<tr><td><code>product</code></td><td>object | null</td><td>Deal Product Row</td><td>ბინის/ერთეულის ინფო (იხ. 3.5)</td></tr>
+</table>
+
+<p><em>* totalAmount — დღგ-ს ჩართ/გამორთვა დასადასტურებელია (ალბათ კომპანიებს/მყიდველებს ეხება).</em></p>
+
+<h3>3.5. product ობიექტი</h3>
+<p>თითო deal-ზე <strong>ერთი</strong> პროდუქტია (array არა):</p>
+<pre>"product": {
+  "productId": 5195,
+  "projectId": 131,
+  "projectName": "Ethno city",
+  "prodPrice": 71487.5
+}</pre>
+<table>
+<tr><th>ველი</th><th>აღწერა</th></tr>
+<tr><td><code>productId</code></td><td>ბინის/ერთეულის ID (catalog element, iblock 14)</td></tr>
+<tr><td><code>projectId</code></td><td>პროექტის ID (iblock section)</td></tr>
+<tr><td><code>projectName</code></td><td>პროექტის სახელი</td></tr>
+<tr><td><code>prodPrice</code></td><td>პრაისლისტის ფასი (b_catalog_price, USD)</td></tr>
+</table>
+
+<div class="note">
+<strong>მნიშვნელოვანი:</strong> <code>getWonDeals</code>-ში <code>product</code> მხოლოდ საბაზისო იდენტიფიკატორები + ფასია. საკადასტრო კოდი, ბლოკი, სართული, ბინის ნომერი და სხვა დეტალები — <code>getProducts.php</code>-ით (იხ. განყოფილება 5).
+</div>
+
+<h2>4. API #2 — გადახდები deal-ის მიხედვით (getPaymentsByDeal)</h2>
+
+<p><strong>URL:</strong><br>
+<code>GET https://crm.monolith.ge/rest/local/api/deal/getPaymentsByDeal.php?dealId={dealId}</code></p>
+
+<p><strong>აღწერა:</strong> კონკრეტული გარიგების გადახდის გრაფიკს (IBlock 22) აბრუნებს — თანხა + თარიღი + paymentId.</p>
+
+<h3>4.1. Query პარამეტრები</h3>
+<table>
+<tr><th>პარამეტრი</th><th>სავალდებულო</th><th>აღწერა</th></tr>
+<tr><td><code>dealId</code></td><td>✅</td><td>გარიგების ID (<code>getWonDeals</code>-ის <code>dealId</code>)</td></tr>
+</table>
+
+<h3>4.2. მაგალითი</h3>
+<pre>GET https://crm.monolith.ge/rest/local/api/deal/getPaymentsByDeal.php?dealId=61128
+Authorization: Bearer MonolithFMGWonDeal2026</pre>
+
+<h3>4.3. Response</h3>
+<pre>{
+  "status": 200,
+  "dealId": 61128,
+  "count": 5,
+  "payments": [
+    {
+      "paymentId": 12345,
+      "amount": 1000.00,
+      "date": "29/07/2026"
+    }
+  ]
+}</pre>
+
+<table>
+<tr><th>ველი</th><th>აღწერა</th></tr>
+<tr><td><code>paymentId</code></td><td>გადახდის ჩანაწერის ID (IBlock 22 element)</td></tr>
+<tr><td><code>amount</code></td><td>თანხა (USD)</td></tr>
+<tr><td><code>date</code></td><td>გადახდის თარიღი (dd/mm/yyyy)</td></tr>
+</table>
+
+<h3>4.4. შეცდომები</h3>
+<table>
+<tr><th>HTTP Status</th><th>მნიშვნელობა</th></tr>
+<tr><td>401</td><td>არასწორი ან აკლია Bearer token</td></tr>
+<tr><td>400</td><td><code>dealId</code> არ არის მითითებული</td></tr>
+<tr><td>404</td><td>გარიგება ვერ მოიძებნა</td></tr>
+</table>
+
+<h2>5. API #3 — პროდუქტის სრული ინფო (getProducts)</h2>
+
+<p><strong>URL:</strong><br>
+<code>GET https://crm.monolith.ge/rest/public/getProducts.php?productId={productId}</code></p>
+
+<p><strong>აღწერა:</strong> <code>getWonDeals</code>-ის <code>product.productId</code>-ით შეგიძლიათ სრული ბინის/ერთეულის ინფორმაცია მოითხოვოთ.</p>
+
+<h3>5.1. მაგალითი</h3>
+<pre>GET https://crm.monolith.ge/rest/public/getProducts.php?productId=5266
+Authorization: Bearer MONOLIGHTFMG2026</pre>
+
+<h3>5.2. Response — ძირითადი ველები</h3>
+<pre>{
+  "status": 200,
+  "result": {
+    "id": 5266,
+    "name": "ბინა 12",
+    "status": "...",
+    "price": 71487.5,
+    "project": "Ethno city",
+    "block": "A",
+    "sector": "...",
+    "floor": "5",
+    "number": "12",
+    "stairwell": "...",
+    "cadastralCode": "01.01.01.001",
+    "totalArea": 31.7,
+    "livingSpace": 28.5,
+    "rooms": "2",
+    "bedrooms": "1",
+    "productType": "...",
+    "image": "https://...",
+    "floorplan": "https://..."
+  }
+}</pre>
+
+<table>
+<tr><th>ველი</th><th>აღწერა</th></tr>
+<tr><td><code>id</code></td><td>პროდუქტის ID</td></tr>
+<tr><td><code>cadastralCode</code></td><td>საკადასტრო კოდი</td></tr>
+<tr><td><code>block</code></td><td>ბლოკი</td></tr>
+<tr><td><code>floor</code></td><td>სართული</td></tr>
+<tr><td><code>number</code></td><td>ბინის ნომერი</td></tr>
+<tr><td><code>stairwell</code></td><td>სადარბაზო</td></tr>
+<tr><td><code>project</code></td><td>პროექტის სახელი</td></tr>
+<tr><td><code>totalArea</code></td><td>საერთო ფართობი</td></tr>
+<tr><td><code>price</code></td><td>ფასი (USD)</td></tr>
+<tr><td><code>status</code></td><td>სტატუსი</td></tr>
+<tr><td>+ სხვა</td><td>ოთახები, აივანი, სველი წერტილი, ფოტოები, გეგმები და ა.შ.</td></tr>
+</table>
+
+<h3>5.3. პროექტის სია (getProjects)</h3>
+<p><strong>URL:</strong> <code>GET https://crm.monolith.ge/rest/public/getProjects.php</code></p>
+<p>აბრუნებს ყველა პროექტის ID-ს და სახელს.</p>
+
+<h2>6. რეკომენდებული სინქრონიზაციის ფლო</h2>
+<ol>
+<li><strong>GET getWonDeals.php?updatedSince=2026-03-01</strong> → გაყიდვების სია</li>
+<li>თითო deal-ისთვის (საჭიროებისამებრ): <strong>GET getPaymentsByDeal.php?dealId=61128</strong> → გადახდების გრაფიკი</li>
+<li>თითო product.productId-ისთვის (საჭიროებისამებრ): <strong>GET getProducts.php?productId=5195</strong> → საკადასტრო, ბლოკი, სართული, ბინის ნომერი, ფართობი...</li>
+</ol>
+
+<div class="note">
+<strong>ინკრემენტული სინქი:</strong> პირველი გაშვება — სრული dump (<code>getWonDeals.php</code> პარამეტრების გარეშე). შემდეგ — მხოლოდ ცვლილებები (<code>?updatedSince=...</code>).
+</div>
+
+<h2>7. CRM ველების Mapping (შეჯამება)</h2>
+<table>
+<tr><th>API ველი</th><th>CRM წყარო</th></tr>
+<tr><td><code>managerId</code></td><td>Deal → ASSIGNED_BY_ID</td></tr>
+<tr><td><code>managerPersonalId</code></td><td>User → UF_USR_1786440559828 (პირადი/პასპორტის ნომერი)</td></tr>
+<tr><td><code>dealType</code></td><td>Deal → SOURCE_ID (ტექსტი)</td></tr>
+<tr><td><code>brokerId</code> / <code>brokerName</code></td><td>Deal → UF_CRM_1785491867 (სააგენტო/აგენტი)</td></tr>
+<tr><td><code>clientPersonalId</code></td><td>Contact → UF_CRM_1781244744534</td></tr>
+<tr><td><code>product.productId</code></td><td>Deal Product Row → PRODUCT_ID</td></tr>
+<tr><td><code>product.projectId</code></td><td>IBlock 14 element → IBLOCK_SECTION_ID</td></tr>
+<tr><td><code>product.prodPrice</code></td><td>b_catalog_price → PRICE (CATALOG_GROUP_ID = 1)</td></tr>
+<tr><td><code>payments[]</code></td><td>IBlock 22 → DEAL + TANXA + TARIGI</td></tr>
+</table>
+
+<h2>8. dealType (A / B / C) — კლასიფიკაცია</h2>
+<p>API აბრუნებს CRM-ის <strong>წყაროს</strong> (<code>dealType</code> სტრინგად), მაგალითად: „Facebook“, „Instagram“, „სხვა“, „ბროკერი“ და ა.შ.</p>
+<p>მიმღები სისტემა თავად განსაზღვრავს:</p>
+<ul>
+<li><strong>A</strong> — პირდაპირი გაყიდვა</li>
+<li><strong>B</strong> — ბროკერით (<code>brokerId</code> / <code>brokerName</code> არსებობს)</li>
+<li><strong>C</strong> — სპეციალური</li>
+</ul>
+
+<h2>9. რა არ შედის (მომავალი ეტაპი)</h2>
+<table>
+<tr><th>ველი</th><th>სტატუსი</th></tr>
+<tr><td><code>status</code> / <code>cancelledDate</code></td><td>❌ გაუქმების მოდული ჯერ არ არის</td></tr>
+<tr><td><code>promoPrice</code></td><td>❌ სისტემაში ჯერ არ არსებობს</td></tr>
+<tr><td><code>initialCash</code></td><td>⏳ მონაცემების მიგრაცია მიმდინარეობს</td></tr>
+<tr><td><code>updatedAt</code></td><td>⏳ DATE_MODIFY ფილტრი (<code>updatedSince</code>) უკვე მუშაობს</td></tr>
+</table>
+
+<h2>10. managerId vs managerPersonalId</h2>
+<table>
+<tr><th>ველი</th><th>აღწერა</th></tr>
+<tr><td><code>managerId</code></td><td>CRM-ის სისტემური User ID (ASSIGNED_BY_ID) — სტაბილური იდენტიფიკატორი</td></tr>
+<tr><td><code>managerPersonalId</code></td><td>პირადი/პასპორტის ნომერი (UF_USR_1786440559828) — სტაბილური პირადი ID ბონუს/ტარგეტის დასათვლელად</td></tr>
+</table>
+
+<div class="warn">
+<strong>Postman ტესტირება:</strong> თუ HTML პასუხი მოდის JSON-ის ნაცვლად, შეამოწმეთ: (1) ფაილი ატვირთულია სერვერზე სწორ path-ზე, (2) Bearer token სწორია, (3) query პარამეტრის სახელი სწორია (<code>dealId</code>, არა <code>dealIdd</code>).
+</div>
+
+<p class="meta" style="margin-top: 40px;">Monolith FMG — CRM API Documentation &nbsp;|&nbsp; მომზადებულია: 11.08.2026</p>
+
+</body>
+</html>
