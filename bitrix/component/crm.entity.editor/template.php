@@ -1156,12 +1156,17 @@ var eventTab = document.getElementById('crm_scope_detail_c_deal__tab_event');
 if (eventTab) eventTab.style.display = '';
 
 
-        // more_button
-        var hideMoreStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
-        var moreBtn = document.getElementById('crm_scope_detail_c_deal__more_button');
-		if(userID != 1){
-			if (moreBtn) moreBtn.style.display = hideMoreStages.indexOf(stage) !== -1 ? 'none' : '';
-		}
+     // more_button
+var hideMoreStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
+var moreBtn = document.getElementById('crm_scope_detail_c_deal__more_button');
+if (moreBtn) {
+    var isAdminForMoreBtn = (userID == 1 || userID == 3);
+    if (isAdminForMoreBtn) {
+        moreBtn.style.display = '';
+    } else {
+        moreBtn.style.display = hideMoreStages.indexOf(stage) !== -1 ? 'none' : '';
+    }
+}
 
 		// Hide document button
         var dealId = <?= isset($dealInfo['ID']) ? intval($dealInfo['ID']) : 0 ?>;
