@@ -1188,62 +1188,42 @@ if (moreBtn) {
             });
         }
 
-        // user_irhcfh47 (permission-gated field)
-        // user_irhcfh47 (permission-gated field)
-// user_irhcfh47 (permission-gated field)
-var ih = document.querySelector("[data-cid='user_irhcfh47']");
-if (ih) {
-    if (stage === 'NEW') {
-        ih.style.display = 'none';
-    } else {
-        ih.style.display = '';
+        // user_irhcfh47 (permission-gated field) — locked for everyone except admin (1, 3), on every stage
+        var ih = document.querySelector("[data-cid='user_irhcfh47']");
+        if (ih) {
+            ih.style.display = '';
 
-        var isAdmin = (userID == 1 || userID == 3);
-        var isGroup17 = <?php echo in_array(17, $userGroups) ? 'true' : 'false'; ?>;
-        var group17Fields = ['UF_CRM_1782206133733', 'UF_CRM_1782206163787'];
+            var isAdmin = (userID == 1 || userID == 3);
 
-        if (!isAdmin) {
-            // Do NOT lock ih itself — lock each child field individually
-            ih.style.pointerEvents = '';
-            ih.style.userSelect = '';
-            ih.style.opacity = '';
-
-            ih.querySelectorAll('[data-cid]').forEach(function(field) {
-                var cid = field.getAttribute('data-cid');
-                var isUnlocked = isGroup17 && group17Fields.indexOf(cid) !== -1;
-
-                if (isUnlocked) {
+            if (isAdmin) {
+                // Admin: fully unlock everything
+                ih.style.pointerEvents = '';
+                ih.style.userSelect = '';
+                ih.style.opacity = '';
+                ih.querySelectorAll('[data-cid]').forEach(function(field) {
                     field.style.pointerEvents = '';
                     field.style.userSelect = '';
                     field.style.opacity = '';
                     field.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
                         btn.style.display = '';
                     });
-                } else {
+                });
+            } else {
+                // Everyone else: locked, no exceptions
+                ih.style.pointerEvents = '';
+                ih.style.userSelect = '';
+                ih.style.opacity = '';
+
+                ih.querySelectorAll('[data-cid]').forEach(function(field) {
                     field.style.pointerEvents = 'none';
                     field.style.userSelect = 'none';
                     field.style.opacity = '0.7';
                     field.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
                         btn.style.display = 'none';
                     });
-                }
-            });
-        } else {
-            // Admin: fully unlock everything
-            ih.style.pointerEvents = '';
-            ih.style.userSelect = '';
-            ih.style.opacity = '';
-            ih.querySelectorAll('[data-cid]').forEach(function(field) {
-                field.style.pointerEvents = '';
-                field.style.userSelect = '';
-                field.style.opacity = '';
-                field.querySelectorAll('.ui-entity-editor-field-edit, .ui-entity-editor-field-edit-button').forEach(function(btn) {
-                    btn.style.display = '';
                 });
-            });
+            }
         }
-    }
-}
 
     }, 500);
 
