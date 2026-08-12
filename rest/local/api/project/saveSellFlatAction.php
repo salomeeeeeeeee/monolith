@@ -42,6 +42,7 @@ function getCIBlockElementsByFilter($arFilter) {
 // ── Inputs ──────────────────────────────────────────────────────────
 $dealId    = intval($_POST['deal_id']  ?? 0);
 $contrDate = trim($_POST['contr_date'] ?? '');   // YYYY-MM-DD from <input type="date">
+$paymentMethod = trim($_POST['payment_method'] ?? '');   // "cash" or "საბანკო გადარიცხვა"
 
 // clients: [{contact_id, firstName, lastName, idNumber}, ...]
 $clientsRaw = $_POST['clients'] ?? '[]';
@@ -56,16 +57,12 @@ if (empty($clients) && $dealId) {
     }
 }
 
-// ── First payment lookup for this deal (IBlock 22) — now runs AFTER $dealId is set ──
-$scheduleRows = getCIBlockElementsByFilter(array("IBLOCK_ID" => 22, "PROPERTY_DEAL" => $dealId));
-usort($scheduleRows, function($a, $b) {
-    $dateA = DateTime::createFromFormat('d/m/Y', $a['TARIGI'] ?? '');
-    $dateB = DateTime::createFromFormat('d/m/Y', $b['TARIGI'] ?? '');
-    if (!$dateA && !$dateB) return 0;
-    if (!$dateA) return 1;
-    if (!$dateB) return -1;
-    return $dateA <=> $dateB;
-});
+// ── First payment lookup for this deal (IBlock 22) — filter by PLAN_TYPE ──
+$scheduleRows = getCIBlockElementsByFilter(array(
+    "IBLOCK_ID"          => 22,
+    "PROPERTY_DEAL"      => $dealId,
+    "PROPERTY_PLAN_TYPE" => "პირველადი შენატანი"
+));
 
 $firstPaymentRaw  = !empty($scheduleRows) ? (float)explode("|", $scheduleRows[0]["TANXA"] ?? "")[0] : 0;
 $firstPayment     = !empty($scheduleRows) ? number_format($firstPaymentRaw, 2, '.', ',') : '';
@@ -93,6 +90,31 @@ if (!empty($_FILES['passport']['tmp_name'])) {
         $passportFilePath = $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath($savedId);
         $passportFileLink = buildPassportFileLink($savedId);
         $passportFileName = $origName ?: (CFile::GetFileArray($savedId)['ORIGINAL_NAME'] ?? 'file.pdf');
+    }
+}
+
+// ── Receipt file upload (only relevant when payment_method === 'cash') ─
+$receiptFileId   = null;
+$receiptFilePath = null;
+$receiptFileLink = '';
+$receiptFileName = '';
+
+if (!empty($_FILES['receipt']['tmp_name'])) {
+    $file     = $_FILES['receipt'];
+    $origName = $file['name'];
+    $tmpPath  = $file['tmp_name'];
+
+    $arFile = CFile::MakeFileArray($tmpPath, $file['type']);
+    $arFile['name'] = $origName;
+    $arFile['MODULE_ID'] = 'crm';
+
+    $savedId = CFile::SaveFile($arFile, 'crm');
+
+    if ($savedId) {
+        $receiptFileId   = $savedId;
+        $receiptFilePath = $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath($savedId);
+        $receiptFileLink = buildPassportFileLink($savedId);
+        $receiptFileName = $origName ?: (CFile::GetFileArray($savedId)['ORIGINAL_NAME'] ?? 'file.pdf');
     }
 }
 
@@ -162,6 +184,7 @@ $idNumbersJoined = implode(', ', $idNumbersForParams);
 $arrForDeal = [
     'UF_CRM_1779278774084' => $contrDateForBitrix,   // ხელშეკრულების გაფორმების თარიღი
     'UF_CRM_1779278590201' => $todayForBitrix,        // today (reuse existing field)
+    'UF_CRM_1786535420882' => $paymentMethod,         // გადახდის მეთოდი
 ];
 
 $dealObj = new CCrmDeal();
@@ -173,6 +196,10 @@ $dealLinkBBCode = "[URL={$dealUrl}]Deal #{$dealId}[/URL]";
 // Short clickable label with real filename (same pattern as dealLink)
 $passportFileLinkBBCode = $passportFileLink
     ? "[URL={$passportFileLink}]{$passportFileName}[/URL]"
+    : '';
+
+$receiptFileLinkBBCode = $receiptFileLink
+    ? "[URL={$receiptFileLink}]{$receiptFileName}[/URL]"
     : '';
 
 $params = [
@@ -188,6 +215,9 @@ $params = [
     "passportFileLink" => $passportFileLinkBBCode,
     "firstPayment"      => $firstPayment,
     "firstPaymentDate"  => $firstPaymentDate,
+    "paymentMethod"    => $paymentMethod,
+    "receiptFile"      => $receiptFileId ?: '',
+    "receiptFileLink"  => $receiptFileLinkBBCode,
 ];
 
 // ── Start workflow ───────────────────────────────────────────────────
@@ -204,6 +234,8 @@ file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/savesell_errors.txt",
     "dealId: $dealId\n" .
     "clients: " . print_r($clients, true) . "\n" .
     "contrDate: $contrDate → $contrDateForBitrix\n" .
+    "paymentMethod: " . $paymentMethod . "\n" .
+    "receiptFileId: " . var_export($receiptFileId, true) . "\n" .
     "wfId: " . var_export($wfId, true) . "\n" .
     $contactUpdateLog .
     "params: " . print_r($params, true) . "\n" .

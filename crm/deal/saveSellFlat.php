@@ -178,6 +178,25 @@ ob_end_clean();
   }
   .field input[type=date] { cursor: pointer; }
 
+  .field select {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'Noto Sans Georgian', sans-serif;
+    color: #1e293b;
+    background: #f8fafc;
+    outline: none;
+    cursor: pointer;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .field select:focus {
+    border-color: #0d9488;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(13,148,136,0.12);
+  }
+
   /* two-col grid */
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
@@ -294,6 +313,38 @@ ob_end_clean();
       <input type="date" id="contr_date" onclick="this.showPicker()" />
     </div>
 
+    <div class="section-label">გადახდის დეტალები</div>
+
+    <div class="field">
+      <label>გადახდის მეთოდი <span class="req">*</span></label>
+      <select id="paymentMethod" onchange="handlePaymentMethodChange(this.value)">
+        <option value="">აირჩიეთ...</option>
+        <option value="cash">Cash</option>
+        <option value="საბანკო გადარიცხვა">საბანკო გადარიცხვა</option>
+      </select>
+    </div>
+
+    <div class="field" id="receiptField" style="display:none;">
+      <label>ჩარიცხვის ქვითარი <span class="req">*</span></label>
+      <div class="drop-zone" id="receiptDropZone" onclick="document.getElementById('receiptFile').click()">
+        <input type="file" id="receiptFile" accept="image/*,.pdf" onchange="handleReceiptFile(this.files[0])">
+        <div class="dz-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#0d9488" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3" stroke="#0d9488" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="dz-label">ჩააგდეთ ფაილი ან <span>აირჩიეთ</span></div>
+        <div class="dz-hint">ქვითარი · PDF, JPG, PNG</div>
+        <div class="file-preview" id="receiptFilePreview">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M2 8l4 4 8-9" stroke="#0f766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="receiptFileName"></span>
+        </div>
+      </div>
+    </div>
+
     <?php foreach ($contacts as $i => $c): ?>
   <div class="section-label">
     კლიენტის მონაცემები<?= count($contacts) > 1 ? ' #' . ($i + 1) : '' ?>
@@ -357,6 +408,7 @@ ob_end_clean();
 
 <script>
 var selectedFile = null;
+var selectedReceiptFile = null;
 
 (function(){
   var dz = document.getElementById('dropZone');
@@ -369,12 +421,43 @@ var selectedFile = null;
   });
 })();
 
+(function(){
+  var dz = document.getElementById('receiptDropZone');
+  if (!dz) return;
+  dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', function(){ dz.classList.remove('dragover'); });
+  dz.addEventListener('drop', function(e){
+    e.preventDefault(); dz.classList.remove('dragover');
+    var f = e.dataTransfer.files[0];
+    if (f) handleReceiptFile(f);
+  });
+})();
+
 function handleFile(f) {
   if (!f) return;
   selectedFile = f;
   var preview  = document.getElementById('filePreview');
   document.getElementById('fileName').textContent = f.name;
   preview.classList.add('visible');
+}
+
+function handleReceiptFile(f) {
+  if (!f) return;
+  selectedReceiptFile = f;
+  document.getElementById('receiptFileName').textContent = f.name;
+  document.getElementById('receiptFilePreview').classList.add('visible');
+}
+
+function handlePaymentMethodChange(value) {
+  var receiptField = document.getElementById('receiptField');
+  if (value === 'cash') {
+    receiptField.style.display = 'block';
+  } else {
+    receiptField.style.display = 'none';
+    selectedReceiptFile = null;
+    document.getElementById('receiptFilePreview').classList.remove('visible');
+    document.getElementById('receiptFile').value = '';
+  }
 }
 
 function setStatus(type, msg) {
@@ -389,13 +472,16 @@ function setStatus(type, msg) {
 }
 
 function saveSell() {
-  var deal_id    = <?= json_encode($deal_id) ?>;
-  var contr_date = document.getElementById('contr_date').value;
-  var btn        = document.getElementById('saveBtn');
+  var deal_id       = <?= json_encode($deal_id) ?>;
+  var contr_date    = document.getElementById('contr_date').value;
+  var paymentMethod = document.getElementById('paymentMethod').value;
+  var btn           = document.getElementById('saveBtn');
 
   var clientBlocks = document.querySelectorAll('.client-block');
   var clients = [];
-  var allValid = !!contr_date;
+  var allValid = !!contr_date && !!paymentMethod;
+
+  if (paymentMethod === 'cash' && !selectedReceiptFile) allValid = false;
 
   clientBlocks.forEach(function(block){
     var contactId  = block.getAttribute('data-contact-id');
@@ -424,8 +510,12 @@ function saveSell() {
   var fd = new FormData();
   fd.append('deal_id',    deal_id);
   fd.append('contr_date', contr_date);
+  fd.append('payment_method', paymentMethod);
   fd.append('clients',    JSON.stringify(clients));
   fd.append('passport',   selectedFile, selectedFile.name);
+  if (paymentMethod === 'cash' && selectedReceiptFile) {
+    fd.append('receipt', selectedReceiptFile, selectedReceiptFile.name);
+  }
 
   fetch(location.origin + '/rest/local/api/projects/saveSellFlatAction.php', {
     method: 'POST',
