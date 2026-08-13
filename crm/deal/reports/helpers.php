@@ -186,6 +186,45 @@ function reportParseAmount($value)
     return is_numeric($text) ? round((float)$text, 2) : 0;
 }
 
+function reportExtractProductOwnerDealId(array $product)
+{
+    foreach (['OWNER_DEAL', 'ownerDeal'] as $key) {
+        $dealId = reportExtractDealId($product[$key] ?? '');
+        if ($dealId !== '') {
+            return $dealId;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Deal ID => [catalog product ID => true] from CRM product rows (deal "Products" tab).
+ */
+function reportGetDealProductIdsMap(array $dealIds)
+{
+    $map = [];
+    foreach ($dealIds as $dealId) {
+        $dealId = (int)$dealId;
+        if ($dealId <= 0) {
+            continue;
+        }
+
+        $res = CCrmProductRow::GetList(
+            ['ID' => 'ASC'],
+            ['OWNER_TYPE' => 'D', 'OWNER_ID' => $dealId]
+        );
+        while ($row = $res->Fetch()) {
+            $productId = (int)($row['PRODUCT_ID'] ?? 0);
+            if ($productId > 0) {
+                $map[(string)$dealId][$productId] = true;
+            }
+        }
+    }
+
+    return $map;
+}
+
 function reportExtractDealId($value)
 {
     if (is_array($value)) {

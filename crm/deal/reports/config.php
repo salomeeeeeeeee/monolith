@@ -13,6 +13,7 @@ define('F_TOTAL_AREA', '__173JA5');
 define('F_BEDROOMS', '__KYRP1L');
 define('F_KVM_PRICE', '__6ZWTER');
 define('F_UNIT_NO', '__6KWOWZ');
+define('F_FLOOR', '_FTRIDL');
 
 define('D_PROJECT', 'UF_CRM_1779277729207');
 define('D_BLOCK', 'UF_CRM_1779277644355');
