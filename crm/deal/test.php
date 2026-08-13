@@ -1,7 +1,7 @@
 <?php
 /**
  * ყველა WON დილი (პროდუქტით): ownerDeal / ownerContact / ownerCompany
- * Batch: ?after_id=0&limit=500
+ * Batch: ?after_id=0&limit=3100
  * გაშვება: https://crm.monolith.ge/crm/deal/test.php
  */
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_before.php');
@@ -20,8 +20,8 @@ define('PROP_OWNER_DEAL', 'ownerDeal');
 define('PROP_OWNER_CONTACT', 'ownerContact');
 define('PROP_OWNER_COMPANY', 'ownerCompany');
 define('OWNER_PROP_CODES', [PROP_OWNER_DEAL, PROP_OWNER_CONTACT, PROP_OWNER_COMPANY]);
-define('DEFAULT_BATCH_LIMIT', 500);
-define('MAX_BATCH_LIMIT', 1000);
+define('DEFAULT_BATCH_LIMIT', 3100);
+define('MAX_BATCH_LIMIT', 3100);
 
 $afterId = max(0, (int)($_GET['after_id'] ?? 0));
 $limit = (int)($_GET['limit'] ?? DEFAULT_BATCH_LIMIT);
