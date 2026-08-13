@@ -683,6 +683,15 @@ ob_end_clean();
     <div class="dropdown-header">სექტორი</div>
     <div class="dropdown-content"></div>
 </div>
+
+<div class="range-filter" style="margin-bottom:8px;">
+    <label>უძრავი ქონების №</label>
+    <div class="range-row">
+        <input type="text" id="aptNumberSearch" placeholder="ძებნა №..." style="width:100%;">
+    </div>
+</div>
+
+
         <div class="dropdown-checkbox" id="statusFilter">
             <div class="dropdown-header">სტატუსი</div>
             <div class="dropdown-content"></div>
@@ -1698,9 +1707,10 @@ function fillAdditionalFilters() {
 function getAllFilters() {
     return {
         blocks:   getCheckboxValues("blockFilter"),
-        sectors:  getCheckboxValues("sectorFilter"),  
+        sectors:  getCheckboxValues("sectorFilter"),
         status:   getCheckboxValues("statusFilter"),
         aptType:  getCheckboxValues("apartmentTypeFilter"),
+        aptNumber: $("#aptNumberSearch").val().trim(),   
         aptRange: { min:$("#aptMin").val(), max:$("#aptMax").val() },
         extra:    getExtraFilterValues()
     };
@@ -1749,7 +1759,14 @@ function matchesFilters(apt, f) {
     if (f.status.length>0  && !f.status.includes(apt["_P64GYD"]))        return false;
     if (f.aptType.length>0 && !f.aptType.includes(apt["__X1GCRZ"]))      return false;
     if (f.blocks.length>0  && !f.blocks.includes(apt["_L24CUB"]))        return false;
-    if (f.sectors.length>0 && !f.sectors.includes(apt["_3BU0JH"] || apt[F_SECTOR])) return false; 
+    if (f.sectors.length>0 && !f.sectors.includes(apt["_3BU0JH"] || apt[F_SECTOR])) return false;
+
+    // NEW: property number search (partial match)
+    if (f.aptNumber && f.aptNumber !== "") {
+        const num = String(apt["Number"] || apt[F_NUMBER] || "").toLowerCase();
+        if (!num.includes(f.aptNumber.toLowerCase())) return false;
+    }
+
     const area=parseFloat(apt["TOTAL_AREA"]);
     if (f.aptRange.min!==""&&area<parseFloat(f.aptRange.min)) return false;
     if (f.aptRange.max!==""&&area>parseFloat(f.aptRange.max)) return false;
@@ -1772,20 +1789,25 @@ function matchesFilters(apt, f) {
 
 document.getElementById("search").addEventListener("click", applyFilters);
 
+document.getElementById("aptNumberSearch")?.addEventListener("keypress", e => {
+    if (e.key === "Enter") applyFilters();
+});
+
 $("#clean").on("click", function() {
-    $("#statusFilter input,#apartmentTypeFilter input,#blockFilter input,#sectorFilter input").prop("checked",false); // ← add sectorFilter
+    $("#statusFilter input,#apartmentTypeFilter input,#blockFilter input,#sectorFilter input").prop("checked",false);
     $("#aptMin,#aptMax").val("");
+    $("#aptNumberSearch").val("");   
     $("#statusFilter .dropdown-header").text("სტატუსი");
     $("#apartmentTypeFilter .dropdown-header").text("ფართის ტიპი");
     $("#blockFilter .dropdown-header").text("ბლოკი");
-    $("#sectorFilter .dropdown-header").text("სექტორი");   // ← add this
+    $("#sectorFilter .dropdown-header").text("სექტორი");
     document.querySelectorAll("#extraFilterChips .filter-chip").forEach(chip => {
         const btn=chip._sourceButton;
         if(btn){btn.disabled=false;btn.classList.remove("disabled-button");btn.style.background="";}
         chip.remove();
     });
     document.querySelectorAll("#legendBar .legend-item").forEach(i=>i.classList.remove("legend-active"));
-    renderProductsByBlock(productsCache, [], []);   // ← pass empty sectors array too
+    renderProductsByBlock(productsCache, [], []);
     $(".dropdown-content").slideUp(150);
 });
 
