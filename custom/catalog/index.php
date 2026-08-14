@@ -731,6 +731,8 @@ ob_end_clean();
             <div class="legend-item status-sold-frame"><span class="legend-color status-sold"></span> გაყიდული <span class="legend-count" id="count-sold">0</span></div>
             <div class="legend-item status-nfs-frame"><span class="legend-color status-notforsale"></span> NFS <span class="legend-count" id="count-nfs">0</span></div>
             <div class="legend-item status-queue-frame"><span class="legend-color status-queue"></span> ჯავშნის რიგში <span class="legend-count" id="count-queue">0</span></div>
+            <div class="legend-item" style="cursor:default;"><span class="legend-color" style="background:var(--text2);"></span> სულ <span class="legend-count" id="count-total">0</span></div>
+
             <button id="exportExcelBtn" onclick="exportToExcel()">⬇ Excel</button>
         </div>
 
@@ -1653,6 +1655,7 @@ function updateLegendCounts(prods) {
             case "ჯავშნის რიგში": c.queue++;    break;
         }
     });
+    document.getElementById("count-total").textContent    = (prods||[]).length;
     document.getElementById("count-active").textContent   = c.active;
     document.getElementById("count-reserved").textContent = c.reserved;
     document.getElementById("count-sold").textContent     = c.sold;
