@@ -430,16 +430,17 @@ if (!function_exists('updateProdElement')) {
 if (!function_exists('changeDealStageToNew')) {
     function changeDealStageToNew($deal, $errors)
     {
-        $logText   = "";
-        $arrForAdd = array(
-            "STAGE_ID" => $deal["UF_CRM_1695034234043"] ?: "FINAL_INVOICE",
-        );
-        $Deal = new CCrmDeal();
-        $Deal->Update($deal["ID"], $arrForAdd);
-        foreach ($errors as $i => $error) {
-            $logText .= ($i + 1) . ") " . $error . "\n";
-        }
-        return $logText;
+        // $logText   = "";
+        // $arrForAdd = array(
+        //     "STAGE_ID" => $deal["UF_CRM_1695034234043"] ?: "FINAL_INVOICE",
+        // );
+        // $Deal = new CCrmDeal();
+        // $Deal->Update($deal["ID"], $arrForAdd);
+        // foreach ($errors as $i => $error) {
+        //     $logText .= ($i + 1) . ") " . $error . "\n";
+        // }
+        // return $logText;
+        return "";
     }
 }
  

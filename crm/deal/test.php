@@ -1,10 +1,10 @@
 <?php
 /**
- * დილებზე პროდუქტის მიბმა ველებით:
- * პროექტი, ფართის ტიპი, ბლოკი, სართული, ნომერი, სრული ფართი
+ * WON დილებზე პროდუქტის მიბმა: პროექტი + ფართის ტიპი,
+ * მატჩი ბლოკი / სართული / ნომერი.
+ * დილის OPPORTUNITY არ იცვლება (IS_MANUAL_OPPORTUNITY = Y).
  *
- * Dry run:  https://crm.monolith.ge/crm/deal/test.php
- * Apply:    https://crm.monolith.ge/crm/deal/test.php?apply=1
+ * UI: https://crm.monolith.ge/crm/deal/test.php
  */
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_before.php');
 
@@ -22,16 +22,16 @@ define('PRODUCT_IBLOCK_ID', 14);
 define('PROP_OWNER_DEAL', 'ownerDeal');
 define('PROP_OWNER_CONTACT', 'ownerContact');
 define('PROP_OWNER_COMPANY', 'ownerCompany');
+define('D_PROJECT', 'UF_CRM_1779277729207');
+define('D_TYPE', 'UF_CRM_1779277898205');
+define('D_BLOCK', 'UF_CRM_1779277644355');
+define('D_FLOOR', 'UF_CRM_1779277828822');
+define('D_NUMBER', 'UF_CRM_1779277613798');
 
-$apply = isset($_GET['apply']) && $_GET['apply'] === '1';
-
-$dealIds = [
-    69399, 69398, 69397, 69396, 69395, 69394, 69393, 69392, 69391, 69390,
-    69389, 69388, 69387, 69386, 69385, 69384, 69383, 69382, 69381, 69380,
-    69379, 69378, 69377, 69376, 69375, 69374, 69373, 69372, 69371, 69370,
-    69369, 69368, 69367, 69366, 69365, 69364, 69363, 69362, 69361, 69360,
-    69359, 69358, 69357, 69356, 69355, 69354, 69353, 69352, 69351, 69350,
-];
+$run = isset($_REQUEST['run']) && $_REQUEST['run'] === '1';
+$apply = isset($_REQUEST['apply']) && $_REQUEST['apply'] === '1';
+$filterProject = trim((string)($_REQUEST['project'] ?? ''));
+$filterType = trim((string)($_REQUEST['type'] ?? ''));
 
 function normVal($value)
 {
@@ -110,12 +110,11 @@ function dealHasProducts($dealId)
 
 function findMatchingProducts(array $deal)
 {
-    $project = trim((string)($deal['UF_CRM_1779277729207'] ?? ''));
-    $type    = trim((string)($deal['UF_CRM_1779277898205'] ?? ''));
-    $block   = trim((string)($deal['UF_CRM_1779277644355'] ?? ''));
-    $floor   = trim((string)($deal['UF_CRM_1779277828822'] ?? ''));
-    $number  = trim((string)($deal['UF_CRM_1779277613798'] ?? ''));
-    $area    = trim((string)($deal['UF_CRM_1779277886804'] ?? ''));
+    $project = trim((string)($deal[D_PROJECT] ?? ''));
+    $type    = trim((string)($deal[D_TYPE] ?? ''));
+    $block   = trim((string)($deal[D_BLOCK] ?? ''));
+    $floor   = trim((string)($deal[D_FLOOR] ?? ''));
+    $number  = trim((string)($deal[D_NUMBER] ?? ''));
 
     $criteria = [
         'project' => $project,
@@ -123,7 +122,6 @@ function findMatchingProducts(array $deal)
         'block'   => $block,
         'floor'   => $floor,
         'number'  => $number,
-        'area'    => $area,
     ];
 
     $filter = [
@@ -159,7 +157,6 @@ function findMatchingProducts(array $deal)
         $prodBlock   = $props['_L24CUB']['VALUE'] ?? '';
         $prodFloor   = $props['_FTRIDL']['VALUE'] ?? '';
         $prodNumber  = $props['__6KWOWZ']['VALUE'] ?? '';
-        $prodArea    = $props['__173JA5']['VALUE'] ?? '';
 
         if ($project !== '' && !valsEqual($prodProject, $project)) {
             continue;
@@ -176,9 +173,6 @@ function findMatchingProducts(array $deal)
         if ($number !== '' && !valsEqual($prodNumber, $number)) {
             continue;
         }
-        if ($area !== '' && !valsEqual($prodArea, $area)) {
-            continue;
-        }
 
         $priceRow = CPrice::GetBasePrice((int)$fields['ID']);
         $matches[] = [
@@ -190,12 +184,57 @@ function findMatchingProducts(array $deal)
             'block'   => $prodBlock,
             'floor'   => $prodFloor,
             'number'  => $prodNumber,
-            'area'    => $prodArea,
         ];
     }
 
     return [$criteria, $matches];
 }
+
+function restoreDealOpportunity($dealId, $opportunity, $currencyId)
+{
+    $crmDeal = new CCrmDeal(false);
+    $fields = [
+        'IS_MANUAL_OPPORTUNITY' => 'Y',
+        'OPPORTUNITY' => $opportunity,
+    ];
+    if ($currencyId !== '') {
+        $fields['CURRENCY_ID'] = $currencyId;
+    }
+    return (bool)$crmDeal->Update($dealId, $fields);
+}
+
+function loadProjectTypeMap()
+{
+    $map = [];
+    $res = CIBlockElement::GetList(
+        ['ID' => 'ASC'],
+        ['IBLOCK_ID' => PRODUCT_IBLOCK_ID, 'ACTIVE' => 'Y', 'CHECK_PERMISSIONS' => 'N'],
+        false,
+        false,
+        ['ID', 'IBLOCK_ID']
+    );
+    while ($ob = $res->GetNextElement()) {
+        $props = $ob->GetProperties();
+        $project = trim((string)($props['__VO9RG4']['VALUE'] ?? ''));
+        $type = trim((string)($props['__X1GCRZ']['VALUE'] ?? ''));
+        if ($project === '' || $type === '') {
+            continue;
+        }
+        if (!isset($map[$project])) {
+            $map[$project] = [];
+        }
+        $map[$project][$type] = true;
+    }
+    ksort($map, SORT_NATURAL | SORT_FLAG_CASE);
+    foreach ($map as $project => $types) {
+        $keys = array_keys($types);
+        natcasesort($keys);
+        $map[$project] = array_values($keys);
+    }
+    return $map;
+}
+
+$projectTypeMap = loadProjectTypeMap();
 
 $results = [];
 $counts = [
@@ -211,66 +250,46 @@ $counts = [
 
 $select = [
     'ID', 'TITLE', 'CONTACT_ID', 'COMPANY_ID',
-    'UF_CRM_1779277729207',
-    'UF_CRM_1779277898205',
-    'UF_CRM_1779277644355',
-    'UF_CRM_1779277828822',
-    'UF_CRM_1779277613798',
-    'UF_CRM_1779277886804',
+    'OPPORTUNITY', 'CURRENCY_ID', 'IS_MANUAL_OPPORTUNITY',
+    D_PROJECT, D_TYPE, D_BLOCK, D_FLOOR, D_NUMBER,
 ];
 
-foreach ($dealIds as $dealId) {
+$processDeal = function ($deal) use ($apply, &$results, &$counts) {
+    $dealId = (int)$deal['ID'];
     $counts['deals']++;
     $row = [
         'deal_id' => $dealId,
-        'status'  => '',
+        'title' => $deal['TITLE'] ?? '',
+        'opportunity_before' => (float)($deal['OPPORTUNITY'] ?? 0),
+        'currency' => $deal['CURRENCY_ID'] ?? '',
+        'status' => '',
     ];
-
-    $dealRes = CCrmDeal::GetListEx(
-        [],
-        ['ID' => $dealId, 'CHECK_PERMISSIONS' => 'N'],
-        false,
-        ['nTopCount' => 1],
-        $select
-    );
-    $deal = $dealRes->Fetch();
-    if (!$deal) {
-        $row['status'] = 'deal_not_found';
-        $counts['failed']++;
-        $results[] = $row;
-        continue;
-    }
-
-    $row['title'] = $deal['TITLE'] ?? '';
 
     if (dealHasProducts($dealId)) {
         $row['status'] = 'already_has_product';
         $counts['already_has_product']++;
         $results[] = $row;
-        continue;
+        return;
     }
 
     [$criteria, $matches] = findMatchingProducts($deal);
     $row['criteria'] = $criteria;
 
-    $emptyCount = 0;
-    foreach ($criteria as $v) {
-        if (trim((string)$v) === '') {
-            $emptyCount++;
+    $required = ['project', 'type', 'block', 'floor', 'number'];
+    foreach ($required as $key) {
+        if (trim((string)($criteria[$key] ?? '')) === '') {
+            $row['status'] = 'missing_fields';
+            $counts['missing_fields']++;
+            $results[] = $row;
+            return;
         }
-    }
-    if ($emptyCount >= 6) {
-        $row['status'] = 'missing_fields';
-        $counts['missing_fields']++;
-        $results[] = $row;
-        continue;
     }
 
     if (count($matches) === 0) {
         $row['status'] = 'not_found';
         $counts['not_found']++;
         $results[] = $row;
-        continue;
+        return;
     }
 
     if (count($matches) > 1) {
@@ -278,7 +297,7 @@ foreach ($dealIds as $dealId) {
         $row['matches'] = $matches;
         $counts['ambiguous']++;
         $results[] = $row;
-        continue;
+        return;
     }
 
     $product = $matches[0];
@@ -288,8 +307,11 @@ foreach ($dealIds as $dealId) {
     if (!$apply) {
         $row['status'] = 'would_attach';
         $results[] = $row;
-        continue;
+        return;
     }
+
+    $originalOpportunity = (float)($deal['OPPORTUNITY'] ?? 0);
+    $currencyId = (string)($deal['CURRENCY_ID'] ?? '');
 
     $saved = CCrmDeal::SaveProductRows($dealId, [[
         'PRODUCT_ID' => $product['ID'],
@@ -301,8 +323,22 @@ foreach ($dealIds as $dealId) {
         $row['status'] = 'save_failed';
         $counts['failed']++;
         $results[] = $row;
-        continue;
+        return;
     }
+
+    $restored = restoreDealOpportunity($dealId, $originalOpportunity, $currencyId);
+    $row['opportunity_restored'] = $restored;
+
+    $verifyRes = CCrmDeal::GetListEx(
+        [],
+        ['ID' => $dealId, 'CHECK_PERMISSIONS' => 'N'],
+        false,
+        ['nTopCount' => 1],
+        ['ID', 'OPPORTUNITY', 'IS_MANUAL_OPPORTUNITY']
+    );
+    $verify = $verifyRes ? $verifyRes->Fetch() : false;
+    $row['opportunity_after'] = (float)($verify['OPPORTUNITY'] ?? 0);
+    $row['is_manual_opportunity'] = $verify['IS_MANUAL_OPPORTUNITY'] ?? '';
 
     $contactId = resolveDealContactId($deal);
     $companyId = (int)($deal['COMPANY_ID'] ?? 0);
@@ -325,11 +361,257 @@ foreach ($dealIds as $dealId) {
     $row['status'] = 'attached';
     $counts['attached']++;
     $results[] = $row;
+};
+
+if ($run && $filterProject !== '' && $filterType !== '') {
+    $arFilter = [
+        'CATEGORY_ID' => 0,
+        'STAGE_ID' => 'WON',
+        D_PROJECT => $filterProject,
+        'CHECK_PERMISSIONS' => 'N',
+    ];
+    $res = CCrmDeal::GetListEx(
+        ['ID' => 'ASC'],
+        $arFilter,
+        false,
+        false,
+        array_merge($select, ['STAGE_ID', 'CATEGORY_ID'])
+    );
+    while ($deal = $res->Fetch()) {
+        $type = trim((string)($deal[D_TYPE] ?? ''));
+        if (!valsEqual($type, $filterType)) {
+            continue;
+        }
+        $processDeal($deal);
+    }
 }
 
-header('Content-Type: application/json; charset=utf-8');
-echo json_encode([
-    'apply'   => $apply,
-    'counts'  => $counts,
-    'results' => $results,
-], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+$statusLabels = [
+    'already_has_product' => 'უკვე აქვს პროდუქტი',
+    'missing_fields' => 'აკლია ველი',
+    'not_found' => 'პროდუქტი ვერ მოიძებნა',
+    'ambiguous' => 'რამდენიმე მატჩი',
+    'would_attach' => 'მიება (dry run)',
+    'attached' => 'მიება',
+    'save_failed' => 'შეცდომა',
+];
+
+header('Content-Type: text/html; charset=utf-8');
+?>
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>პროდუქტის მიბმა დილებზე</title>
+    <style>
+        :root {
+            --bg: #f4f5f7;
+            --panel: #fff;
+            --text: #00335b;
+            --muted: #6b7a8a;
+            --accent: #72c4b1;
+            --danger: #c0392b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+        h1 { font-size: 22px; margin: 0 0 8px; }
+        .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+        .card {
+            background: var(--panel);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 28px rgba(0, 51, 91, 0.08);
+            margin-bottom: 20px;
+        }
+        .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+        label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+        select, button {
+            height: 40px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        select {
+            min-width: 220px;
+            border: 1px solid #d5dce3;
+            padding: 0 10px;
+            background: #fff;
+            color: var(--text);
+        }
+        .check { display: flex; align-items: center; gap: 8px; height: 40px; font-size: 14px; }
+        button {
+            border: 0;
+            padding: 0 18px;
+            background: var(--text);
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button.apply { background: #0e7c66; }
+        button:disabled { opacity: .5; cursor: not-allowed; }
+        .counts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+        .chip {
+            background: #eef3f7;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
+        th { font-size: 12px; color: var(--muted); }
+        .st-would_attach, .st-attached { color: #0e7c66; font-weight: 600; }
+        .st-not_found, .st-missing_fields, .st-save_failed, .st-ambiguous { color: var(--danger); font-weight: 600; }
+        .st-already_has_product { color: var(--muted); }
+        .warn { color: var(--danger); font-size: 13px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>პროდუქტის მიბმა WON დილებზე</h1>
+    <p class="sub">აირჩიე პროექტი და ფართის ტიპი. ბლოკი + სართული + ნომერი ველებით იძებნება შესაბამისი პროდუქტი და ებმევა დილზე . დილის თანხა არ იცვლება. პროდუქტზეც ივსბეა მფლობელის დილი და კონტაქტი/კომპანია</p>
+
+    <form class="card" method="get" id="bind-form">
+        <input type="hidden" name="run" value="1">
+        <div class="row">
+            <div>
+                <label for="project">პროექტი</label>
+                <select name="project" id="project" required>
+                    <option value="">— აირჩიე —</option>
+                    <?php foreach (array_keys($projectTypeMap) as $projectName): ?>
+                        <option value="<?= htmlspecialchars($projectName) ?>" <?= $filterProject === $projectName ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($projectName) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="type">ფართის ტიპი</label>
+                <select name="type" id="type" required>
+                    <option value="">— ჯერ აირჩიე პროექტი —</option>
+                </select>
+            </div>
+            <label class="check">
+                <input type="checkbox" name="apply" value="1" <?= $apply ? 'checked' : '' ?>>
+                რეალურად მიბმა
+            </label>
+            <button type="submit" id="run-btn">ნახვა/გაშვება</button>
+        </div>
+        <p class="warn" id="apply-warn" style="<?= $apply ? '' : 'display:none' ?>">
+            Apply ჩართულია: პროდუქტი მიებმევა დილებს, რომლებსაც ჯერ პროდუქტი არ აქვთ.
+        </p>
+    </form>
+
+    <?php if ($run): ?>
+        <div class="card">
+            <?php if ($filterProject === '' || $filterType === ''): ?>
+                <p>აირჩიე პროექტი და ფართის ტიპი.</p>
+            <?php else: ?>
+                <div class="counts">
+                    <span class="chip">რეჟიმი: <?= $apply ? 'APPLY' : 'DRY RUN' ?></span>
+                    <span class="chip"><?= htmlspecialchars($filterProject) ?> / <?= htmlspecialchars($filterType) ?></span>
+                    <span class="chip">დილები: <?= (int)$counts['deals'] ?></span>
+                    <span class="chip">უკვე აქვს: <?= (int)$counts['already_has_product'] ?></span>
+                    <span class="chip">აკლია ველი: <?= (int)$counts['missing_fields'] ?></span>
+                    <span class="chip">ვერ მოიძებნა: <?= (int)$counts['not_found'] ?></span>
+                    <span class="chip">რამდენიმე მატჩი: <?= (int)$counts['ambiguous'] ?></span>
+                    <span class="chip">მატჩი: <?= (int)$counts['matched'] ?></span>
+                    <span class="chip">მიება: <?= (int)$counts['attached'] ?></span>
+                    <span class="chip">შეცდომა: <?= (int)$counts['failed'] ?></span>
+                </div>
+                <table>
+                    <thead>
+                    <tr>
+                        <th>დილი</th>
+                        <th>სტატუსი</th>
+                        <th>ბლოკი / სართული / ნომერი</th>
+                        <th>პროდუქტი</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($results as $row):
+                        $c = $row['criteria'] ?? [];
+                        $p = $row['product'] ?? null;
+                        $st = $row['status'] ?? '';
+                    ?>
+                        <tr>
+                            <td>
+                                <a href="/crm/deal/details/<?= (int)$row['deal_id'] ?>/" target="_blank">
+                                    #<?= (int)$row['deal_id'] ?>
+                                </a>
+                                <div><?= htmlspecialchars((string)($row['title'] ?? '')) ?></div>
+                            </td>
+                            <td class="st-<?= htmlspecialchars($st) ?>">
+                                <?= htmlspecialchars($statusLabels[$st] ?? $st) ?>
+                            </td>
+                            <td>
+                                <?= htmlspecialchars((string)($c['block'] ?? '')) ?>
+                                /
+                                <?= htmlspecialchars((string)($c['floor'] ?? '')) ?>
+                                /
+                                <?= htmlspecialchars((string)($c['number'] ?? '')) ?>
+                            </td>
+                            <td>
+                                <?php if ($p): ?>
+                                    #<?= (int)$p['ID'] ?> <?= htmlspecialchars((string)$p['NAME']) ?>
+                                <?php elseif (!empty($row['matches'])): ?>
+                                    <?php foreach ($row['matches'] as $m): ?>
+                                        <div>#<?= (int)$m['ID'] ?> <?= htmlspecialchars((string)$m['NAME']) ?></div>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+</div>
+<script>
+    const map = <?= json_encode($projectTypeMap, JSON_UNESCAPED_UNICODE) ?>;
+    const projectEl = document.getElementById('project');
+    const typeEl = document.getElementById('type');
+    const selectedType = <?= json_encode($filterType, JSON_UNESCAPED_UNICODE) ?>;
+    const applyBox = document.querySelector('input[name="apply"]');
+    const runBtn = document.getElementById('run-btn');
+    const applyWarn = document.getElementById('apply-warn');
+
+    function fillTypes() {
+        const project = projectEl.value;
+        const types = map[project] || [];
+        typeEl.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = types.length ? '— აირჩიე —' : '— ჯერ აირჩიე პროექტი —';
+        typeEl.appendChild(placeholder);
+        types.forEach(function (t) {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            if (t === selectedType) opt.selected = true;
+            typeEl.appendChild(opt);
+        });
+    }
+
+    function syncApplyUi() {
+        const on = applyBox.checked;
+        runBtn.textContent = on ? 'გაშვება' : 'ნახვა';
+        runBtn.classList.toggle('apply', on);
+        applyWarn.style.display = on ? '' : 'none';
+    }
+
+    projectEl.addEventListener('change', fillTypes);
+    applyBox.addEventListener('change', syncApplyUi);
+    fillTypes();
+    syncApplyUi();
+</script>
+</body>
+</html>
