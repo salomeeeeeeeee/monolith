@@ -1073,6 +1073,32 @@ setInterval(() => {
 			
 }
 
+   // Freeze WON stage for everyone except admins (1, 3)
+   var wonCells = document.querySelectorAll('[data-id="WON"]');
+    wonCells.forEach(function(cell) {
+        if (isAdmin) {
+            if (cell.hasAttribute('data-dmg-won-locked')) {
+                cell.removeAttribute('data-dmg-won-locked');
+                cell.style.pointerEvents = '';
+                cell.style.cursor = '';
+            }
+            return;
+        }
+
+        if (!cell.hasAttribute('data-dmg-won-locked')) {
+            cell.setAttribute('data-dmg-won-locked', 'true');
+            cell.style.pointerEvents = 'none';
+            cell.style.cursor = 'not-allowed';
+
+            cell.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }, true);
+        }
+    });
+	
+
 
 
     var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
