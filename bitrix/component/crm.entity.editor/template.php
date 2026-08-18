@@ -1039,7 +1039,7 @@ var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'UC_NSTB3H', 'UC_NJ7A78'];
 var isGroup17 = <?php echo in_array(17, $userGroups) ? 'true' : 'false'; ?>;
 var isAdmin = (userID == 1 || userID == 3);
 
-if (isGroup17 && !isAdmin) {
+if (!isAdmin) {
     // Bitrix24 renders the stage/phase bar with cells carrying data-id = stage code.
     // Common containers: .crm-entity-widget-status, .crm-entity-stream-section-status
     var stageCells = document.querySelectorAll('[data-id]');
@@ -1073,31 +1073,7 @@ setInterval(() => {
 			
 }
 
-   // Freeze WON stage for everyone except admins (1, 3)
-   var wonCells = document.querySelectorAll('[data-id="WON"]');
-    wonCells.forEach(function(cell) {
-        if (isAdmin) {
-            if (cell.hasAttribute('data-dmg-won-locked')) {
-                cell.removeAttribute('data-dmg-won-locked');
-                cell.style.pointerEvents = '';
-                cell.style.cursor = '';
-            }
-            return;
-        }
 
-        if (!cell.hasAttribute('data-dmg-won-locked')) {
-            cell.setAttribute('data-dmg-won-locked', 'true');
-            cell.style.pointerEvents = 'none';
-            cell.style.cursor = 'not-allowed';
-
-            cell.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-            }, true);
-        }
-    });
-	
 
 
 
