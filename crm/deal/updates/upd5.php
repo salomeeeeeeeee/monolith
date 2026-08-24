@@ -87,7 +87,6 @@ $counts = [
     'products' => 0,
     'no_owner_deal' => 0,
     'deal_not_found' => 0,
-    'price_zero' => 0,
     'already_same' => 0,
     'would_update' => 0,
     'updated' => 0,
@@ -143,13 +142,6 @@ while ($ob = $res->GetNextElement()) {
         continue;
     }
 
-    if ($price <= 0) {
-        $row['result'] = 'price_zero';
-        $counts['price_zero']++;
-        $results[] = $row;
-        continue;
-    }
-
     $dealRes = CCrmDeal::GetListEx(
         [],
         ['ID' => $dealId, 'CHECK_PERMISSIONS' => 'N'],
@@ -176,7 +168,8 @@ while ($ob = $res->GetNextElement()) {
 
     $opportunitySame = abs($opportunityBefore - $price) < 0.01
         && ($deal['IS_MANUAL_OPPORTUNITY'] ?? '') === 'Y';
-    $kvmSame = abs($kvmBefore - $kvmPrice) < 0.01;
+    // კვ.მ ველში 0 არ იწერება — თუ პროდუქტზე 0ა, ველს არ ვეხებით
+    $kvmSame = $kvmPrice <= 0 || abs($kvmBefore - $kvmPrice) < 0.01;
 
     if ($opportunitySame && $kvmSame) {
         $row['result'] = 'already_same';
@@ -196,8 +189,10 @@ while ($ob = $res->GetNextElement()) {
     $fieldsUpdate = [
         'IS_MANUAL_OPPORTUNITY' => 'Y',
         'OPPORTUNITY' => $price,
-        D_KVM_PRICE => $kvmPrice,
     ];
+    if ($kvmPrice > 0) {
+        $fieldsUpdate[D_KVM_PRICE] = $kvmPrice;
+    }
     if (!empty($deal['CURRENCY_ID'])) {
         $fieldsUpdate['CURRENCY_ID'] = $deal['CURRENCY_ID'];
     }
