@@ -40,7 +40,7 @@ if ($filterResponsible !== '') {
 }
 
 $deals = reportGetDealsByFilter($arFilter, [
-    'ID', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_BLOCK, D_TYPE, 'ASSIGNED_BY_ID',
+    'ID', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_BLOCK, D_TYPE, D_BEDROOMS, 'ASSIGNED_BY_ID',
 ]);
 $dealsIds = array_keys($deals);
 
@@ -83,7 +83,10 @@ $resArray = [];
 foreach ($deals as $deal) {
     $prodType = $deal[D_TYPE] ?? '';
     $dealKey = reportExtractDealId($deal['ID'] ?? '');
-    $bedrooms = $productsByDeal[$dealKey][F_BEDROOMS] ?? '';
+    $bedrooms = (string)($deal[D_BEDROOMS] ?? '');
+    if ($bedrooms === '') {
+        $bedrooms = (string)($productsByDeal[$dealKey][F_BEDROOMS] ?? '');
+    }
 
     if (($deal[D_BLOCK] ?? '') === 'P') {
         $prodType = 'გარე ავტოსადგომი';

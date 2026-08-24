@@ -66,6 +66,7 @@ $deals = reportGetDealsByFilter($arFilter, [
     D_PROJECT,
     D_BLOCK,
     D_TYPE,
+    D_BEDROOMS,
     D_RESERVATION_DATE,
 ]);
 
@@ -86,7 +87,9 @@ foreach ($deals as &$deal) {
     $deal['TOTAL_AREA'] = $product ? (float)($product[F_TOTAL_AREA] ?? 0) : 0;
     $deal['UNIT_NAME'] = $product['NAME'] ?? '';
     $deal['UNIT_NO'] = $product[F_UNIT_NO] ?? '';
-    $deal['BEDROOMS'] = $product[F_BEDROOMS] ?? '';
+    $deal['BEDROOMS'] = ($deal[D_BEDROOMS] ?? '') !== ''
+        ? $deal[D_BEDROOMS]
+        : ($product[F_BEDROOMS] ?? '');
     $deal['KVM_PRICE'] = $product['KVM_PRICE'] ?? ($product[F_KVM_PRICE] ?? '');
     $deal['STAGE_LABEL'] = ($stageLabels[$lang][$deal['STAGE_ID'] ?? ''] ?? ($deal['STAGE_ID'] ?? ''));
 

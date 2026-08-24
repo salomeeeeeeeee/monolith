@@ -37,6 +37,7 @@ $filters = [
 ];
 
 $products = reportGetSoldProducts();
+$products = reportEnrichDealBedrooms($products);
 $filterOptions = [
     'projects' => reportGetUniqueValues($products, F_PROJECT),
     'sectors' => reportGetUniqueValues($products, F_SECTOR),
@@ -56,7 +57,7 @@ foreach ($filteredProducts as $product) {
     $resArray[$prodType]['price'] += (float)($product['PRICE'] ?? 0);
     $resArray[$prodType]['KVM_PRICE'] += (float)($product['KVM_PRICE'] ?? 0);
 
-    $subType = reportResolveApartmentSubtype($product);
+    $subType = reportResolveApartmentSubtype($product, true);
     if ($subType) {
         if (!isset($resArray[$subType])) {
             $resArray[$subType] = ['num' => 0, 'total_area' => 0, 'price' => 0, 'KVM_PRICE' => 0];
@@ -192,7 +193,7 @@ function exportToExcel() {
         { key: '<?= F_BLOCK ?>', label: t.xls_block },
         { key: 'NAME', label: t.xls_unit },
         { key: '<?= F_TYPE ?>', label: t.xls_type },
-        { key: '<?= F_BEDROOMS ?>', label: t.xls_bedrooms },
+        { key: '<?= D_BEDROOMS ?>', label: t.xls_bedrooms },
         { key: '<?= F_TOTAL_AREA ?>', label: t.xls_area },
         { key: 'KVM_PRICE', label: t.xls_price_sqm },
         { key: 'PRICE', label: t.xls_price },
@@ -206,6 +207,7 @@ function exportToExcel() {
         fields.forEach(function(f) {
             if (f.label === t.xls_num) row[f.label] = counter;
             else if (f.key === '<?= F_TYPE ?>') row[f.label] = translateType(p[f.key] ?? '');
+            else if (f.key === '<?= D_BEDROOMS ?>') row[f.label] = p['<?= D_BEDROOMS ?>'] || p['<?= F_BEDROOMS ?>'] || '';
             else row[f.label] = p[f.key] ?? '';
         });
         counter++;

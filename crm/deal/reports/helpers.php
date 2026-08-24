@@ -148,6 +148,41 @@ function reportEnrichReservationMeta(array $products)
     return $products;
 }
 
+/**
+ * Attach bedroom count from linked OWNER_DEAL (D_BEDROOMS) onto product rows.
+ */
+function reportEnrichDealBedrooms(array $products)
+{
+    $dealIds = [];
+    foreach ($products as $product) {
+        $dealId = reportExtractProductOwnerDealId($product);
+        if ($dealId !== '') {
+            $dealIds[$dealId] = true;
+        }
+    }
+
+    $dealBedrooms = [];
+    if (!empty($dealIds)) {
+        $res = CCrmDeal::GetList(
+            ['ID' => 'ASC'],
+            ['ID' => array_keys($dealIds), 'CHECK_PERMISSIONS' => 'N'],
+            ['ID', D_BEDROOMS]
+        );
+        while ($row = $res->Fetch()) {
+            $dealBedrooms[(string)$row['ID']] = $row[D_BEDROOMS] ?? '';
+        }
+    }
+
+    foreach ($products as $id => $product) {
+        $dealId = reportExtractProductOwnerDealId($product);
+        $products[$id][D_BEDROOMS] = ($dealId !== '' && isset($dealBedrooms[$dealId]))
+            ? (string)$dealBedrooms[$dealId]
+            : '';
+    }
+
+    return $products;
+}
+
 function reportGetUniqueValues($items, $field)
 {
     $values = [];
@@ -492,13 +527,23 @@ function reportResolveProductType($product)
     return $prodType;
 }
 
-function reportResolveApartmentSubtype($product)
+/**
+ * @param bool $preferDealBedrooms When true (deal-based reports): D_BEDROOMS, then F_BEDROOMS.
+ *                                  When false (product inventory): F_BEDROOMS only.
+ */
+function reportResolveApartmentSubtype($product, $preferDealBedrooms = false)
 {
     if (($product[F_TYPE] ?? '') !== 'ბინა') {
         return null;
     }
 
-    $bedrooms = (string)($product[F_BEDROOMS] ?? '');
+    $bedrooms = '';
+    if ($preferDealBedrooms) {
+        $bedrooms = (string)($product[D_BEDROOMS] ?? '');
+    }
+    if ($bedrooms === '') {
+        $bedrooms = (string)($product[F_BEDROOMS] ?? '');
+    }
     if ($bedrooms === '1') {
         return 'ბინა (1 საძ.)';
     }
