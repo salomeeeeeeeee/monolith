@@ -470,7 +470,7 @@ if (!function_exists('calcGetDealMetaForPlan')) {
             'BINIS_NOMERI' => $dealData['UF_CRM_1779277613798'] ?? '',
             'floor' => $dealData['UF_CRM_1779277828822'] ?? '',
             'ZETIPI' => $dealData['UF_CRM_1779277898205'] ?? '',
-            'KONTRAKT_DATE' => $dealData['UF_CRM_1779278590201'] ?? '',
+            'KONTRAKT_DATE' => calcFormatBitrixDate($dealData['UF_CRM_1779278774084'] ?? ''),
             'xelshNum' => trim((string)($dealData['UF_CRM_1769416547'] ?? '')),
             'CONTACT' => $dealData['CONTACT_ID'] ?? '',
             'FULL_NAME' => $dealData['CONTACT_FULL_NAME'] ?? '',

@@ -237,7 +237,12 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST' && isset($_POST['action']) && $_POST['a
                 }
 
                 $amount = round($amount, 2);
-                $nbgRate = calcGetNbgRate();
+                // NBG — იმ დღის კურსი, როცა გადახდა უწევს (თარიღი სვეტი: d/m/Y)
+                $nbgDate = null;
+                if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $date, $dm)) {
+                    $nbgDate = $dm[3] . '-' . $dm[2] . '-' . $dm[1];
+                }
+                $nbgRate = calcGetNbgRate($nbgDate);
                 $amountGel = $nbgRate ? round($amount * $nbgRate, 2) : 0;
 
                 $arForAdd = array(
