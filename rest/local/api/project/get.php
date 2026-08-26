@@ -27,8 +27,9 @@ function getContactInfo($contactId) {
     if ($arContact = $res->Fetch()) {
         $PHONE = \CCrmFieldMulti::GetList(array(), array('ENTITY_ID' => 'CONTACT', 'TYPE_ID' => 'PHONE', 'VALUE_TYPE' => 'MOBILE|WORK', "ELEMENT_ID" => $arContact["ID"]))->Fetch();
         $MAIL  = \CCrmFieldMulti::GetList(array(), array('ENTITY_ID' => 'CONTACT', 'TYPE_ID' => 'EMAIL', 'VALUE_TYPE' => 'HOME|WORK',   "ELEMENT_ID" => $arContact["ID"]))->Fetch();
-        $arContact["PHONE"] = $PHONE["VALUE"];
-        $arContact["EMAIL"] = $MAIL["VALUE"];
+        $arContact["PHONE"]     = $PHONE["VALUE"];
+        $arContact["EMAIL"]     = $MAIL["VALUE"];
+        $arContact["FULL_NAME"] = trim($arContact["NAME"] . " " . $arContact["LAST_NAME"]);
         return $arContact;
     }
     return $arContact;
@@ -92,8 +93,8 @@ function getProducts($projId = null, $blockId = null) {
             }
         }
 
-        if ($arPushs["OWNER_CONTACT"]) {
-            $arPushs["OWNER_CONTACT_NAME"] = getContactInfo($arPushs["OWNER_CONTACT"])["FULL_NAME"];
+        if (!empty($arPushs["OWNER_PERSONAL_CONTACT"])) {
+            $arPushs["OWNER_CONTACT_NAME"] = getContactInfo($arPushs["OWNER_PERSONAL_CONTACT"])["FULL_NAME"];
         }
         
         if ($arPushs["DEAL_RESPONSIBLE"]) {
@@ -101,13 +102,15 @@ function getProducts($projId = null, $blockId = null) {
         }
         
         // Resolve OWNER_DEAL → reservation stage/date
-        if (!empty($arPushs["OWNER_DEAL"])) {
-            $dRes = CCrmDeal::GetList(["ID" => "ASC"], ["ID" => $arPushs["OWNER_DEAL"]], ["ID", "STAGE_ID", "UF_CRM_1779278567041"]);
-            if ($dRow = $dRes->Fetch()) {
-                $arPushs["RESERVATION_STAGE_ID"] = $dRow["STAGE_ID"];
-                $arPushs["RESERVATION_DATE"]     = $dRow["UF_CRM_1779278567041"];
-            }
-        }
+       // Resolve OWNER_DEAL → reservation stage/date/title
+if (!empty($arPushs["OWNER_DEAL"])) {
+    $dRes = CCrmDeal::GetList(["ID" => "ASC"], ["ID" => $arPushs["OWNER_DEAL"]], ["ID", "TITLE", "STAGE_ID", "UF_CRM_1779278567041"]);
+    if ($dRow = $dRes->Fetch()) {
+        $arPushs["OWNER_DEAL_TITLE"]     = $dRow["TITLE"];
+        $arPushs["RESERVATION_STAGE_ID"] = $dRow["STAGE_ID"];
+        $arPushs["RESERVATION_DATE"]     = $dRow["UF_CRM_1779278567041"];
+    }
+}
 
         // ── Legacy image aliases (kept for backward compatibility) ──
         $legacyMap = [

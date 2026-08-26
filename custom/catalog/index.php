@@ -89,10 +89,11 @@ if (!empty($item["OWNER_PERSONAL_CONTACT"])) {
     }
 }
 
-// Resolve OWNER_DEAL → reservation stage/date
+// Resolve OWNER_DEAL → reservation stage/date/title
 if (!empty($item["OWNER_DEAL"])) {
-    $dRes = CCrmDeal::GetList(["ID"=>"ASC"], ["ID"=>$item["OWNER_DEAL"]], ["ID","STAGE_ID","UF_CRM_1779278567041"]);
+    $dRes = CCrmDeal::GetList(["ID"=>"ASC"], ["ID"=>$item["OWNER_DEAL"]], ["ID","TITLE","STAGE_ID","UF_CRM_1779278567041"]);
     if ($dRow = $dRes->Fetch()) {
+        $item["OWNER_DEAL_TITLE"]     = $dRow["TITLE"];
         $item["RESERVATION_STAGE_ID"] = $dRow["STAGE_ID"];
         $item["RESERVATION_DATE"]     = $dRow["UF_CRM_1779278567041"];
     }
@@ -870,7 +871,7 @@ const SKIP_CODES = new Set([
     "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME","DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","QUEUE",
     "PRICE","PRICE_GEL",
     "_P64GYD","Number","FLOOR","__X1GCRZ","_L24CUB",
-    "__51MODL","__6ZWTER", "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL", "threedrender","floorplan","mtavari_foto"
+    "__51MODL","__6ZWTER", "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL", "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
 ]);
 const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA"];
 
@@ -2041,7 +2042,7 @@ function renderBlockSections(apt) {
         "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME",
         "DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","OWNER_PERSONAL_CONTACT","QUEUE",
         "__51MODL","__6ZWTER",  "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL","RESERVATION_STAGE_ID","RESERVATION_DATE",
-        "threedrender","floorplan","mtavari_foto"
+        "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
     ]);
     // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
@@ -2072,9 +2073,9 @@ function renderBlockSections(apt) {
     // ── 3. Reservation info ───────────────────────────────────────────
     const resFields = [];
     if (apt["OWNER_DEAL"])
-        resFields.push({ code: "OWNER_DEAL", name: "მფლობელის დილი", value: `<a href="/crm/deal/details/${apt["OWNER_DEAL"]}/" target="_blank">${apt["OWNER_DEAL"]}</a>` });
-        if (apt["OWNER_PERSONAL_CONTACT"])
-        resFields.push({ code: "OWNER_PERSONAL_CONTACT", name: "კონტაქტი", value: `<a href="/crm/contact/details/${apt["OWNER_PERSONAL_CONTACT"]}/" target="_blank">${apt["OWNER_CONTACT_NAME"] || apt["OWNER_PERSONAL_CONTACT"]}</a>` });
+    resFields.push({ code: "OWNER_DEAL", name: "მფლობელის დილი", value: `<a href="/crm/deal/details/${apt["OWNER_DEAL"]}/" target="_blank">${apt["OWNER_DEAL_TITLE"] || apt["OWNER_DEAL"]}</a>` });
+if (apt["OWNER_PERSONAL_CONTACT"])
+    resFields.push({ code: "OWNER_PERSONAL_CONTACT", name: "კონტაქტი", value: `<a href="/crm/contact/details/${apt["OWNER_PERSONAL_CONTACT"]}/" target="_blank">${apt["OWNER_CONTACT_NAME"] || apt["OWNER_PERSONAL_CONTACT"]}</a>` });
     if (apt["DEAL_RESPONSIBLE"])
         resFields.push({ code: "DEAL_RESPONSIBLE", name: "პასუხისმგებელი", value: `<a href="/company/personal/user/${apt["DEAL_RESPONSIBLE"]}/" target="_blank">${apt["DEAL_RESPONSIBLE_NAME"] || apt["DEAL_RESPONSIBLE"]}</a>` });
        
