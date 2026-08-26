@@ -1683,3 +1683,21 @@ var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
     }
 })();
 </script>
+
+<script>
+BX.ready(function() {
+    setInterval(function() {
+        document.querySelectorAll('[id^="menu-popup-entity_progress_FAILURE_MENU"]').forEach(function(popup) {
+            popup.querySelectorAll('.menu-popup-item-text').forEach(function(textSpan) {
+                var text = (textSpan.textContent || '').trim();
+                if (text === 'გაყიდული') {
+                    var item = textSpan.closest('.menu-popup-item');
+                    if (item) {
+                        item.style.display = 'none';
+                    }
+                }
+            });
+        });
+    }, 300);
+});
+</script>

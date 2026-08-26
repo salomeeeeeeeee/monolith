@@ -8,6 +8,10 @@ $URL = "https://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 $URLexploded=explode("/",$URL);
 
 
+$urlTest = $_SERVER['REQUEST_URI'];
+$urlTest = explode('/', trim($urlTest, '/'));
+
+
 if (in_array(28, $userGroups)) {
    
     function getCIBlockElementsByFilterHeader($arFilter = array()) {
@@ -62,6 +66,8 @@ $futureDate = $currentDate->format('Ymd');
 
 
 <script>
+
+urlTest = <? echo json_encode($urlTest); ?>;
 
 var userID = <? echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
 var currentDate1 = <? echo json_encode($currentDate1, JSON_UNESCAPED_UNICODE); ?>;
@@ -224,4 +230,51 @@ if(pathname[1] == "crm"){
     }
 
 }
+
+        // ვერ შეცვალონ ეტაპი გარე ხედვით
+        if (urlTest[0] == "crm" && urlTest[1] == "deal"){
+                setInterval(() => {
+                    // ლისტ ხედვა
+                    stageCvlileba=document.querySelectorAll('.crm-list-stage-bar-table');
+                    if(stageCvlileba){        
+                        stageCvlileba.forEach(element => {
+                            element.style.pointerEvents = 'none';
+                        });        
+                    }
+                    // კენბან ხედვა
+                    document.querySelectorAll('.main-kanban-item-wrapper').forEach(item => {
+                        item.removeAttribute('draggable');
+                        item.addEventListener('dragstart', event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }, true);
+                        item.addEventListener('mousedown', event => {
+                            if (event.button === 0) {
+                                event.stopPropagation();
+                            }
+                        }, true);
+
+                        item.addEventListener('touchstart', event => {
+                            event.stopPropagation();
+                        }, true);
+                    });
+
+                    let actionPanel=document.getElementById("kanban_column");
+                    if (actionPanel) {
+                        actionPanel.style.display="none";
+                    }
+
+                    let actionPanel2 = document.querySelector('.main-dropdown-item[data-value="set_stage"]');
+                    if (actionPanel2) {
+                        // Hide the whole menu-popup-item (the full row), not just the inner span
+                        const menuItem = actionPanel2.closest('.menu-popup-item');
+                        if (menuItem) {
+                            menuItem.style.display = "none";
+                        }
+                    }
+                        
+                }, 500);
+            }
+        //
+
 </script>
