@@ -1,7 +1,7 @@
 <?php
 /**
  * WON დილებზე პროდუქტის მიბმა: პროექტი + ფართის ტიპი,
- * მატჩი ბლოკი / სართული / ნომერი.
+ * მატჩი სექტორი / ბლოკი / სართული / ნომერი.
  * დილის OPPORTUNITY არ იცვლება (IS_MANUAL_OPPORTUNITY = Y).
  *
  * UI: https://crm.monolith.ge/crm/deal/test.php
@@ -24,6 +24,7 @@ define('PROP_OWNER_CONTACT', 'ownerContact');
 define('PROP_OWNER_COMPANY', 'ownerCompany');
 define('D_PROJECT', 'UF_CRM_1779277729207');
 define('D_TYPE', 'UF_CRM_1779277898205');
+define('D_SECTOR', 'UF_CRM_1781768590754');
 define('D_BLOCK', 'UF_CRM_1779277644355');
 define('D_FLOOR', 'UF_CRM_1779277828822');
 define('D_NUMBER', 'UF_CRM_1779277613798');
@@ -112,6 +113,7 @@ function findMatchingProducts(array $deal)
 {
     $project = trim((string)($deal[D_PROJECT] ?? ''));
     $type    = trim((string)($deal[D_TYPE] ?? ''));
+    $sector  = trim((string)($deal[D_SECTOR] ?? ''));
     $block   = trim((string)($deal[D_BLOCK] ?? ''));
     $floor   = trim((string)($deal[D_FLOOR] ?? ''));
     $number  = trim((string)($deal[D_NUMBER] ?? ''));
@@ -119,6 +121,7 @@ function findMatchingProducts(array $deal)
     $criteria = [
         'project' => $project,
         'type'    => $type,
+        'sector'  => $sector,
         'block'   => $block,
         'floor'   => $floor,
         'number'  => $number,
@@ -131,6 +134,9 @@ function findMatchingProducts(array $deal)
     ];
     if ($project !== '') {
         $filter['PROPERTY___VO9RG4'] = $project;
+    }
+    if ($sector !== '') {
+        $filter['PROPERTY__3BU0JH'] = $sector;
     }
     if ($block !== '') {
         $filter['PROPERTY__L24CUB'] = $block;
@@ -154,6 +160,7 @@ function findMatchingProducts(array $deal)
 
         $prodProject = $props['__VO9RG4']['VALUE'] ?? '';
         $prodType    = $props['__X1GCRZ']['VALUE'] ?? '';
+        $prodSector  = $props['_3BU0JH']['VALUE'] ?? '';
         $prodBlock   = $props['_L24CUB']['VALUE'] ?? '';
         $prodFloor   = $props['_FTRIDL']['VALUE'] ?? '';
         $prodNumber  = $props['__6KWOWZ']['VALUE'] ?? '';
@@ -162,6 +169,9 @@ function findMatchingProducts(array $deal)
             continue;
         }
         if ($type !== '' && !valsEqual($prodType, $type)) {
+            continue;
+        }
+        if ($sector !== '' && !valsEqual($prodSector, $sector)) {
             continue;
         }
         if ($block !== '' && !valsEqual($prodBlock, $block)) {
@@ -181,6 +191,7 @@ function findMatchingProducts(array $deal)
             'PRICE'   => (float)($priceRow['PRICE'] ?? 0),
             'project' => $prodProject,
             'type'    => $prodType,
+            'sector'  => $prodSector,
             'block'   => $prodBlock,
             'floor'   => $prodFloor,
             'number'  => $prodNumber,
@@ -251,7 +262,7 @@ $counts = [
 $select = [
     'ID', 'TITLE', 'CONTACT_ID', 'COMPANY_ID',
     'OPPORTUNITY', 'CURRENCY_ID', 'IS_MANUAL_OPPORTUNITY',
-    D_PROJECT, D_TYPE, D_BLOCK, D_FLOOR, D_NUMBER,
+    D_PROJECT, D_TYPE, D_SECTOR, D_BLOCK, D_FLOOR, D_NUMBER,
 ];
 
 $processDeal = function ($deal) use ($apply, &$results, &$counts) {
@@ -275,7 +286,7 @@ $processDeal = function ($deal) use ($apply, &$results, &$counts) {
     [$criteria, $matches] = findMatchingProducts($deal);
     $row['criteria'] = $criteria;
 
-    $required = ['project', 'type', 'block', 'floor', 'number'];
+    $required = ['project', 'type', 'sector', 'block', 'floor', 'number'];
     foreach ($required as $key) {
         if (trim((string)($criteria[$key] ?? '')) === '') {
             $row['status'] = 'missing_fields';
@@ -474,7 +485,7 @@ header('Content-Type: text/html; charset=utf-8');
 <body>
 <div class="wrap">
     <h1>პროდუქტის მიბმა WON დილებზე</h1>
-    <p class="sub">აირჩიე პროექტი და ფართის ტიპი. ბლოკი + სართული + ნომერი ველებით იძებნება შესაბამისი პროდუქტი და ებმევა დილზე . დილის თანხა არ იცვლება. პროდუქტზეც ივსბეა მფლობელის დილი და კონტაქტი/კომპანია</p>
+    <p class="sub">აირჩიე პროექტი და ფართის ტიპი. სექტორი + ბლოკი + სართული + ნომერი ველებით იძებნება შესაბამისი პროდუქტი და ებმევა დილზე. დილის თანხა არ იცვლება. პროდუქტზეც ივსება მფლობელის დილი და კონტაქტი/კომპანია</p>
 
     <form class="card" method="get" id="bind-form">
         <input type="hidden" name="run" value="1">
@@ -529,7 +540,7 @@ header('Content-Type: text/html; charset=utf-8');
                     <tr>
                         <th>დილი</th>
                         <th>სტატუსი</th>
-                        <th>ბლოკი / სართული / ნომერი</th>
+                        <th>სექტორი / ბლოკი / სართული / ნომერი</th>
                         <th>პროდუქტი</th>
                     </tr>
                     </thead>
@@ -550,6 +561,8 @@ header('Content-Type: text/html; charset=utf-8');
                                 <?= htmlspecialchars($statusLabels[$st] ?? $st) ?>
                             </td>
                             <td>
+                                <?= htmlspecialchars((string)($c['sector'] ?? '')) ?>
+                                /
                                 <?= htmlspecialchars((string)($c['block'] ?? '')) ?>
                                 /
                                 <?= htmlspecialchars((string)($c['floor'] ?? '')) ?>
