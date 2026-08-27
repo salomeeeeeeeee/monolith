@@ -325,9 +325,9 @@ ob_end_clean();
     </div>
 
     <div class="field" id="receiptField" style="display:none;">
-      <label>ჩარიცხვის ქვითარი <span class="req">*</span></label>
+      <label>ჩარიცხვის ქვითარი</label>
       <div class="drop-zone" id="receiptDropZone" onclick="document.getElementById('receiptFile').click()">
-        <input type="file" id="receiptFile" accept="image/*,.pdf" onchange="handleReceiptFile(this.files[0])">
+        <input type="file" id="receiptFile" accept="image/,.pdf" onchange="handleReceiptFile(this.files[0])">
         <div class="dz-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#0d9488" stroke-width="1.8" stroke-linejoin="round"/>
@@ -450,7 +450,7 @@ function handleReceiptFile(f) {
 
 function handlePaymentMethodChange(value) {
   var receiptField = document.getElementById('receiptField');
-  if (value === 'cash') {
+  if (value === 'cash' || value === 'საბანკო გადარიცხვა') {
     receiptField.style.display = 'block';
   } else {
     receiptField.style.display = 'none';
@@ -480,8 +480,6 @@ function saveSell() {
   var clientBlocks = document.querySelectorAll('.client-block');
   var clients = [];
   var allValid = !!contr_date && !!paymentMethod;
-
-  if (paymentMethod === 'cash' && !selectedReceiptFile) allValid = false;
 
   clientBlocks.forEach(function(block){
     var contactId  = block.getAttribute('data-contact-id');
@@ -513,7 +511,7 @@ function saveSell() {
   fd.append('payment_method', paymentMethod);
   fd.append('clients',    JSON.stringify(clients));
   fd.append('passport',   selectedFile, selectedFile.name);
-  if (paymentMethod === 'cash' && selectedReceiptFile) {
+  if (selectedReceiptFile) {
     fd.append('receipt', selectedReceiptFile, selectedReceiptFile.name);
   }
 
