@@ -541,6 +541,9 @@ if ($run) {
                     $area = trim((string)($row[4] ?? ''));
                     $areaExcel = epdParseArea($area);
                     $kvmExcel = epdParsePrice($row[5] ?? '');
+                    if ($kvmExcel === null) {
+                        $kvmExcel = 0.0;
+                    }
                     $oppExcel = epdParsePrice($row[6] ?? '');
 
                     $resultRow = [
@@ -576,7 +579,7 @@ if ($run) {
                         continue;
                     }
 
-                    if ($kvmExcel === null || $oppExcel === null || $kvmExcel <= 0 || $oppExcel <= 0) {
+                    if ($oppExcel === null || $oppExcel <= 0) {
                         $resultRow['status'] = 'invalid_prices';
                         $counts['invalid_prices']++;
                         $results[] = $resultRow;
@@ -702,7 +705,7 @@ if ($run) {
 
 $statusLabels = [
     'missing_fields' => 'აკლია ველი',
-    'invalid_prices' => 'არასწორი ფასი F/G',
+    'invalid_prices' => 'არასწორი ფასი G',
     'invalid_area' => 'არასწორი ფართი E',
     'not_found' => 'დილი ვერ მოიძებნა',
     'ambiguous' => 'რამდენიმე დილი',
