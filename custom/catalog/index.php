@@ -1036,53 +1036,26 @@ projectSelect.addEventListener("change", function() {
 });
 
 // ══════════════════════════════════════════
-//  BLOCK CHECKBOXES (sector-aware)
+//  BLOCK CHECKBOXES (flat list — no sector grouping)
 // ══════════════════════════════════════════
 function buildBlockCheckboxes(blocks) {
     const c = document.querySelector("#blockFilter .dropdown-content");
     c.innerHTML = "";
 
-    const hasSectors = productsCache.some(p => p[F_SECTOR] && p[F_SECTOR] !== "");
+    // Flat, deduplicated block list — no sector grouping/headers.
+    const allBlocks = new Set(blocks || []);
+    productsCache.forEach(p => {
+        const blk = p[F_BLOCK] || p["_L24CUB"] || "";
+        if (blk) allBlocks.add(blk);
+    });
 
-    if (hasSectors) {
-        const sectorBlockMap = {};
-        productsCache.forEach(p => {
-            const sec = p[F_SECTOR] || "–";
-            const blk = p[F_BLOCK]  || "";
-            if (!blk) return;
-            if (!sectorBlockMap[sec]) sectorBlockMap[sec] = new Set();
-            sectorBlockMap[sec].add(blk);
-        });
-        if (blocks.includes("P")) {
-            if (!sectorBlockMap["P"]) sectorBlockMap["P"] = new Set();
-            sectorBlockMap["P"].add("P");
-        }
-
-        Object.keys(sectorBlockMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })).forEach(sec => {
-            const hdr = document.createElement("div");
-            hdr.className = "block-dropdown-sector-header";
-            hdr.textContent = sec === "P" ? "გარე ავტოსადგომები" : "სექტ. " + sec;
-            c.appendChild(hdr);
-
-            [...sectorBlockMap[sec]].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })).forEach(block => {
-                const lbl = document.createElement("label");
-
-                lbl.innerHTML = block === "P"
-                    ? `<input type="checkbox" value="${block}"> გარე ავტოსადგომები`
-                    : `<input type="checkbox" value="${block}"> ${block}`;
-                c.appendChild(lbl);
-            });
-        });
-    } else {
-        blocks.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })).forEach(block => {
-
-            const lbl = document.createElement("label");
-            lbl.innerHTML = block === "P"
-                ? `<input type="checkbox" value="${block}"> გარე ავტოსადგომები`
-                : `<input type="checkbox" value="${block}"> ${block}`;
-            c.appendChild(lbl);
-        });
-    }
+    [...allBlocks].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })).forEach(block => {
+        const lbl = document.createElement("label");
+        lbl.innerHTML = block === "P"
+            ? `<input type="checkbox" value="${block}"> გარე ავტოსადგომები`
+            : `<input type="checkbox" value="${block}"> ${block}`;
+        c.appendChild(lbl);
+    });
 }
 
 
