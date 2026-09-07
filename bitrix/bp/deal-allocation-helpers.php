@@ -64,6 +64,7 @@ if (!function_exists('allocation_dealUpdateFields')) {
             "UF_CRM_1779277860291" => $productData["__9H8XS9"] ?? "",
             "UF_CRM_1779277690404" => $productData["__WX6YWZ"] ?? "",
             "UF_CRM_1782206163787" => $productData["__51MODL"] ?? "",
+            "UF_CRM_1781768590754" => $productData["_3BU0JH"] ?? "",
             "PRODUCT_ID"           => $productData["ID"] ?? "",
             "OPPORTUNITY"          => $totalPrice,
         );
