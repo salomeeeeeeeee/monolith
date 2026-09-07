@@ -676,14 +676,15 @@ ob_end_clean();
         <h2>ძირითადი ფილტრი</h2>
         <select id="projects"><option value="" disabled selected>პროექტი *</option></select>
 
-        <div class="dropdown-checkbox" id="blockFilter">
-            <div class="dropdown-header">ბლოკი</div>
-            <div class="dropdown-content"></div>
-        </div>
         <div class="dropdown-checkbox" id="sectorFilter">
     <div class="dropdown-header">სექტორი</div>
     <div class="dropdown-content"></div>
 </div>
+        <div class="dropdown-checkbox" id="blockFilter">
+            <div class="dropdown-header">ბლოკი</div>
+            <div class="dropdown-content"></div>
+        </div>
+
 
 <div class="range-filter" style="margin-bottom:8px;">
     <label>უძრავი ქონების №</label>
