@@ -1359,6 +1359,9 @@ var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
 
         var dateStr = info["DATE_CREATE"] ? '<span style="color:#888; background:#f5f5f5; border-radius:4px; padding:1px 6px;">📅 ' + info["DATE_CREATE"] + '</span>' : '';
 
+        var stageValue = info["STAGE_NAME"] || info["STAGE_ID"] || "";
+        var stageStr = stageValue ? '<span style="color:#5a3e00; background:#fff3cd; border-radius:4px; padding:1px 6px;">🏷️ ' + stageValue + '</span>' : '';
+
         drawDivs += '<div style="' +
             'display:flex; align-items:center; gap:8px;' +
             'background:#fff; border:1px solid #ffcdd2;' +
@@ -1371,14 +1374,13 @@ var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
                 'background:#ffebee; border-radius:4px; padding:2px 6px; white-space:nowrap;' +
             '">#' + info["ID"] + '</a>' +
             '<span style="color:#666;">📞 ' + info["PHONE"] + '</span>' +
-            // '<span style="color:#888; background:#f5f5f5; border-radius:4px; padding:1px 6px;">' + info["CATEGORY_NAME"] + '</span>' +
+            stageStr +
             dateStr +
             '<span style="color:#555; margin-left:auto;">👤 ' + info["RESPONSIBLE_NAME"] + '</span>' +
         '</div>';
     }
     return drawDivs;
 }
-
     window.showDealsInfos = function() {
         var block = document.getElementById("dealsInfosBlock");
         var hideArrow = document.getElementById("hideArrow");

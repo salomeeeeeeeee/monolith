@@ -10,6 +10,14 @@ function getPipelineById($categoryId) {
     return "";
 }
 
+function getStageName($stageId) {
+    static $stages = null;
+    if ($stages === null) {
+        $stages = \CCrmStatus::GetStatusList('DEAL_STAGE');
+    }
+    return isset($stages[$stageId]) ? $stages[$stageId] : $stageId;
+}
+
 function getDealsByFilter($arFilter) {
     $arDeals = array();
     $res = CCrmDeal::GetListEx(
@@ -17,10 +25,11 @@ function getDealsByFilter($arFilter) {
         $arFilter,
         false,
         array("nPageSize" => 10),
-        array("ID", "TITLE", "CATEGORY_ID", "ASSIGNED_BY_ID", "ASSIGNED_BY_NAME", "ASSIGNED_BY_LAST_NAME", "DATE_CREATE")
+        array("ID", "TITLE", "CATEGORY_ID", "STAGE_ID", "ASSIGNED_BY_ID", "ASSIGNED_BY_NAME", "ASSIGNED_BY_LAST_NAME", "DATE_CREATE")
     );
     while ($arDeal = $res->Fetch()) {
         $arDeal["CATEGORY_NAME"]    = getPipelineById($arDeal["CATEGORY_ID"]);
+        $arDeal["STAGE_NAME"]       = getStageName($arDeal["STAGE_ID"]);
         $arDeal["RESPONSIBLE_NAME"] = $arDeal["ASSIGNED_BY_NAME"] . " " . $arDeal["ASSIGNED_BY_LAST_NAME"];
         $arDeal["DATE_CREATE"] = date("d/m/Y", MakeTimeStamp($arDeal["DATE_CREATE"]));
                 array_push($arDeals, $arDeal);
@@ -74,6 +83,8 @@ function checkDeals($mobileNumber, $dealId) {
                     "ID"               => $resDeal["ID"],
                     "TITLE"            => $resDeal["TITLE"],
                     "CATEGORY_NAME"    => $resDeal["CATEGORY_NAME"],
+                    "STAGE_NAME"       => $resDeal["STAGE_NAME"],
+                    "STAGE_ID"         => $resDeal["STAGE_ID"],
                     "RESPONSIBLE_NAME" => $resDeal["RESPONSIBLE_NAME"],
                     "PHONE"            => $info["VALUE"],
                     "DATE_CREATE"      => $resDeal["DATE_CREATE"],
@@ -125,7 +136,7 @@ function checkLeads($mobileNumber, $leadId) {
     return $leadsArr;
 }
 
-$dealId = $_GET["dealId"];
+$id     = $_GET["id"];
 $phone  = $_GET["phone"];
 $type   = $_GET["type"];
 
