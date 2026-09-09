@@ -90,14 +90,27 @@ foreach ($statuses as $status) {
 }
 ?>
 
+<?php
+$reportPct = static function ($value, $total): string {
+    if ($total <= 0) {
+        return '0%';
+    }
+    return number_format(($value / $total) * 100, 1) . '%';
+};
+?>
+
 <?php reportBlockOpen($t['h2_count']); ?>
     <thead>
         <tr>
             <th><?= $t['col_type'] ?></th>
             <th><?= $t['col_free'] ?></th>
+            <th>%</th>
             <th><?= $t['col_reserved'] ?></th>
+            <th>%</th>
             <th><?= $t['col_sold'] ?></th>
+            <th>%</th>
             <th>NFS</th>
+            <th>%</th>
             <th><?= $t['col_total'] ?></th>
         </tr>
     </thead>
@@ -111,18 +124,25 @@ foreach ($statuses as $status) {
         ?>
         <tr <?= $isSubRow ? 'class="sub-row"' : '' ?>>
             <td><?= reportSubTypeCell($prodType, $t, $isSubRow) ?></td>
-            <?php foreach ($statuses as $status): ?>
-                <td><?= $infos[$status]['num'] ?? 0 ?></td>
+            <?php foreach ($statuses as $status):
+                $val = $infos[$status]['num'] ?? 0;
+            ?>
+                <td><?= $val ?></td>
+                <td><?= $reportPct($val, $row_total) ?></td>
             <?php endforeach; ?>
             <td><?= $row_total ?></td>
         </tr>
         <?php endforeach; ?>
+        <?php $grand_total_num = array_sum($status_totals_num); ?>
         <tr class="total-row">
             <td><?= $t['col_total'] ?></td>
-            <?php foreach ($statuses as $status): ?>
-                <td><?= $status_totals_num[$status] ?></td>
+            <?php foreach ($statuses as $status):
+                $val = $status_totals_num[$status];
+            ?>
+                <td><?= $val ?></td>
+                <td><?= $reportPct($val, $grand_total_num) ?></td>
             <?php endforeach; ?>
-            <td><?= array_sum($status_totals_num) ?></td>
+            <td><?= $grand_total_num ?></td>
         </tr>
     </tbody>
 <?php reportBlockClose(); ?>
@@ -132,9 +152,13 @@ foreach ($statuses as $status) {
         <tr>
             <th><?= $t['col_type'] ?></th>
             <th><?= $t['col_free'] ?></th>
+            <th>%</th>
             <th><?= $t['col_reserved'] ?></th>
+            <th>%</th>
             <th><?= $t['col_sold'] ?></th>
+            <th>%</th>
             <th>NFS</th>
+            <th>%</th>
             <th><?= $t['col_total'] ?></th>
         </tr>
     </thead>
@@ -148,18 +172,25 @@ foreach ($statuses as $status) {
         ?>
         <tr <?= $isSubRow ? 'class="sub-row"' : '' ?>>
             <td><?= reportSubTypeCell($prodType, $t, $isSubRow) ?></td>
-            <?php foreach ($statuses as $status): ?>
-                <td><?= number_format($infos[$status]['total_area'] ?? 0, 2) ?></td>
+            <?php foreach ($statuses as $status):
+                $val = $infos[$status]['total_area'] ?? 0;
+            ?>
+                <td><?= number_format($val, 2) ?></td>
+                <td><?= $reportPct($val, $row_total) ?></td>
             <?php endforeach; ?>
             <td><?= number_format($row_total, 2) ?></td>
         </tr>
         <?php endforeach; ?>
+        <?php $grand_total_area = array_sum($apt_status_totals_area); ?>
         <tr class="total-row">
             <td><?= $t['col_total'] ?></td>
-            <?php foreach ($statuses as $status): ?>
-                <td><?= number_format($apt_status_totals_area[$status], 2) ?></td>
+            <?php foreach ($statuses as $status):
+                $val = $apt_status_totals_area[$status];
+            ?>
+                <td><?= number_format($val, 2) ?></td>
+                <td><?= $reportPct($val, $grand_total_area) ?></td>
             <?php endforeach; ?>
-            <td><?= number_format(array_sum($apt_status_totals_area), 2) ?></td>
+            <td><?= number_format($grand_total_area, 2) ?></td>
         </tr>
     </tbody>
 <?php reportBlockClose(); ?>
@@ -169,9 +200,13 @@ foreach ($statuses as $status) {
         <tr>
             <th><?= $t['col_type'] ?></th>
             <th><?= $t['col_free'] ?></th>
+            <th>%</th>
             <th><?= $t['col_reserved'] ?></th>
+            <th>%</th>
             <th><?= $t['col_sold'] ?></th>
+            <th>%</th>
             <th>NFS</th>
+            <th>%</th>
             <th><?= $t['col_total'] ?></th>
         </tr>
     </thead>
@@ -185,12 +220,26 @@ foreach ($statuses as $status) {
         ?>
         <tr <?= $isSubRow ? 'class="sub-row"' : '' ?>>
             <td><?= reportSubTypeCell($prodType, $t, $isSubRow) ?></td>
-            <?php foreach ($statuses as $status): ?>
-                <td><?= number_format($infos[$status]['price'] ?? 0, 2) ?></td>
+            <?php foreach ($statuses as $status):
+                $val = $infos[$status]['price'] ?? 0;
+            ?>
+                <td><?= number_format($val, 2) ?></td>
+                <td><?= $reportPct($val, $row_total) ?></td>
             <?php endforeach; ?>
             <td><?= number_format($row_total, 2) ?></td>
         </tr>
         <?php endforeach; ?>
+        <?php $grand_total_price = array_sum($status_totals_price); ?>
+        <tr class="total-row">
+            <td><?= $t['col_total'] ?></td>
+            <?php foreach ($statuses as $status):
+                $val = $status_totals_price[$status];
+            ?>
+                <td><?= number_format($val, 2) ?></td>
+                <td><?= $reportPct($val, $grand_total_price) ?></td>
+            <?php endforeach; ?>
+            <td><?= number_format($grand_total_price, 2) ?></td>
+        </tr>
     </tbody>
 <?php reportBlockClose(); ?>
 

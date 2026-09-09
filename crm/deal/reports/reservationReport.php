@@ -71,18 +71,35 @@ $deals = reportGetDealsByFilter($arFilter, [
 ]);
 
 $productsByDeal = [];
-foreach (reportGetProducts() as $row) {
+foreach (reportGetProductsForDeals(array_keys($deals)) as $row) {
     $ownerDealId = reportExtractDealId($row['OWNER_DEAL'] ?? '');
-    if ($ownerDealId !== '' && isset($deals[$ownerDealId])) {
+    if ($ownerDealId !== '') {
         $productsByDeal[$ownerDealId] = $row;
     }
 }
 
+$userIds = [];
+$contactIds = [];
+foreach ($deals as $deal) {
+    $uid = (int)($deal['ASSIGNED_BY_ID'] ?? 0);
+    if ($uid > 0) {
+        $userIds[$uid] = true;
+    }
+    $cid = (int)($deal['CONTACT_ID'] ?? 0);
+    if ($cid > 0 && empty($deal['CONTACT_FULL_NAME'])) {
+        $contactIds[$cid] = true;
+    }
+}
+$userNames = reportBatchUserNames(array_keys($userIds));
+$contactNames = reportBatchContactNames(array_keys($contactIds));
+
 foreach ($deals as &$deal) {
     $dealId = reportExtractDealId($deal['ID'] ?? '');
     $product = $productsByDeal[$dealId] ?? null;
+    $uid = (int)($deal['ASSIGNED_BY_ID'] ?? 0);
+    $cid = (int)($deal['CONTACT_ID'] ?? 0);
 
-    $deal['RESPONSIBLE_NAME'] = reportGetUserName($deal['ASSIGNED_BY_ID'] ?? '');
+    $deal['RESPONSIBLE_NAME'] = $uid > 0 ? ($userNames[$uid] ?? '') : '';
     $deal['AMOUNT'] = reportParseAmount($deal['OPPORTUNITY'] ?? 0);
     $deal['TOTAL_AREA'] = $product ? (float)($product[F_TOTAL_AREA] ?? 0) : 0;
     $deal['UNIT_NAME'] = $product['NAME'] ?? '';
@@ -93,8 +110,8 @@ foreach ($deals as &$deal) {
     $deal['KVM_PRICE'] = $product['KVM_PRICE'] ?? ($product[F_KVM_PRICE] ?? '');
     $deal['STAGE_LABEL'] = ($stageLabels[$lang][$deal['STAGE_ID'] ?? ''] ?? ($deal['STAGE_ID'] ?? ''));
 
-    if (empty($deal['CONTACT_FULL_NAME']) && !empty($deal['CONTACT_ID'])) {
-        $deal['CONTACT_FULL_NAME'] = reportGetContactName($deal['CONTACT_ID']);
+    if (empty($deal['CONTACT_FULL_NAME']) && $cid > 0) {
+        $deal['CONTACT_FULL_NAME'] = $contactNames[$cid] ?? '';
     }
 }
 unset($deal);
@@ -153,17 +170,21 @@ foreach ($resArray as $prodType => $infos) {
 
 $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_RESERVATION_STAGES], ['ID', D_PROJECT, D_BLOCK, 'ASSIGNED_BY_ID']);
 $projects = $blocks = $responsibles = [];
+$responsibleIds = [];
 foreach ($allDeals as $deal) {
-    if (!empty($deal[D_PROJECT]) && !in_array($deal[D_PROJECT], $projects, true)) {
-        $projects[] = $deal[D_PROJECT];
+    if (!empty($deal[D_PROJECT])) {
+        $projects[$deal[D_PROJECT]] = true;
     }
-    if (!empty($deal[D_BLOCK]) && $deal[D_BLOCK] !== 'P' && !in_array($deal[D_BLOCK], $blocks, true)) {
-        $blocks[] = $deal[D_BLOCK];
+    if (!empty($deal[D_BLOCK]) && $deal[D_BLOCK] !== 'P') {
+        $blocks[$deal[D_BLOCK]] = true;
     }
     if (!empty($deal['ASSIGNED_BY_ID'])) {
-        $responsibles[$deal['ASSIGNED_BY_ID']] = reportGetUserName($deal['ASSIGNED_BY_ID']);
+        $responsibleIds[(int)$deal['ASSIGNED_BY_ID']] = true;
     }
 }
+$projects = array_keys($projects);
+$blocks = array_keys($blocks);
+$responsibles = reportBatchUserNames(array_keys($responsibleIds));
 sort($projects);
 sort($blocks);
 asort($responsibles);

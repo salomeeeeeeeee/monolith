@@ -2,47 +2,273 @@
 
 require_once __DIR__ . '/config.php';
 
+/** Short TTL for report catalog / schedule snapshots (seconds). */
+define('REPORT_DATA_CACHE_TTL', 120);
+
+function reportCacheGet($key, $dir = '/crm/deal/reports')
+{
+    if (!class_exists('\Bitrix\Main\Data\Cache')) {
+        return null;
+    }
+    $cache = \Bitrix\Main\Data\Cache::createInstance();
+    if ($cache->initCache(REPORT_DATA_CACHE_TTL, $key, $dir)) {
+        return $cache->getVars();
+    }
+    return null;
+}
+
+function reportCacheSet($key, $value, $dir = '/crm/deal/reports')
+{
+    if (!class_exists('\Bitrix\Main\Data\Cache')) {
+        return;
+    }
+    $cache = \Bitrix\Main\Data\Cache::createInstance();
+    if ($cache->initCache(REPORT_DATA_CACHE_TTL, $key, $dir)) {
+        return;
+    }
+    if ($cache->startDataCache()) {
+        $cache->endDataCache($value);
+    }
+}
+
+function reportScalarProp($value)
+{
+    if (is_array($value)) {
+        if (array_key_exists('VALUE', $value)) {
+            return reportScalarProp($value['VALUE']);
+        }
+        if (isset($value[0])) {
+            return reportScalarProp($value[0]);
+        }
+        return '';
+    }
+    return $value;
+}
+
 function reportGetNbgRate($date = null)
 {
+    static $memory = [];
     $date = $date ?: date('Y-m-d');
+    if (isset($memory[$date])) {
+        return $memory[$date];
+    }
+
+    $cached = reportCacheGet('nbg_usd_' . $date, '/crm/deal/reports/nbg');
+    if ($cached !== null && is_numeric($cached)) {
+        return $memory[$date] = (float)$cached;
+    }
+
     $url = "https://nbg.gov.ge/gw/api/ct/monetarypolicy/currencies?Currencies=USD&date={$date}";
     $response = @file_get_contents($url);
-    if ($response === false) {
-        return 1;
+    $rate = 1.0;
+    if ($response !== false) {
+        $data = json_decode($response);
+        $rate = (float)($data[0]->currencies[0]->rate ?? 1);
     }
-    $data = json_decode($response);
-    return $data[0]->currencies[0]->rate ?? 1;
+
+    reportCacheSet('nbg_usd_' . $date, $rate, '/crm/deal/reports/nbg');
+    return $memory[$date] = $rate;
 }
 
 function reportGetUserName($id)
 {
-    if (empty($id)) {
+    $id = (int)$id;
+    if ($id <= 0) {
         return '';
     }
-    $res = CUser::GetByID($id)->Fetch();
-    return trim(($res['NAME'] ?? '') . ' ' . ($res['LAST_NAME'] ?? ''));
+    $names = reportBatchUserNames([$id]);
+    return $names[$id] ?? '';
 }
 
 function reportGetContactName($contactId)
 {
-    if (empty($contactId)) {
+    $contactId = (int)$contactId;
+    if ($contactId <= 0) {
         return '';
     }
-    $res = CCrmContact::GetList([], ['ID' => $contactId], ['ID', 'NAME', 'LAST_NAME']);
-    if ($row = $res->Fetch()) {
-        return trim($row['NAME'] . ' ' . $row['LAST_NAME']);
+    $names = reportBatchContactNames([$contactId]);
+    return $names[$contactId] ?? '';
+}
+
+function reportBatchUserNames(array $ids)
+{
+    static $cache = [];
+    $result = [];
+    $missing = [];
+    foreach ($ids as $id) {
+        $id = (int)$id;
+        if ($id <= 0) {
+            continue;
+        }
+        if (array_key_exists($id, $cache)) {
+            $result[$id] = $cache[$id];
+        } else {
+            $missing[$id] = true;
+        }
     }
-    return '';
+    if (!empty($missing)) {
+        $by = 'id';
+        $order = 'asc';
+        $res = CUser::GetList(
+            $by,
+            $order,
+            ['ID' => implode('|', array_keys($missing))],
+            ['FIELDS' => ['ID', 'NAME', 'LAST_NAME']]
+        );
+        while ($row = $res->Fetch()) {
+            $id = (int)$row['ID'];
+            $name = trim(($row['NAME'] ?? '') . ' ' . ($row['LAST_NAME'] ?? ''));
+            $cache[$id] = $name;
+            $result[$id] = $name;
+            unset($missing[$id]);
+        }
+        foreach ($missing as $id => $_) {
+            $cache[$id] = '';
+            $result[$id] = '';
+        }
+    }
+    return $result;
+}
+
+function reportBatchContactNames(array $ids)
+{
+    static $cache = [];
+    $result = [];
+    $missing = [];
+    foreach ($ids as $id) {
+        $id = (int)$id;
+        if ($id <= 0) {
+            continue;
+        }
+        if (array_key_exists($id, $cache)) {
+            $result[$id] = $cache[$id];
+        } else {
+            $missing[$id] = true;
+        }
+    }
+    if (!empty($missing)) {
+        foreach (array_chunk(array_keys($missing), 500) as $chunk) {
+            $res = CCrmContact::GetList(
+                [],
+                ['ID' => $chunk, 'CHECK_PERMISSIONS' => 'N'],
+                ['ID', 'NAME', 'LAST_NAME']
+            );
+            while ($row = $res->Fetch()) {
+                $id = (int)$row['ID'];
+                $name = trim(($row['NAME'] ?? '') . ' ' . ($row['LAST_NAME'] ?? ''));
+                $cache[$id] = $name;
+                $result[$id] = $name;
+                unset($missing[$id]);
+            }
+        }
+        foreach ($missing as $id => $_) {
+            $cache[$id] = '';
+            $result[$id] = '';
+        }
+    }
+    return $result;
+}
+
+function reportBatchBasePrices(array $productIds)
+{
+    $prices = [];
+    if (empty($productIds)) {
+        return $prices;
+    }
+
+    $baseGroupId = 0;
+    if (class_exists('CCatalogGroup')) {
+        $base = CCatalogGroup::GetBaseGroup();
+        $baseGroupId = (int)($base['ID'] ?? 0);
+    }
+
+    foreach (array_chunk(array_map('intval', $productIds), 500) as $chunk) {
+        $chunk = array_values(array_filter($chunk));
+        if (empty($chunk)) {
+            continue;
+        }
+        $filter = ['PRODUCT_ID' => $chunk];
+        if ($baseGroupId > 0) {
+            $filter['CATALOG_GROUP_ID'] = $baseGroupId;
+        }
+        $res = CPrice::GetList(
+            [],
+            $filter,
+            false,
+            false,
+            ['PRODUCT_ID', 'PRICE', 'CATALOG_GROUP_ID']
+        );
+        while ($row = $res->Fetch()) {
+            $pid = (int)$row['PRODUCT_ID'];
+            if (!isset($prices[$pid])) {
+                $prices[$pid] = (float)$row['PRICE'];
+            }
+        }
+    }
+
+    return $prices;
 }
 
 function reportGetDealsByFilter($arFilter, $arSelect = [], $arSort = ['ID' => 'ASC'])
 {
     $resArr = [];
+    if (!isset($arFilter['CHECK_PERMISSIONS'])) {
+        $arFilter['CHECK_PERMISSIONS'] = 'N';
+    }
     $res = CCrmDeal::GetList($arSort, $arFilter, $arSelect);
     while ($arDeal = $res->Fetch()) {
         $resArr[$arDeal['ID']] = $arDeal;
     }
     return $resArr;
+}
+
+function reportProductPropertyCodes()
+{
+    return [
+        F_PROJECT,
+        F_TYPE,
+        F_STATUS,
+        F_BLOCK,
+        F_SECTOR,
+        F_TOTAL_AREA,
+        F_BEDROOMS,
+        F_KVM_PRICE,
+        F_UNIT_NO,
+        F_FLOOR,
+        'OWNER_DEAL',
+        'ownerDeal',
+        'OWNER_CONTACT',
+        'OWNER_PERSONAL_CONTACT',
+        'DEAL_RESPONSIBLE',
+    ];
+}
+
+function reportProductSelectFields()
+{
+    $select = ['ID', 'IBLOCK_ID', 'NAME'];
+    foreach (reportProductPropertyCodes() as $code) {
+        $select[] = 'PROPERTY_' . $code;
+    }
+    return $select;
+}
+
+function reportMapProductFetchRow(array $ob)
+{
+    $row = [
+        'ID' => $ob['ID'],
+        'IBLOCK_ID' => $ob['IBLOCK_ID'] ?? '',
+        'NAME' => $ob['~NAME'] ?? ($ob['NAME'] ?? ''),
+    ];
+    foreach (reportProductPropertyCodes() as $code) {
+        $key = 'PROPERTY_' . $code . '_VALUE';
+        if (array_key_exists($key, $ob)) {
+            $row[$code] = reportScalarProp($ob[$key]);
+        }
+    }
+    if (empty($row['OWNER_DEAL']) && !empty($row['ownerDeal'])) {
+        $row['OWNER_DEAL'] = $row['ownerDeal'];
+    }
+    return $row;
 }
 
 function reportNormalizeProductRow($arFields, $arProps, $nbg = null)
@@ -76,17 +302,82 @@ function reportNormalizeProductRow($arFields, $arProps, $nbg = null)
 
 function reportGetProducts($arFilter = [])
 {
-    $filter = array_merge(['IBLOCK_ID' => REPORT_PRODUCT_IBLOCK], $arFilter);
-    $nbg = reportGetNbgRate(date('Y-m-d'));
-    $elements = [];
+    static $runtime = [];
 
-    $res = CIBlockElement::GetList([], $filter, false, ['nPageSize' => 99999], []);
-    while ($ob = $res->GetNextElement()) {
-        $row = reportNormalizeProductRow($ob->GetFields(), $ob->GetProperties(), $nbg);
-        $elements[$row['ID']] = $row;
+    $filter = array_merge([
+        'IBLOCK_ID' => REPORT_PRODUCT_IBLOCK,
+        'CHECK_PERMISSIONS' => 'N',
+    ], $arFilter);
+
+    $cacheKey = 'products_' . md5(serialize($filter));
+    if (isset($runtime[$cacheKey])) {
+        return $runtime[$cacheKey];
     }
 
-    return $elements;
+    $cached = reportCacheGet($cacheKey);
+    if (is_array($cached)) {
+        return $runtime[$cacheKey] = $cached;
+    }
+
+    $nbg = reportGetNbgRate(date('Y-m-d'));
+    $raw = [];
+    $productIds = [];
+    $contactIds = [];
+    $userIds = [];
+
+    $res = CIBlockElement::GetList(
+        ['ID' => 'ASC'],
+        $filter,
+        false,
+        false,
+        reportProductSelectFields()
+    );
+    while ($ob = $res->GetNext()) {
+        $id = (int)$ob['ID'];
+        if ($id <= 0) {
+            continue;
+        }
+        $row = reportMapProductFetchRow($ob);
+        $raw[$id] = $row;
+        $productIds[] = $id;
+
+        $contactRaw = $row['OWNER_PERSONAL_CONTACT'] ?? '';
+        if ($contactRaw === '' || $contactRaw === null) {
+            $contactRaw = $row['OWNER_CONTACT'] ?? '';
+        }
+        $contactId = (int)reportExtractDealId($contactRaw);
+        if ($contactId > 0) {
+            $contactIds[$contactId] = true;
+        }
+        $userId = (int)($row['DEAL_RESPONSIBLE'] ?? 0);
+        if ($userId > 0) {
+            $userIds[$userId] = true;
+        }
+    }
+
+    $contacts = reportBatchContactNames(array_keys($contactIds));
+    $users = reportBatchUserNames(array_keys($userIds));
+    $prices = reportBatchBasePrices($productIds);
+
+    $elements = [];
+    foreach ($raw as $id => $row) {
+        $contactRaw = $row['OWNER_PERSONAL_CONTACT'] ?? '';
+        if ($contactRaw === '' || $contactRaw === null) {
+            $contactRaw = $row['OWNER_CONTACT'] ?? '';
+        }
+        $contactId = (int)reportExtractDealId($contactRaw);
+        $userId = (int)($row['DEAL_RESPONSIBLE'] ?? 0);
+
+        $row['OWNER_CONTACT_NAME'] = $contactId > 0 ? ($contacts[$contactId] ?? '') : '';
+        $row['DEAL_RESPONSIBLE_NAME'] = $userId > 0 ? ($users[$userId] ?? '') : '';
+        $row['PRICE'] = isset($prices[$id]) ? round((float)$prices[$id], 2) : 0;
+        $row['PRICE_GEL'] = round($row['PRICE'] * $nbg, 2);
+        $row['KVM_PRICE'] = isset($row[F_KVM_PRICE]) ? (float)$row[F_KVM_PRICE] : 0;
+        $elements[$id] = $row;
+    }
+
+    reportCacheSet($cacheKey, $elements);
+    return $runtime[$cacheKey] = $elements;
 }
 
 function reportGetAllInventoryProducts()
@@ -96,18 +387,36 @@ function reportGetAllInventoryProducts()
 
 function reportGetSoldProducts()
 {
-    $products = reportGetProducts();
-    return array_filter($products, function ($product) {
+    return array_filter(reportGetProducts(), static function ($product) {
         return ($product[F_STATUS] ?? '') === 'გაყიდული';
     });
 }
 
 function reportGetReservedProducts()
 {
-    $products = reportGetProducts();
-    return array_filter($products, function ($product) {
+    return array_filter(reportGetProducts(), static function ($product) {
         return ($product[F_STATUS] ?? '') === REPORT_RESERVED_STATUS;
     });
+}
+
+/**
+ * Products linked to the given deal IDs via OWNER_DEAL (uses cached catalog).
+ */
+function reportGetProductsForDeals(array $dealIds)
+{
+    $dealIdSet = reportBuildDealIdSet($dealIds);
+    if (empty($dealIdSet)) {
+        return [];
+    }
+
+    $matched = [];
+    foreach (reportGetProducts() as $id => $row) {
+        $ownerDealId = reportExtractDealId($row['OWNER_DEAL'] ?? '');
+        if ($ownerDealId !== '' && isset($dealIdSet[$ownerDealId])) {
+            $matched[$id] = $row;
+        }
+    }
+    return $matched;
 }
 
 /**
@@ -187,10 +496,11 @@ function reportGetUniqueValues($items, $field)
 {
     $values = [];
     foreach ($items as $item) {
-        if (!empty($item[$field]) && !in_array($item[$field], $values, true)) {
-            $values[] = $item[$field];
+        if (!empty($item[$field])) {
+            $values[$item[$field]] = true;
         }
     }
+    $values = array_keys($values);
     sort($values);
     return $values;
 }
@@ -324,6 +634,63 @@ function reportBuildDealIdSet($dealIds)
 }
 
 /**
+ * Load all property rows for an iblock (cached). Used by schedule/payment reports.
+ */
+function reportLoadAllIblockPropertyRows($iblockId, array $sort = ['ID' => 'ASC'])
+{
+    static $runtime = [];
+    $iblockId = (int)$iblockId;
+    if ($iblockId <= 0) {
+        return [];
+    }
+
+    $cacheKey = 'iblock_rows_' . $iblockId . '_' . md5(serialize($sort));
+    if (isset($runtime[$cacheKey])) {
+        return $runtime[$cacheKey];
+    }
+
+    $cached = reportCacheGet($cacheKey, '/crm/deal/reports/iblock');
+    if (is_array($cached)) {
+        return $runtime[$cacheKey] = $cached;
+    }
+
+    $rows = [];
+    $page = 1;
+    $pageSize = 500;
+
+    do {
+        $pageCount = 0;
+        $res = CIBlockElement::GetList(
+            $sort,
+            ['IBLOCK_ID' => $iblockId, 'CHECK_PERMISSIONS' => 'N'],
+            false,
+            ['nPageSize' => $pageSize, 'iNumPage' => $page],
+            ['ID', 'IBLOCK_ID', 'NAME', 'PROPERTY_*']
+        );
+
+        while ($ob = $res->GetNext()) {
+            $pageCount++;
+            $row = [
+                'ID' => $ob['ID'],
+                'IBLOCK_ID' => $ob['IBLOCK_ID'] ?? '',
+                'NAME' => $ob['~NAME'] ?? ($ob['NAME'] ?? ''),
+            ];
+            foreach ($ob as $key => $val) {
+                if (preg_match('/^PROPERTY_(.+)_VALUE$/', $key, $m)) {
+                    $row[$m[1]] = reportScalarProp($val);
+                }
+            }
+            $rows[] = $row;
+        }
+
+        $page++;
+    } while ($pageCount === $pageSize);
+
+    reportCacheSet($cacheKey, $rows, '/crm/deal/reports/iblock');
+    return $runtime[$cacheKey] = $rows;
+}
+
+/**
  * Load iblock rows linked to deals via CRM DEAL property.
  * Matches in PHP (Bitrix PROPERTY_DEAL filter is unreliable for CRM binds).
  */
@@ -335,42 +702,14 @@ function reportLoadIblockRowsForDeals($iblockId, array $dealIds, array $sort = [
     }
 
     $rows = [];
-    $page = 1;
-    $pageSize = 500;
-
-    do {
-        $pageCount = 0;
-        $res = CIBlockElement::GetList(
-            $sort,
-            ['IBLOCK_ID' => (int)$iblockId, 'CHECK_PERMISSIONS' => 'N'],
-            false,
-            ['nPageSize' => $pageSize, 'iNumPage' => $page],
-            ['ID', 'IBLOCK_ID', 'NAME', 'PROPERTY_*']
-        );
-
-        while ($ob = $res->GetNextElement()) {
-            $pageCount++;
-            $fields = $ob->GetFields();
-            $props = $ob->GetProperties();
-            $row = [];
-            foreach ($fields as $key => $val) {
-                $row[$key] = $val;
-            }
-            foreach ($props as $key => $prop) {
-                $code = !empty($prop['CODE']) ? $prop['CODE'] : $key;
-                $row[$code] = $prop['VALUE'];
-            }
-
-            $dealId = reportExtractDealId($row['DEAL'] ?? '');
-            if ($dealId === '' || !isset($dealIdSet[$dealId])) {
-                continue;
-            }
-            $row['_DEAL_ID'] = $dealId;
-            $rows[] = $row;
+    foreach (reportLoadAllIblockPropertyRows($iblockId, $sort) as $row) {
+        $dealId = reportExtractDealId($row['DEAL'] ?? '');
+        if ($dealId === '' || !isset($dealIdSet[$dealId])) {
+            continue;
         }
-
-        $page++;
-    } while ($pageCount === $pageSize);
+        $row['_DEAL_ID'] = $dealId;
+        $rows[] = $row;
+    }
 
     return $rows;
 }

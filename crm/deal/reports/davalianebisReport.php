@@ -49,9 +49,9 @@ $daricxvebi = reportGetDaricxvebi($dealsIds, false);
 $gadaxdebi = reportGetGadaxdebi($dealsIds);
 
 $productsByDeal = [];
-foreach (reportGetProducts() as $row) {
+foreach (reportGetProductsForDeals($dealsIds) as $row) {
     $ownerDealId = reportExtractDealId($row['OWNER_DEAL'] ?? '');
-    if ($ownerDealId !== '' && isset($deals[$ownerDealId])) {
+    if ($ownerDealId !== '') {
         $productsByDeal[$ownerDealId] = $row;
     }
 }
