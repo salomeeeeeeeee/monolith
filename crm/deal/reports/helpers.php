@@ -252,19 +252,31 @@ function reportProductSelectFields()
     return $select;
 }
 
-function reportMapProductFetchRow(array $ob)
+function reportMapProductFetchRow(array $fields, array $props = [])
 {
     $row = [
-        'ID' => $ob['ID'],
-        'IBLOCK_ID' => $ob['IBLOCK_ID'] ?? '',
-        'NAME' => $ob['~NAME'] ?? ($ob['NAME'] ?? ''),
+        'ID' => $fields['ID'] ?? '',
+        'IBLOCK_ID' => $fields['IBLOCK_ID'] ?? '',
+        'NAME' => $fields['~NAME'] ?? ($fields['NAME'] ?? ''),
     ];
-    foreach (reportProductPropertyCodes() as $code) {
-        $key = 'PROPERTY_' . $code . '_VALUE';
-        if (array_key_exists($key, $ob)) {
-            $row[$code] = reportScalarProp($ob[$key]);
+
+    // Prefer GetProperties() — CRM bind fields (ownerDeal) are often empty via PROPERTY_* GetNext.
+    if (!empty($props)) {
+        foreach (reportProductPropertyCodes() as $code) {
+            if (!isset($props[$code])) {
+                continue;
+            }
+            $row[$code] = reportScalarProp($props[$code]['VALUE'] ?? '');
+        }
+    } else {
+        foreach (reportProductPropertyCodes() as $code) {
+            $key = 'PROPERTY_' . $code . '_VALUE';
+            if (array_key_exists($key, $fields)) {
+                $row[$code] = reportScalarProp($fields[$key]);
+            }
         }
     }
+
     if (empty($row['OWNER_DEAL']) && !empty($row['ownerDeal'])) {
         $row['OWNER_DEAL'] = $row['ownerDeal'];
     }
@@ -309,7 +321,8 @@ function reportGetProducts($arFilter = [])
         'CHECK_PERMISSIONS' => 'N',
     ], $arFilter);
 
-    $cacheKey = 'products_' . md5(serialize($filter));
+    // v2: load CRM-bind props via GetProperties (ownerDeal was empty with PROPERTY_* GetNext)
+    $cacheKey = 'products_v2_' . md5(serialize($filter));
     if (isset($runtime[$cacheKey])) {
         return $runtime[$cacheKey];
     }
@@ -330,14 +343,15 @@ function reportGetProducts($arFilter = [])
         $filter,
         false,
         false,
-        reportProductSelectFields()
+        ['ID', 'IBLOCK_ID', 'NAME']
     );
-    while ($ob = $res->GetNext()) {
-        $id = (int)$ob['ID'];
+    while ($ob = $res->GetNextElement()) {
+        $fields = $ob->GetFields();
+        $id = (int)($fields['ID'] ?? 0);
         if ($id <= 0) {
             continue;
         }
-        $row = reportMapProductFetchRow($ob);
+        $row = reportMapProductFetchRow($fields, $ob->GetProperties());
         $raw[$id] = $row;
         $productIds[] = $id;
 
@@ -533,14 +547,7 @@ function reportParseAmount($value)
 
 function reportExtractProductOwnerDealId(array $product)
 {
-    foreach (['OWNER_DEAL', 'ownerDeal'] as $key) {
-        $dealId = reportExtractDealId($product[$key] ?? '');
-        if ($dealId !== '') {
-            return $dealId;
-        }
-    }
-
-    return '';
+    return reportExtractDealId($product['ownerDeal'] ?? '');
 }
 
 /**
@@ -635,6 +642,7 @@ function reportBuildDealIdSet($dealIds)
 
 /**
  * Load all property rows for an iblock (cached). Used by schedule/payment reports.
+ * Uses GetProperties() so CRM-bind DEAL is populated (PROPERTY_* GetNext often leaves it empty).
  */
 function reportLoadAllIblockPropertyRows($iblockId, array $sort = ['ID' => 'ASC'])
 {
@@ -644,7 +652,7 @@ function reportLoadAllIblockPropertyRows($iblockId, array $sort = ['ID' => 'ASC'
         return [];
     }
 
-    $cacheKey = 'iblock_rows_' . $iblockId . '_' . md5(serialize($sort));
+    $cacheKey = 'iblock_rows_v2_' . $iblockId . '_' . md5(serialize($sort));
     if (isset($runtime[$cacheKey])) {
         return $runtime[$cacheKey];
     }
@@ -665,20 +673,20 @@ function reportLoadAllIblockPropertyRows($iblockId, array $sort = ['ID' => 'ASC'
             ['IBLOCK_ID' => $iblockId, 'CHECK_PERMISSIONS' => 'N'],
             false,
             ['nPageSize' => $pageSize, 'iNumPage' => $page],
-            ['ID', 'IBLOCK_ID', 'NAME', 'PROPERTY_*']
+            ['ID', 'IBLOCK_ID', 'NAME']
         );
 
-        while ($ob = $res->GetNext()) {
+        while ($ob = $res->GetNextElement()) {
             $pageCount++;
+            $fields = $ob->GetFields();
             $row = [
-                'ID' => $ob['ID'],
-                'IBLOCK_ID' => $ob['IBLOCK_ID'] ?? '',
-                'NAME' => $ob['~NAME'] ?? ($ob['NAME'] ?? ''),
+                'ID' => $fields['ID'],
+                'IBLOCK_ID' => $fields['IBLOCK_ID'] ?? '',
+                'NAME' => $fields['~NAME'] ?? ($fields['NAME'] ?? ''),
             ];
-            foreach ($ob as $key => $val) {
-                if (preg_match('/^PROPERTY_(.+)_VALUE$/', $key, $m)) {
-                    $row[$m[1]] = reportScalarProp($val);
-                }
+            foreach ($ob->GetProperties() as $code => $prop) {
+                $propCode = !empty($prop['CODE']) ? $prop['CODE'] : $code;
+                $row[$propCode] = reportScalarProp($prop['VALUE'] ?? '');
             }
             $rows[] = $row;
         }

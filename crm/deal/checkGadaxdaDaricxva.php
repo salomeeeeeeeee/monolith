@@ -71,7 +71,7 @@ $gadaxdaByDeal = cgddSumByDeal(reportGetGadaxdebi($dealIds), 'gadaxda_amount');
 $catalogProducts = reportGetProducts();
 $dealProductIdsMap = reportGetDealProductIdsMap($dealIds);
 
-// Fallback when CRM rows exist but catalog OWNER_DEAL was never synced.
+// Fallback when CRM rows exist but catalog ownerDeal was never synced.
 $productsByOwnerDeal = [];
 foreach ($catalogProducts as $product) {
     $ownerDealId = reportExtractProductOwnerDealId($product);
