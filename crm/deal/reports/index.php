@@ -104,6 +104,37 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         height: calc(100vh - 16px);
     }
 
+    .hub-home {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 9px 11px;
+        border-radius: 2px;
+        border: 1px solid var(--hub-primary);
+        background: var(--hub-primary);
+        color: #fff;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .hub-home:hover {
+        background: #004675;
+        border-color: #004675;
+        color: #fff;
+        transform: translateY(-1px);
+    }
+
+    .hub-home__icon {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+    }
+
     .hub-brand__eyebrow {
         margin: 0 0 4px;
         font-size: 10px;
@@ -334,6 +365,14 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
 <div class="reports-hub">
     <div class="hub-shell">
         <aside class="hub-sidebar">
+            <a class="hub-home" href="/crm/deal/mainpage.php" id="hubHome">
+                <svg class="hub-home__icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 10.5 12 3l9 7.5"></path>
+                    <path d="M5 9.5V21h14V9.5"></path>
+                </svg>
+                <span id="hubHomeLabel">მთავარი გვერდი</span>
+            </a>
+
             <div class="hub-brand">
                 <p class="hub-brand__eyebrow">Monolith CRM</p>
                 <h1 class="hub-brand__title" id="hubTitle">რეპორტები</h1>
@@ -392,6 +431,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
 <script>
     const copy = {
         ge: {
+            hubHome: 'მთავარი გვერდი',
             hubTitle: 'რეპორტები',
             hubText: 'აირჩიეთ რეპორტის ტიპი და ნახეთ შედეგი მარჯვენა პანელში.',
             viewerEmpty: 'რეპორტის სანახავად აირჩიეთ ერთ-ერთი ღილაკი მარცხნივ.',
@@ -407,6 +447,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
             cashflow: ['ქეშფლოუ რეპორტი', 'ფინანსური მოძრაობა პერიოდით'],
         },
         eng: {
+            hubHome: 'Main Page',
             hubTitle: 'Reports',
             hubText: 'Pick a report type and view the result in the right panel.',
             viewerEmpty: 'Select one of the report cards on the left to preview it here.',
@@ -429,6 +470,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
 
     function applyCopy(lang) {
         const t = copy[lang];
+        document.getElementById('hubHomeLabel').innerText = t.hubHome;
         document.getElementById('hubTitle').innerText = t.hubTitle;
         document.getElementById('hubText').innerText = t.hubText;
         document.getElementById('viewerEmpty').innerText = t.viewerEmpty;
