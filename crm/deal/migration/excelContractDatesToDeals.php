@@ -533,7 +533,8 @@ function ecdApplyContractDate($dealId, $ymd, $bitrixDate, &$error = '')
 {
     $error = '';
     $deal = new CCrmDeal(false);
-    $ok = $deal->Update($dealId, [D_CONTRACT_DATE => $bitrixDate]);
+    $fields = [D_CONTRACT_DATE => $bitrixDate];
+    $ok = $deal->Update($dealId, $fields);
     if (!$ok) {
         $error = (string)$deal->LAST_ERROR;
         return false;
