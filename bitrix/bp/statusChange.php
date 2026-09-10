@@ -4,6 +4,31 @@
 
 //=== functions
 
+if (!function_exists('normalizeDealId')) {
+    /**
+     * Bitrix CRM-element-binding properties can store/return deal IDs
+     * as "D_13" instead of a bare "13". This strips any non-digit
+     * prefix so comparisons against a raw $dealID always work.
+     */
+    function normalizeDealId($value)
+    {
+        if ($value === null || $value === "") return "";
+        // Pull out the trailing digits only
+        if (preg_match('/(\d+)\s*$/', (string)$value, $m)) {
+            return $m[1];
+        }
+        return (string)$value;
+    }
+}
+
+if (!function_exists('dealIdsMatch')) {
+    function dealIdsMatch($ownerDealValue, $dealID)
+    {
+        return normalizeDealId($ownerDealValue) !== "" 
+            && normalizeDealId($ownerDealValue) === normalizeDealId($dealID);
+    }
+}
+
 if (!function_exists('getCIBlockElementByID')) {
     /**
      * Returns a single flat property array for the given element ID,
@@ -153,7 +178,7 @@ if (!function_exists('new_stage')) {
                 $element["QUEUE"] .= "|$dealID";
             }
  
-            if ($element["ownerDeal"] == $dealID) {
+            if (dealIdsMatch($element["ownerDeal"], $dealID)) {
                 $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
                 sendNotificationToQueue($element["QUEUE"], $notification);
                 sendNotificationToResponsible($dealID, $notification);
@@ -239,7 +264,7 @@ if (!function_exists('queueStage')) {
 
             $debugLines[] = "ProdID " . $element["ID"] . " BEFORE: _P64GYD=" . $element["_P64GYD"] . " ownerDeal=" . $element["ownerDeal"] . " QUEUE=" . $element["QUEUE"];
 
-            if ($element["ownerDeal"] == $dealID) {
+            if (dealIdsMatch($element["ownerDeal"], $dealID)) {
                 $element["ownerDeal"]              = "";
                 $element["DEAL_RESPONSIBLE"]        = "";
                 $element["ownerContact"]  = "";
@@ -282,7 +307,7 @@ if (!function_exists('sold')) {
             $element = getCIBlockElementByID($product["PRODUCT_ID"]);
             if (!$element) continue;
  
-            if ($element["ownerDeal"] == $dealID) {
+            if (dealIdsMatch($element["ownerDeal"], $dealID)) {
                 if ($element["_P64GYD"] != "გაყიდული") $sendNotification = true;
                 $element = preparationProductForSale($element, $deal);
             } elseif ($element["_P64GYD"] == "თავისუფალი" || ($element["_P64GYD"] == "ჯავშნის რიგში" && firstInQueue($element["QUEUE"], $dealID))) {
@@ -322,7 +347,7 @@ if (!function_exists('junk')) {
  
             $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
  
-            if ($element["ownerDeal"] == $dealID) {
+            if (dealIdsMatch($element["ownerDeal"], $dealID)) {
                 $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
                 sendNotificationToQueue($element["QUEUE"], $notification);
                 sendNotificationToResponsible($dealID, $notification);
