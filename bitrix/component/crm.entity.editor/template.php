@@ -1097,6 +1097,64 @@ setInterval(() => {
         });
     }
 
+    // UF_CRM_1789115794556 — visible & required only when SOURCE_ID is EMAIL
+    // Same SOURCE_ID show/hide + save-button-block pattern used for
+    // UF_CRM_1760686426502 (source "CALL") on other projects.
+    // Placed above the stage-guard below so it re-checks on every tick,
+    // since changing SOURCE_ID does not change STAGE_ID.
+	(function() {
+    function toggleEmailField() {
+        var emailFieldCid = 'UF_CRM_1789115794556';
+        var saveBtn = document.querySelector('[title="[Ctrl+Enter]"]');
+        var errId = 'emailFieldRequiredError';
+        var errHtml = '<span id="' + errId + '" style="margin:5px; font-weight:bold; color:red;">შეავსეთ ველი: ინფორმაციის წყარო</span>';
+        var existingErr = document.getElementById(errId);
+
+        var sourceInput = document.querySelector('[name="SOURCE_ID"]');
+        var sourceValue = null;
+
+        if (sourceInput) {
+            // edit mode — raw code lives on the input/select itself
+            sourceValue = sourceInput.value;
+        } else {
+            // view mode — no [name] input, read the rendered label instead
+            var sourceDisplay = document.querySelector("[data-cid='SOURCE_ID']");
+            sourceValue = sourceDisplay?.children[3]?.children[0]?.innerText
+                || sourceDisplay?.children[2]?.children[0]?.innerText;
+        }
+
+        var isEmailSource = sourceValue === 'EMAIL' || sourceValue === 'Email' || sourceValue === 'ზარი';
+
+        var emailField = document.querySelector("[data-cid='" + emailFieldCid + "']");
+        if (emailField) {
+            emailField.style.display = isEmailSource ? '' : 'none';
+        }
+
+        if (isEmailSource) {
+            var emailInput = document.querySelector("[name='" + emailFieldCid + "']");
+            var emailValue = emailInput
+                ? emailInput.value
+                : (emailField?.children[3]?.children[0]?.innerText || emailField?.children[2]?.children[0]?.innerText);
+
+            if (!emailValue) {
+                if (!existingErr && saveBtn) {
+                    saveBtn.insertAdjacentHTML('beforebegin', errHtml);
+                }
+                if (saveBtn) saveBtn.style.pointerEvents = 'none';
+            } else {
+                if (existingErr) existingErr.remove();
+                if (saveBtn) saveBtn.style.pointerEvents = 'auto';
+            }
+        } else {
+            if (existingErr) existingErr.remove();
+            if (saveBtn) saveBtn.style.pointerEvents = 'auto';
+        }
+    }
+
+    toggleEmailField(); // run once immediately on load
+    setInterval(toggleEmailField, 500); // keep re-checking so view-mode renders catch up
+})();
+
     if (stage === lastStage) return;
     lastStage = stage;
 
