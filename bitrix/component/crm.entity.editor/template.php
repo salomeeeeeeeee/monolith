@@ -1808,3 +1808,43 @@ BX.ready(function() {
     }, 300);
 });
 </script>
+
+<script>
+(function() {
+    var pathname = window.location.pathname.split('/');
+    if (!((pathname[2] === 'deal' || pathname[2] === 'lead') && pathname[3] === 'details')) {
+        return;
+    }
+
+    var GREY_FILL = 'd3d7dc';
+    var CONFIRM_MSG = 'ნამდვილად გსურთ სთეიჯის ცვლილება ?';
+
+    document.addEventListener('click', function(e) {
+        var step = e.target && e.target.closest && e.target.closest('.crm-entity-section-status-step');
+        if (!step) {
+            return;
+        }
+
+        if (step.hasAttribute('data-dmg-stage-locked')) {
+            return;
+        }
+
+        var textEl = step.querySelector('.crm-entity-section-status-step-item-text');
+        if (!textEl) {
+            return;
+        }
+
+        var styleAttr = textEl.getAttribute('data-style') || textEl.getAttribute('style') || '';
+        var isFutureStage = styleAttr.toLowerCase().indexOf(GREY_FILL) !== -1;
+
+        if (isFutureStage) {
+            return;
+        }
+        if (!window.confirm(CONFIRM_MSG)) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+})();
+</script>
