@@ -1810,7 +1810,15 @@ BX.ready(function() {
 </script>
 
 <script>
+// Confirm once before moving back to a previous (colored) stage.
+// Guard with a window flag: entity editor template can load multiple times in Bitrix
+// sliders/iframes, which would otherwise stack click listeners and show confirm N times.
 (function() {
+    if (window.__dmgPrevStageConfirmBound) {
+        return;
+    }
+    window.__dmgPrevStageConfirmBound = true;
+
     var pathname = window.location.pathname.split('/');
     if (!((pathname[2] === 'deal' || pathname[2] === 'lead') && pathname[3] === 'details')) {
         return;
@@ -1820,6 +1828,10 @@ BX.ready(function() {
     var CONFIRM_MSG = 'ნამდვილად გსურთ სთეიჯის ცვლილება ?';
 
     document.addEventListener('click', function(e) {
+        if (e.__dmgPrevStageConfirmHandled) {
+            return;
+        }
+
         var step = e.target && e.target.closest && e.target.closest('.crm-entity-section-status-step');
         if (!step) {
             return;
@@ -1834,12 +1846,16 @@ BX.ready(function() {
             return;
         }
 
+        // Prefer data-style: live style is recolored on hover for future stages
         var styleAttr = textEl.getAttribute('data-style') || textEl.getAttribute('style') || '';
         var isFutureStage = styleAttr.toLowerCase().indexOf(GREY_FILL) !== -1;
 
         if (isFutureStage) {
             return;
         }
+
+        e.__dmgPrevStageConfirmHandled = true;
+
         if (!window.confirm(CONFIRM_MSG)) {
             e.preventDefault();
             e.stopPropagation();
