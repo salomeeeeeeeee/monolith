@@ -149,6 +149,7 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST' && isset($_POST['action']) && $_POST['a
         $batchData = json_decode($_POST['batch_data'], true);
         $headers = json_decode($_POST['headers'], true);
         $iblockId = intval($_POST['iblock_id']);
+        $hasExactNumber = isset($_POST['has_exact_number']) && $_POST['has_exact_number'] === '1';
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new Exception('Invalid JSON data: ' . json_last_error_msg());
@@ -167,20 +168,26 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST' && isset($_POST['action']) && $_POST['a
             }
 
             $dealId = trim($row[0] ?? '');
-            $exactDay = trim($row[1] ?? '');
 
             if (empty($dealId) || !is_numeric($dealId)) {
                 $results['errors'][] = "სტრიქონი $i: Deal ID არასწორია ან ცარიელია";
                 continue;
             }
 
-            if ($exactDay === '' || !is_numeric($exactDay) || intval($exactDay) < 1 || intval($exactDay) > 31) {
-                $results['errors'][] = "სტრიქონი $i: თვის დღე (exact_number) არასწორია — მოსალოდნელია 1–31";
-                continue;
+            $exactDay = null;
+            $amountStartCol = 1; // B სვეტიდან — როცა exact_number არ არის
+
+            if ($hasExactNumber) {
+                $exactDayRaw = trim($row[1] ?? '');
+                if ($exactDayRaw === '' || !is_numeric($exactDayRaw) || intval($exactDayRaw) < 1 || intval($exactDayRaw) > 31) {
+                    $results['errors'][] = "სტრიქონი $i: თვის დღე (exact_number) არასწორია — მოსალოდნელია 1–31";
+                    continue;
+                }
+                $exactDay = intval($exactDayRaw);
+                $amountStartCol = 2; // C სვეტიდან
             }
 
             $dealId = intval($dealId);
-            $exactDay = intval($exactDay);
 
             $dealRes = CCrmDeal::GetList(
                 array("ID" => "ASC"),
@@ -216,8 +223,8 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST' && isset($_POST['action']) && $_POST['a
             $currency = !empty($dealData['CURRENCY_ID']) ? $dealData['CURRENCY_ID'] : 'USD';
             $isPaymentsList = ($iblockId === UPLOAD_LIST_IBLOCK_PAYMENTS);
 
-            // C სვეტიდან — თარიღის ჰედერები და თანხები
-            for ($j = 2; $j < count($row); $j++) {
+            // თარიღის ჰედერები და თანხები: C-დან (exact_number-ით) ან B-დან (თვის ბოლოთი)
+            for ($j = $amountStartCol; $j < count($row); $j++) {
                 $amount = floatval(trim($row[$j] ?? ''));
 
                 if (!$amount || $amount == 0 || $amount == 0.00) {
@@ -229,10 +236,13 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST' && isset($_POST['action']) && $_POST['a
                 }
 
                 $monthYear = trim($headers[$j] ?? '');
-                $date = planUpload_buildDateWithExactDay($monthYear, $exactDay);
+                // exact_number არ არის → 31 (თვის ბოლო; buildDate ამოწმებს daysInMonth-ს)
+                $dayForDate = $hasExactNumber ? $exactDay : 31;
+                $date = planUpload_buildDateWithExactDay($monthYear, $dayForDate);
 
                 if (!$date) {
-                    $results['errors'][] = "სტრიქონი $i, სვეტი " . chr(65 + $j) . ": ვერ დამუშავდა თარიღი '$monthYear' + დღე $exactDay";
+                    $dayLabel = $hasExactNumber ? $exactDay : 'თვის ბოლო';
+                    $results['errors'][] = "სტრიქონი $i, სვეტი " . chr(65 + $j) . ": ვერ დამუშავდა თარიღი '$monthYear' + დღე $dayLabel";
                     continue;
                 }
 
@@ -435,6 +445,12 @@ ob_end_clean();
                 <option value="22">განვადება (22)</option>
                 <option value="23">გადახდები (23)</option>
             </select>
+
+            <h5 class="mt-4">Excel-ში გაქვთ exact_number (B სვეტი)?</h5>
+            <select class="form-select" id="exactNumberSelect" required>
+                <option value="1" selected>კი — B სვეტში მაქვს თვის ზუსტი დღე</option>
+                <option value="0">არა — exact_number არ მაქვს; თარიღები B-დან, დღე = თვის ბოლო</option>
+            </select>
         </div>
 
         <div class="info-box">
@@ -442,14 +458,26 @@ ob_end_clean();
             <ul>
                 <li>ზემოთ აირჩიეთ სია: <strong>განვადება</strong> (22) ან <strong>გადახდები</strong> (23) — ერთი და იგივე Excel ფორმატი.</li>
                 <li><strong>A</strong> სვეტი: Deal ID</li>
+            </ul>
+            <ul id="formatWithExact">
                 <li><strong>B</strong> სვეტი: თვის ზუსტი დღე (1–31), მაგ: <code>15</code></li>
                 <li><strong>C</strong> სვეტიდან: თარიღი ჰედერში (დღე/თვე/წელი, მაგ: <code>31/01/2026</code>) და თანხა ქვემოთ</li>
                 <li>რეალური თარიღი = B სვეტის დღე + ჰედერის თვე/წელი → მაგ. B=<code>15</code>, ჰედერი=<code>31/01/2026</code> → <code>15/01/2026</code></li>
+            </ul>
+            <ul id="formatWithoutExact" style="display:none;">
+                <li><strong>B</strong> სვეტიდან: თარიღი ჰედერში (დღე/თვე/წელი) და თანხა ქვემოთ — exact_number სვეტი არ არის</li>
+                <li>რეალური თარიღი = ჰედერის თვის <strong>ბოლო დღე</strong> → მაგ. ჰედერი=<code>15/01/2026</code> → <code>31/01/2026</code></li>
+            </ul>
+            <ul>
                 <li>Deal-ს ვეძებთ Deal ID-ით; მხოლოდ გაყიდული (WON) გარიგებები</li>
             </ul>
-            <div class="format-example">
+            <div class="format-example" id="formatExampleWithExact">
                 deal_id | exact_number | 31/01/2026 | 28/02/2026<br>
                 69366&nbsp;&nbsp;&nbsp;|&nbsp;15&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;777&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;888
+            </div>
+            <div class="format-example" id="formatExampleWithoutExact" style="display:none;">
+                deal_id | 31/01/2026 | 28/02/2026<br>
+                69366&nbsp;&nbsp;&nbsp;|&nbsp;777&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;888
             </div>
         </div>
 
@@ -483,6 +511,17 @@ ob_end_clean();
     <script>
         const xlsxData = <?php echo $xlsxData ? json_encode($xlsxData) : 'null'; ?>;
         const uploadMessage = '<?php echo $uploadMessage; ?>';
+
+        function updateFormatHelp() {
+            const hasExact = document.getElementById('exactNumberSelect').value === '1';
+            document.getElementById('formatWithExact').style.display = hasExact ? '' : 'none';
+            document.getElementById('formatWithoutExact').style.display = hasExact ? 'none' : '';
+            document.getElementById('formatExampleWithExact').style.display = hasExact ? '' : 'none';
+            document.getElementById('formatExampleWithoutExact').style.display = hasExact ? 'none' : '';
+        }
+
+        document.getElementById('exactNumberSelect').addEventListener('change', updateFormatHelp);
+        updateFormatHelp();
 
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -542,6 +581,8 @@ ob_end_clean();
                 return;
             }
 
+            const hasExactNumber = document.getElementById('exactNumberSelect').value;
+
             document.getElementById('uploadBtn').disabled = true;
             document.getElementById('progressContainer').style.display = 'block';
 
@@ -569,7 +610,7 @@ ob_end_clean();
                 }));
 
                 try {
-                    const result = await processBatch(batchData, headers, iblockId);
+                    const result = await processBatch(batchData, headers, iblockId, hasExactNumber);
                     totalSuccess += result.success;
                     allErrors = allErrors.concat(result.errors || []);
                     processedRows += batch.length;
@@ -590,13 +631,14 @@ ob_end_clean();
             document.getElementById('uploadBtn').disabled = false;
         }
 
-        function processBatch(batchData, headers, iblockId) {
+        function processBatch(batchData, headers, iblockId, hasExactNumber) {
             return new Promise((resolve, reject) => {
                 const formData = new FormData();
                 formData.append('action', 'process_batch');
                 formData.append('batch_data', JSON.stringify(batchData));
                 formData.append('headers', JSON.stringify(headers));
                 formData.append('iblock_id', iblockId);
+                formData.append('has_exact_number', hasExactNumber);
 
                 fetch(window.location.href, {
                     method: 'POST',
