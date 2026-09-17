@@ -76,80 +76,104 @@ switch ($period) {
     case 'day':
         foreach ($daricxvebi as $item) {
             $date = $item['DATE'];
-            $amount = $item['AMOUNT'];
+            $amount = (float)$item['AMOUNT'];
             $grouped_daricxvebi[$date] = ($grouped_daricxvebi[$date] ?? 0) + $amount;
-            $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$date]['daricxva'] =
-                ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$date]['daricxva'] ?? 0) + $amount;
+            if (isset($dealsForExcel[$item['DEAL_ID']])) {
+                $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$date]['daricxva'] =
+                    ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$date]['daricxva'] ?? 0) + $amount;
+            }
         }
         foreach ($gadaxdebi as $item) {
             $date = $item['DATE'];
-            $amount = $item['AMOUNT'];
+            $amount = (float)$item['AMOUNT'];
             $grouped_gadaxdebi[$date] = ($grouped_gadaxdebi[$date] ?? 0) + $amount;
-            $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$date]['gadaxda'] =
-                ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$date]['gadaxda'] ?? 0) + $amount;
+            if (isset($dealsForExcel[$item['DEAL_ID']])) {
+                $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$date]['gadaxda'] =
+                    ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$date]['gadaxda'] ?? 0) + $amount;
+            }
         }
-        uksort($grouped_daricxvebi, fn($a, $b) => strtotime($a) <=> strtotime($b));
-        uksort($grouped_gadaxdebi, fn($a, $b) => strtotime($a) <=> strtotime($b));
+        // Fill every day in the selected range (empty days = 0.00)
+        if (!empty($fromDate) && !empty($toDate)) {
+            $fillFrom = DateTime::createFromFormat('Y-m-d', $fromDate);
+            $fillTo = DateTime::createFromFormat('Y-m-d', $toDate);
+            if ($fillFrom && $fillTo) {
+                $cursor = clone $fillFrom;
+                while ($cursor <= $fillTo) {
+                    $key = $cursor->format('Y-m-d');
+                    if (!isset($grouped_daricxvebi[$key])) {
+                        $grouped_daricxvebi[$key] = 0;
+                    }
+                    if (!isset($grouped_gadaxdebi[$key])) {
+                        $grouped_gadaxdebi[$key] = 0;
+                    }
+                    $cursor->modify('+1 day');
+                }
+            }
+        }
+        ksort($grouped_daricxvebi);
+        ksort($grouped_gadaxdebi);
         break;
 
     case 'month':
         foreach ($daricxvebi as $item) {
-            if (empty($item['DATE'])) {
-                continue;
-            }
-            $dateObj = DateTime::createFromFormat('d/m/Y', $item['DATE']);
+            $dateObj = reportParseDate($item['DATE'] ?? '');
             if (!$dateObj) {
                 continue;
             }
             $monthKey = $dateObj->format('Y-m');
             $amount = (float)$item['AMOUNT'];
             $grouped_daricxvebi[$monthKey] = ($grouped_daricxvebi[$monthKey] ?? 0) + $amount;
-            $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$monthKey]['daricxva'] =
-                ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$monthKey]['daricxva'] ?? 0) + $amount;
+            if (isset($dealsForExcel[$item['DEAL_ID']])) {
+                $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$monthKey]['daricxva'] =
+                    ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$monthKey]['daricxva'] ?? 0) + $amount;
+            }
         }
         foreach ($gadaxdebi as $item) {
-            if (empty($item['DATE'])) {
-                continue;
-            }
-            $dateObj = DateTime::createFromFormat('d/m/Y', $item['DATE']);
+            $dateObj = reportParseDate($item['DATE'] ?? '');
             if (!$dateObj) {
                 continue;
             }
             $monthKey = $dateObj->format('Y-m');
             $amount = (float)$item['AMOUNT'];
             $grouped_gadaxdebi[$monthKey] = ($grouped_gadaxdebi[$monthKey] ?? 0) + $amount;
-            $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$monthKey]['gadaxda'] =
-                ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$monthKey]['gadaxda'] ?? 0) + $amount;
+            if (isset($dealsForExcel[$item['DEAL_ID']])) {
+                $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$monthKey]['gadaxda'] =
+                    ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$monthKey]['gadaxda'] ?? 0) + $amount;
+            }
         }
-        uksort($grouped_daricxvebi, fn($a, $b) => strtotime($a . '-01') <=> strtotime($b . '-01'));
-        uksort($grouped_gadaxdebi, fn($a, $b) => strtotime($a . '-01') <=> strtotime($b . '-01'));
+        ksort($grouped_daricxvebi);
+        ksort($grouped_gadaxdebi);
         break;
 
     case 'year':
         foreach ($daricxvebi as $item) {
-            if (empty($item['DATE'])) {
+            $dateObj = reportParseDate($item['DATE'] ?? '');
+            if (!$dateObj) {
                 continue;
             }
-            $dateObj = DateTime::createFromFormat('d/m/Y', $item['DATE']);
-            $yearKey = $dateObj ? $dateObj->format('Y') : '';
+            $yearKey = $dateObj->format('Y');
             $amount = (float)$item['AMOUNT'];
             $grouped_daricxvebi[$yearKey] = ($grouped_daricxvebi[$yearKey] ?? 0) + $amount;
-            $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$yearKey]['daricxva'] =
-                ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$yearKey]['daricxva'] ?? 0) + $amount;
+            if (isset($dealsForExcel[$item['DEAL_ID']])) {
+                $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$yearKey]['daricxva'] =
+                    ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$yearKey]['daricxva'] ?? 0) + $amount;
+            }
         }
         foreach ($gadaxdebi as $item) {
-            if (empty($item['DATE'])) {
+            $dateObj = reportParseDate($item['DATE'] ?? '');
+            if (!$dateObj) {
                 continue;
             }
-            $dateObj = DateTime::createFromFormat('d/m/Y', $item['DATE']);
-            $yearKey = $dateObj ? $dateObj->format('Y') : '';
+            $yearKey = $dateObj->format('Y');
             $amount = (float)$item['AMOUNT'];
             $grouped_gadaxdebi[$yearKey] = ($grouped_gadaxdebi[$yearKey] ?? 0) + $amount;
-            $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$yearKey]['gadaxda'] =
-                ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$yearKey]['gadaxda'] ?? 0) + $amount;
+            if (isset($dealsForExcel[$item['DEAL_ID']])) {
+                $dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$yearKey]['gadaxda'] =
+                    ($dealsForExcel[$item['DEAL_ID']]['gadaxdebi_and_daricxvebi_by_dates'][$yearKey]['gadaxda'] ?? 0) + $amount;
+            }
         }
-        uksort($grouped_daricxvebi, fn($a, $b) => (int)$a <=> (int)$b);
-        uksort($grouped_gadaxdebi, fn($a, $b) => (int)$a <=> (int)$b);
+        ksort($grouped_daricxvebi, SORT_NUMERIC);
+        ksort($grouped_gadaxdebi, SORT_NUMERIC);
         break;
 }
 
@@ -182,9 +206,9 @@ reportRenderCashflowFilterForm($period, $fromDate, $toDate, $project, $projects)
             return (int)$a <=> (int)$b;
         }
         if ($period === 'month') {
-            return strtotime($a . '-01') <=> strtotime($b . '-01');
+            return strcmp($a, $b);
         }
-        return strtotime($a) <=> strtotime($b);
+        return strcmp($a, $b);
     });
     $geoMonths = [
         '01' => 'იანვარი', '02' => 'თებერვალი', '03' => 'მარტი', '04' => 'აპრილი',
@@ -200,9 +224,11 @@ reportRenderCashflowFilterForm($period, $fromDate, $toDate, $project, $projects)
                     if ($period === 'month') {
                         [$y, $m] = explode('-', $date);
                         $displayDate = ($geoMonths[$m] ?? $m) . ' ' . $y;
-                    } elseif ($period === 'day' && strpos($date, '/') !== false) {
-                        [$d, $m, $y] = explode('/', $date);
-                        $displayDate = ltrim($d, '0') . ' ' . ($geoMonths[$m] ?? $m) . ' ' . $y;
+                    } elseif ($period === 'day') {
+                        $dateObj = DateTime::createFromFormat('Y-m-d', $date) ?: reportParseDate($date);
+                        if ($dateObj) {
+                            $displayDate = $dateObj->format('j') . ' ' . ($geoMonths[$dateObj->format('m')] ?? '') . ' ' . $dateObj->format('Y');
+                        }
                     }
                 ?>
                     <th colspan="2"><?= htmlspecialchars($displayDate) ?></th>

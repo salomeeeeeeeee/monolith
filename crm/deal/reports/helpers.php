@@ -472,7 +472,7 @@ function reportEnrichReservationMeta(array $products)
 }
 
 /**
- * Attach bedroom count from linked OWNER_DEAL (D_BEDROOMS) onto product rows.
+ * Attach bedroom count and barter from linked OWNER_DEAL onto product rows.
  */
 function reportEnrichDealBedrooms(array $products)
 {
@@ -484,23 +484,23 @@ function reportEnrichDealBedrooms(array $products)
         }
     }
 
-    $dealBedrooms = [];
+    $dealMeta = [];
     if (!empty($dealIds)) {
         $res = CCrmDeal::GetList(
             ['ID' => 'ASC'],
             ['ID' => array_keys($dealIds), 'CHECK_PERMISSIONS' => 'N'],
-            ['ID', D_BEDROOMS]
+            ['ID', D_BEDROOMS, D_BARTER]
         );
         while ($row = $res->Fetch()) {
-            $dealBedrooms[(string)$row['ID']] = $row[D_BEDROOMS] ?? '';
+            $dealMeta[(string)$row['ID']] = $row;
         }
     }
 
     foreach ($products as $id => $product) {
         $dealId = reportExtractProductOwnerDealId($product);
-        $products[$id][D_BEDROOMS] = ($dealId !== '' && isset($dealBedrooms[$dealId]))
-            ? (string)$dealBedrooms[$dealId]
-            : '';
+        $meta = ($dealId !== '' && isset($dealMeta[$dealId])) ? $dealMeta[$dealId] : null;
+        $products[$id][D_BEDROOMS] = $meta ? (string)($meta[D_BEDROOMS] ?? '') : '';
+        $products[$id][D_BARTER] = $meta ? (string)($meta[D_BARTER] ?? '') : '';
     }
 
     return $products;
@@ -652,7 +652,8 @@ function reportLoadAllIblockPropertyRows($iblockId, array $sort = ['ID' => 'ASC'
         return [];
     }
 
-    $cacheKey = 'iblock_rows_v2_' . $iblockId . '_' . md5(serialize($sort));
+    // Always load by ID — Bitrix property-sort + pagination skips/duplicates rows.
+    $cacheKey = 'iblock_rows_v3_' . $iblockId;
     if (isset($runtime[$cacheKey])) {
         return $runtime[$cacheKey];
     }
@@ -663,22 +664,27 @@ function reportLoadAllIblockPropertyRows($iblockId, array $sort = ['ID' => 'ASC'
     }
 
     $rows = [];
-    $page = 1;
+    $lastId = 0;
     $pageSize = 500;
 
     do {
         $pageCount = 0;
         $res = CIBlockElement::GetList(
-            $sort,
-            ['IBLOCK_ID' => $iblockId, 'CHECK_PERMISSIONS' => 'N'],
+            ['ID' => 'ASC'],
+            [
+                'IBLOCK_ID' => $iblockId,
+                'CHECK_PERMISSIONS' => 'N',
+                '>ID' => $lastId,
+            ],
             false,
-            ['nPageSize' => $pageSize, 'iNumPage' => $page],
+            ['nPageSize' => $pageSize],
             ['ID', 'IBLOCK_ID', 'NAME']
         );
 
         while ($ob = $res->GetNextElement()) {
             $pageCount++;
             $fields = $ob->GetFields();
+            $lastId = (int)$fields['ID'];
             $row = [
                 'ID' => $fields['ID'],
                 'IBLOCK_ID' => $fields['IBLOCK_ID'] ?? '',
@@ -690,8 +696,6 @@ function reportLoadAllIblockPropertyRows($iblockId, array $sort = ['ID' => 'ASC'
             }
             $rows[] = $row;
         }
-
-        $page++;
     } while ($pageCount === $pageSize);
 
     reportCacheSet($cacheKey, $rows, '/crm/deal/reports/iblock');
@@ -731,7 +735,7 @@ function reportGetDaricxvebi($dealIds, $upToToday = false)
     $today = new DateTime('today');
     $items = [];
 
-    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds, ['PROPERTY_TARIGI' => 'ASC']) as $row) {
+    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds) as $row) {
         $dateRaw = $row['TARIGI'] ?? '';
         if ($upToToday) {
             $dateObj = reportParseDate($dateRaw);
@@ -788,36 +792,42 @@ function reportGetDaricxvebiDaGadaxdebi($fromDate, $toDate, $dealIds)
         $toObj->setTime(23, 59, 59);
     }
 
-    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds, ['PROPERTY_TARIGI' => 'ASC']) as $row) {
+    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds) as $row) {
         $dateRaw = $row['TARIGI'] ?? '';
         $dateObj = reportParseDate($dateRaw);
-        if ($fromObj && (!$dateObj || $dateObj < $fromObj)) {
+        if (!$dateObj) {
             continue;
         }
-        if ($toObj && (!$dateObj || $dateObj > $toObj)) {
+        if ($fromObj && $dateObj < $fromObj) {
+            continue;
+        }
+        if ($toObj && $dateObj > $toObj) {
             continue;
         }
 
         $daricxvebi[] = [
             'DEAL_ID' => $row['_DEAL_ID'],
-            'DATE' => $dateRaw,
+            'DATE' => $dateObj->format('Y-m-d'),
             'AMOUNT' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
         ];
     }
 
-    foreach (reportLoadIblockRowsForDeals(REPORT_PAYMENT_IBLOCK, $dealIds, ['ID' => 'ASC']) as $row) {
+    foreach (reportLoadIblockRowsForDeals(REPORT_PAYMENT_IBLOCK, $dealIds) as $row) {
         $dateRaw = $row['date'] ?? ($row['TARIGI'] ?? '');
         $dateObj = reportParseDate($dateRaw);
-        if ($fromObj && $dateObj && $dateObj < $fromObj) {
+        if (!$dateObj) {
             continue;
         }
-        if ($toObj && $dateObj && $dateObj > $toObj) {
+        if ($fromObj && $dateObj < $fromObj) {
+            continue;
+        }
+        if ($toObj && $dateObj > $toObj) {
             continue;
         }
 
         $gadaxdebi[] = [
             'DEAL_ID' => $row['_DEAL_ID'],
-            'DATE' => $dateRaw,
+            'DATE' => $dateObj->format('Y-m-d'),
             'AMOUNT' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
         ];
     }
@@ -936,11 +946,15 @@ function reportGetProductLabels($lang = 'ge')
             'filter_project' => 'პროექტი:',
             'filter_sector' => 'სექტორი:',
             'filter_block' => 'ბლოკი:',
+            'filter_barter' => 'ბარტერი:',
             'filter_responsible' => 'პასუხისმგებელი:',
             'all_projects' => 'ყველა პროექტი',
             'all_sectors' => 'ყველა სექტორი',
             'all_blocks' => 'ყველა ბლოკი',
+            'all_barter' => 'ყველა',
             'all_responsible' => 'ყველა პასუხისმგებელი',
+            'barter_yes' => 'დიახ',
+            'barter_no' => 'არა',
             'apply' => 'ფილტრის გამოყენება',
             'clear' => 'გასუფთავება',
             'export' => '📥 Excel-ში ექსპორტი',
@@ -964,11 +978,15 @@ function reportGetProductLabels($lang = 'ge')
             'filter_project' => 'Project:',
             'filter_sector' => 'Sector:',
             'filter_block' => 'Block:',
+            'filter_barter' => 'Barter:',
             'filter_responsible' => 'Responsible:',
             'all_projects' => 'All Projects',
             'all_sectors' => 'All Sectors',
             'all_blocks' => 'All Blocks',
+            'all_barter' => 'All',
             'all_responsible' => 'All Responsible',
+            'barter_yes' => 'Yes',
+            'barter_no' => 'No',
             'apply' => 'Apply Filters',
             'clear' => 'Clear',
             'export' => '📥 Export to Excel',
@@ -1012,6 +1030,9 @@ function reportFilterProducts(array $products, array $filters)
         if (!empty($filters['block']) && ($product[F_BLOCK] ?? '') != $filters['block']) {
             $match = false;
         }
+        if (!empty($filters['barter']) && (string)($product[D_BARTER] ?? '') !== (string)$filters['barter']) {
+            $match = false;
+        }
         if (!empty($filters['responsible']) && ($product['DEAL_RESPONSIBLE_NAME'] ?? '') != $filters['responsible']) {
             $match = false;
         }
@@ -1036,8 +1057,19 @@ function reportRenderFilterForm($filters, $options, $labels, $lang, $schema = 'i
             ['name' => 'project', 'id' => 'project', 'label' => $labels['filter_project'], 'all' => $labels['all_projects'], 'options' => $options['projects'] ?? [], 'value' => $filters['project'] ?? ''],
             ['name' => 'sector', 'id' => 'sector', 'label' => $labels['filter_sector'], 'all' => $labels['all_sectors'], 'options' => $options['sectors'] ?? [], 'value' => $filters['sector'] ?? ''],
             ['name' => 'block', 'id' => 'block', 'label' => $labels['filter_block'], 'all' => $labels['all_blocks'], 'options' => $options['blocks'] ?? [], 'value' => $filters['block'] ?? ''],
-            ['name' => 'responsible', 'id' => 'responsible', 'label' => $labels['filter_responsible'], 'all' => $labels['all_responsible'], 'options' => $options['responsibles'] ?? [], 'value' => $filters['responsible'] ?? ''],
         ];
+        if (!empty($options['barters'])) {
+            $fields[] = [
+                'name' => 'barter',
+                'id' => 'barter',
+                'label' => $labels['filter_barter'],
+                'all' => $labels['all_barter'],
+                'options' => $options['barters'],
+                'value' => $filters['barter'] ?? '',
+                'assoc' => true,
+            ];
+        }
+        $fields[] = ['name' => 'responsible', 'id' => 'responsible', 'label' => $labels['filter_responsible'], 'all' => $labels['all_responsible'], 'options' => $options['responsibles'] ?? [], 'value' => $filters['responsible'] ?? ''];
     }
     ?>
     <section class="report-filter">

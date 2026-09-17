@@ -33,6 +33,7 @@ $filters = [
     'project' => $_GET['project'] ?? '',
     'sector' => $_GET['sector'] ?? '',
     'block' => $_GET['block'] ?? '',
+    'barter' => $_GET['barter'] ?? '',
     'responsible' => $_GET['responsible'] ?? '',
 ];
 
@@ -42,6 +43,10 @@ $filterOptions = [
     'projects' => reportGetUniqueValues($products, F_PROJECT),
     'sectors' => reportGetUniqueValues($products, F_SECTOR),
     'blocks' => array_values(array_diff(reportGetUniqueValues($products, F_BLOCK), ['P'])),
+    'barters' => [
+        D_BARTER_YES => $t['barter_yes'],
+        D_BARTER_NO => $t['barter_no'],
+    ],
     'responsibles' => reportGetUniqueValues($products, 'DEAL_RESPONSIBLE_NAME'),
 ];
 $filteredProducts = reportFilterProducts($products, $filters);
