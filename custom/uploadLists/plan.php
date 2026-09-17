@@ -40,12 +40,13 @@ function planUpload_buildDateWithExactDay($headerDate, $exactDay)
     $year = null;
     $month = null;
 
-    if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $headerDate, $m)) {
-        $month = intval($m[2]);
-        $year = intval($m[3]);
-    } elseif (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})$/', $headerDate, $m)) {
+    // Excel Date უჯრები SimpleXLSX-იდან ხშირად მოდის როგორც "YYYY-MM-DD HH:MM:SS"
+    if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/', $headerDate, $m)) {
         $year = intval($m[1]);
         $month = intval($m[2]);
+    } elseif (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $headerDate, $m)) {
+        $month = intval($m[2]);
+        $year = intval($m[3]);
     } elseif (preg_match('/^(\d{4})-(\d{1,2})$/', $headerDate, $m)) {
         $year = intval($m[1]);
         $month = intval($m[2]);
