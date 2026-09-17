@@ -983,6 +983,7 @@ $userGroups = $USER->GetUserGroupArray();
 $urlParts = explode('/', "//{$_SERVER['HTTP_HOST']}{$_SERVER['REQUEST_URI']}");
 $dealInfo = array();
 $leadInfo = array();
+$paymentsArr = array();
 
 function getDealInfoForDublTemplate($dealID) {
     $res = CCrmDeal::GetListEx(array("ID" => "ASC"), array("ID" => $dealID), false, false, array("ID","CATEGORY_ID","STAGE_ID","ASSIGNED_BY_ID", "DATE_CREATE"));
@@ -996,11 +997,132 @@ function getLeadInfoForDublTemplate($leadID) {
     return array();
 }
 
-if (isset($urlParts[4]) && $urlParts[4] == "deal" && isset($urlParts[6]) && is_numeric($urlParts[6]) && $urlParts[6] != 0) {
-    $dealInfo = getDealInfoForDublTemplate($urlParts[6]);
+if (!function_exists('getDealInfoByIDEntity')) {
+	function getDealInfoByIDEntity($dealID)
+	{
+		$res = CCrmDeal::GetList(array("ID" => "ASC"), array("ID" => $dealID), array());
+		if ($arDeal = $res->Fetch()) {
+			return $arDeal;
+		}
+		return array();
+	}
+}
+
+if (!function_exists('getCIBlockElementsByFilterT')) {
+	function getCIBlockElementsByFilterT($arFilter = array())
+	{
+		$arElements = array();
+		$arSelect = array("ID", "IBLOCK_ID", "NAME", "DATE_ACTIVE_FROM", "DATE_CREATE", "PROPERTY_*");
+		$res = CIBlockElement::GetList(array(), $arFilter, false, array("nPageSize" => 999), $arSelect);
+		while ($ob = $res->GetNextElement()) {
+			$arFilds = $ob->GetFields();
+			$arProps = $ob->GetProperties();
+			$arPushs = array();
+			foreach ($arFilds as $key => $arFild)
+				$arPushs[$key] = $arFild;
+			foreach ($arProps as $key => $arProp)
+				$arPushs[$key] = $arProp["VALUE"];
+			array_push($arElements, $arPushs);
+		}
+		return $arElements;
+	}
+}
+
+if (!function_exists('moneyFormatNum_CRM_ENTITY')) {
+	function moneyFormatNum_CRM_ENTITY($num, $currency = "USD") {
+		if ($currency == "GEL") {
+			$num = floatval(preg_replace('/[^\d.]/', '', $num));
+			$numMoney = number_format($num, 2) . "₾";
+		} else {
+			$num = floatval(preg_replace('/[^\d.]/', '', $num));
+			$numMoney = "$" . number_format($num, 2);
+		}
+		return $numMoney;
+	}
+}
+
+if (!function_exists('moneyToNum_CRM_ENTITY')) {
+	function moneyToNum_CRM_ENTITY($num) {
+		$num = floatval(preg_replace('/[^\d.]/', '', $num));
+		return $num;
+	}
+}
+
+if (!function_exists('moneyFormatNum_CRM_ENTITY_GEL')) {
+	function moneyFormatNum_CRM_ENTITY_GEL($num) {
+		$num = floatval(preg_replace('/[^\d.]/', '', $num));
+		$numMoney = "₾" . number_format($num, 2);
+		return $numMoney;
+	}
+}
+
+$dealId = 0;
+$isDealEntity = !empty($arResult['ENTITY_TYPE_ID'])
+	&& (int)$arResult['ENTITY_TYPE_ID'] === \CCrmOwnerType::Deal;
+if ($isDealEntity && !empty($arResult['ENTITY_ID'])) {
+	$dealId = (int)$arResult['ENTITY_ID'];
+}
+if ($dealId <= 0 && isset($urlParts[4]) && $urlParts[4] == "deal" && isset($urlParts[6]) && is_numeric($urlParts[6]) && $urlParts[6] != 0) {
+	$dealId = (int)$urlParts[6];
+}
+
+if (isset($urlParts[4]) && $urlParts[4] == "deal" && $dealId > 0) {
+    $dealInfo = getDealInfoForDublTemplate($dealId);
 }
 if (isset($urlParts[4]) && $urlParts[4] == "lead" && isset($urlParts[6]) && is_numeric($urlParts[6]) && $urlParts[6] != 0) {
     $leadInfo = getLeadInfoForDublTemplate($urlParts[6]);
+}
+
+if ($dealId > 0 && ($isDealEntity || (isset($urlParts[4]) && $urlParts[4] == "deal")) && Main\Loader::includeModule('iblock') && Main\Loader::includeModule('crm')) {
+	$deal = getDealInfoByIDEntity($dealId);
+	$isGel = !empty($deal['CURRENCY_ID']) && $deal['CURRENCY_ID'] === 'GEL';
+
+	$paymentsArr = array(
+		"PAYMENTS_SUM" => 0,
+		"PAYMENTS_SUM_GEL" => 0,
+		"PAYMENTS_SUM_FORMATED" => 0,
+		"PAYMENTS_SUM_FORMATED_GEL" => 0,
+		"PAYMENT_PLAN_SUM" => 0,
+		"PAYMENT_PLAN_SUM_FORMATED" => 0,
+		"OPPORTUNITY" => 0,
+		"diff" => 0,
+	);
+
+	// სია 23 — გადახდები
+	$resPayments = getCIBlockElementsByFilterT(array(
+		"IBLOCK_ID" => 23,
+		"PROPERTY_DEAL" => $dealId,
+	));
+	foreach ($resPayments as $payment) {
+		$paymentsArr["PAYMENTS_SUM"] += moneyToNum_CRM_ENTITY($payment["TANXA"] ?? 0);
+		$paymentsArr["PAYMENTS_SUM_GEL"] += moneyToNum_CRM_ENTITY($payment["tanxa_gel"] ?? 0);
+	}
+	$paymentsArr["PAYMENTS_SUM_FORMATED"] = moneyFormatNum_CRM_ENTITY($paymentsArr["PAYMENTS_SUM"]);
+	$paymentsArr["PAYMENTS_SUM_FORMATED_GEL"] = moneyFormatNum_CRM_ENTITY_GEL($paymentsArr["PAYMENTS_SUM_GEL"]);
+
+	// სია 22 — განვადება
+	$resPaymentPlan = getCIBlockElementsByFilterT(array(
+		"IBLOCK_ID" => 22,
+		"PROPERTY_DEAL" => $dealId,
+	));
+
+	if ($isGel) {
+		$paymentsArr["OPPORTUNITY"] = moneyFormatNum_CRM_ENTITY($deal["OPPORTUNITY"] ?? 0, "GEL");
+		foreach ($resPaymentPlan as $paymentPlan) {
+			$paymentsArr["PAYMENT_PLAN_SUM"] += moneyToNum_CRM_ENTITY($paymentPlan["amount_GEL"] ?? 0);
+		}
+		$paymentsArr["diff"] = moneyToNum_CRM_ENTITY($paymentsArr["OPPORTUNITY"]) - moneyToNum_CRM_ENTITY($paymentsArr["PAYMENT_PLAN_SUM"]);
+		$paymentsArr["diff"] = moneyFormatNum_CRM_ENTITY($paymentsArr["diff"], "GEL");
+		$paymentsArr["PAYMENT_PLAN_SUM_FORMATED"] = moneyFormatNum_CRM_ENTITY($paymentsArr["PAYMENT_PLAN_SUM"], "GEL");
+	} else {
+		$paymentsArr["OPPORTUNITY"] = moneyFormatNum_CRM_ENTITY($deal["OPPORTUNITY"] ?? 0, "USD");
+		foreach ($resPaymentPlan as $paymentPlan) {
+			$paymentsArr["PAYMENT_PLAN_SUM"] += moneyToNum_CRM_ENTITY($paymentPlan["TANXA"] ?? 0);
+		}
+		$paymentsArr["diff"] = moneyToNum_CRM_ENTITY($paymentsArr["OPPORTUNITY"]) - moneyToNum_CRM_ENTITY($paymentsArr["PAYMENT_PLAN_SUM"]);
+		$paymentsArr["diff"] = moneyFormatNum_CRM_ENTITY($paymentsArr["diff"], "USD");
+		$paymentsArr["PAYMENT_PLAN_SUM_FORMATED"] = moneyFormatNum_CRM_ENTITY($paymentsArr["PAYMENT_PLAN_SUM"], "USD");
+	}
 }
 
 
@@ -1023,6 +1145,17 @@ button.ui-btn.ui-btn-icon-setting {
     display: none !important;
 }
 
+.leac-title-menu {
+	padding: 10px;
+	margin-bottom: 10px;
+}
+
+.leac-title-menu span {
+	font-weight: bold;
+	color: #39c3ef;
+	font-size: 17px;
+	margin-right: 15px;
+}
 
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -1311,6 +1444,7 @@ if (moreBtn) {
 
 <script>
 var userID = <?php echo json_encode($userID, JSON_UNESCAPED_UNICODE); ?>;
+var paymentsArr = <?php echo json_encode($paymentsArr ?? [], JSON_UNESCAPED_UNICODE); ?>;
 
 (function() {
     var pathname = window.location.pathname.split("/");
@@ -1862,5 +1996,82 @@ BX.ready(function() {
             e.stopImmediatePropagation();
         }
     }, true);
+})();
+</script>
+
+<script>
+// განვადება / გადახდები — შეჯამება (Anagi-ის ანალოგი; სიები 22 / 23)
+(function() {
+    if (window.__dmgPaymentInfoBound) {
+        return;
+    }
+    window.__dmgPaymentInfoBound = true;
+
+    var pathname = window.location.pathname.split('/');
+    if (pathname[2] !== 'deal' || pathname[3] !== 'details' || !pathname[4] || pathname[4] <= 0) {
+        return;
+    }
+
+    var PaymentInfoManager = {
+        paymentsInfoAdded: false,
+        paymentPlanInfoAdded: false,
+
+        init: function() {
+            var self = this;
+            setTimeout(function() {
+                self.setupPaymentsTab();
+                self.setupPaymentPlanTab();
+            }, 400);
+        },
+
+        setupPaymentsTab: function() {
+            var self = this;
+            var paymentsBtn = document.getElementById('crm_scope_detail_c_deal__tab_lists_23');
+            if (!paymentsBtn) return;
+
+            paymentsBtn.addEventListener('click', function() {
+                if (self.paymentsInfoAdded) return;
+
+                setTimeout(function() {
+                    var container = document.querySelector('#container_lists_attached_crm_23');
+                    if (!container) return;
+
+                    var html =
+                        '<div class="leac-title-menu">' +
+                            '<span>გადახდილი: ' + (paymentsArr['PAYMENTS_SUM_FORMATED'] || '') +
+                            ' - ' + (paymentsArr['PAYMENTS_SUM_FORMATED_GEL'] || '') + '</span>' +
+                        '</div>';
+                    container.insertAdjacentHTML('beforebegin', html);
+                    self.paymentsInfoAdded = true;
+                }, 1000);
+            });
+        },
+
+        setupPaymentPlanTab: function() {
+            var self = this;
+            var planBtn = document.getElementById('crm_scope_detail_c_deal__tab_lists_22');
+            if (!planBtn) return;
+
+            planBtn.addEventListener('click', function() {
+                if (self.paymentPlanInfoAdded) return;
+
+                setTimeout(function() {
+                    var container = document.querySelector('#container_lists_attached_crm_22');
+                    if (!container) return;
+
+                    var html =
+                        '<div class="leac-title-menu">' +
+                            '<span>პროდუქტის ღირებულება: ' + (paymentsArr['OPPORTUNITY'] || '') + ';</span>' +
+                            '<span>განვადება: ' + (paymentsArr['PAYMENT_PLAN_SUM_FORMATED'] || '') + ';</span>' +
+                            '<span>სხვაობა: ' + (paymentsArr['diff'] || '') + ';</span>' +
+                        '</div>';
+                    container.insertAdjacentHTML('beforebegin', html);
+                    self.paymentPlanInfoAdded = true;
+                }, 600);
+            });
+        }
+    };
+
+    PaymentInfoManager.init();
 })();
 </script>
