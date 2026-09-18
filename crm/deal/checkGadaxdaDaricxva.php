@@ -25,6 +25,17 @@ function cgddFormatContractDate($value)
     return trim((string)$value);
 }
 
+function cgddBarterLabel($code)
+{
+    if ((string)$code === D_BARTER_YES) {
+        return 'დიახ';
+    }
+    if ((string)$code === D_BARTER_NO) {
+        return 'არა';
+    }
+    return '';
+}
+
 function cgddSumByDeal(array $items, $amountKey)
 {
     $sums = [];
@@ -58,6 +69,7 @@ $res = CCrmDeal::GetListEx(
         D_FLOOR,
         D_UNIT_NO,
         D_CONTRACT_DATE,
+        D_BARTER,
     ]
 );
 while ($row = $res->Fetch()) {
@@ -161,6 +173,7 @@ foreach ($deals as $deal) {
         $uniqueClients[$clientKey] = true;
     }
 
+    $barterCode = (string)reportScalarProp($deal[D_BARTER] ?? '');
     $price = round((float)($deal['OPPORTUNITY'] ?? 0), 2);
     $daricxva = round($daricxvaByDeal[$dealId] ?? 0, 2);
     $gadaxda = round($gadaxdaByDeal[$dealId] ?? 0, 2);
@@ -193,6 +206,8 @@ foreach ($deals as $deal) {
         'flatNum' => $deal[D_UNIT_NO] ?? '',
         'flatFloor' => $deal[D_FLOOR] ?? '',
         'xelshGafDate' => cgddFormatContractDate($deal[D_CONTRACT_DATE] ?? ''),
+        'barterCode' => $barterCode,
+        'barter' => cgddBarterLabel($barterCode),
         'PRICE' => $price,
         'daricxva' => $daricxva,
         'gadaxda' => $gadaxda,
@@ -271,6 +286,14 @@ reportPageBegin('', 'WON დილები — ღირებულება, 
                 <option value="">TOTAL</option>
             </select>
         </div>
+        <div class="report-field">
+            <label for="barter">ბარტერი</label>
+            <select id="barter">
+                <option value="">TOTAL</option>
+                <option value="<?= D_BARTER_YES ?>">დიახ</option>
+                <option value="<?= D_BARTER_NO ?>">არა</option>
+            </select>
+        </div>
     </div>
     <div class="report-filter__actions">
         <button type="button" class="btn btn-export" onclick="exportTableToExcel()">
@@ -286,6 +309,7 @@ reportPageBegin('', 'WON დილები — ღირებულება, 
                 <td id="dealCountHeader">რაოდენობა: <?= $dealCount ?></td>
                 <td id="sxvaobaSumHeader">ჯამი: <?= number_format(round($dealSum - $daricxvaSum, 2), 2) ?></td>
                 <td id="clientCountHeader">რაოდენობა: <?= $clientCount ?></td>
+                <td></td>
                 <td></td>
                 <td></td>
                 <td></td>
@@ -324,6 +348,7 @@ reportPageBegin('', 'WON დილები — ღირებულება, 
                 <th class="sortable" data-sort="flatNum" data-label="ბინის ნომერი">ბინის ნომერი ↕</th>
                 <th class="sortable" data-sort="flatFloor" data-label="სართული">სართული ↕</th>
                 <th class="sortable" data-sort="xelshGafDate" data-label="ხელშეკრულების გაფორმების თარიღი">ხელშეკრულების გაფორმების თარიღი ↕</th>
+                <th class="sortable" data-sort="barter" data-label="ბარტერი">ბარტერი ↕</th>
                 <th class="sortable" data-sort="price" data-label="ბინის ღირებულება">ბინის ღირებულება ↕</th>
                 <th class="sortable" data-sort="daricxva" data-label="დარიცხვები">დარიცხვები ↕</th>
                 <th class="sortable" data-sort="gadaxda" data-label="გადახდები">გადახდები ↕</th>
@@ -340,7 +365,10 @@ const dataArr = <?= json_encode($dataArr, JSON_UNESCAPED_UNICODE) ?>;
 const projectSelect = document.getElementById('project');
 const blockSelect = document.getElementById('block');
 const flatTypeSelect = document.getElementById('flatType');
+const barterSelect = document.getElementById('barter');
 const tableBody = document.getElementById('tableBody');
+const BARTER_YES = '<?= D_BARTER_YES ?>';
+const BARTER_NO = '<?= D_BARTER_NO ?>';
 
 let sortColumn = null;
 let sortAsc = true;
@@ -349,6 +377,7 @@ let currentFilteredData = dataArr.slice();
 projectSelect.addEventListener('change', filterTable);
 blockSelect.addEventListener('change', filterTable);
 flatTypeSelect.addEventListener('change', filterTable);
+barterSelect.addEventListener('change', filterTable);
 
 document.querySelectorAll('#reportTable thead th.sortable').forEach(function (th) {
     th.addEventListener('click', function () {
@@ -427,6 +456,8 @@ function getSortValue(item, key) {
             return parseFloat(String(item.flatFloor || '').replace(/[^\d.-]/g, '')) || 0;
         case 'xelshGafDate':
             return parseSortDate(item.xelshGafDate);
+        case 'barter':
+            return String(item.barter || '').toLowerCase();
         case 'price':
             return parseFloat(item.PRICE) || 0;
         case 'daricxva':
@@ -508,12 +539,17 @@ function filterTable() {
     const selectedProject = projectSelect.value;
     const selectedBlock = blockSelect.value;
     const selectedFlatType = flatTypeSelect.value;
+    const selectedBarter = barterSelect.value;
 
     currentFilteredData = dataArr.filter(item => {
         const projectMatch = selectedProject === '' || item.project === selectedProject;
         const blockMatch = selectedBlock === '' || item.block === selectedBlock;
         const flatTypeMatch = selectedFlatType === '' || item.flatType === selectedFlatType;
-        return projectMatch && blockMatch && flatTypeMatch;
+        const barterCode = String(item.barterCode || '');
+        // "არა" = ყველა, რაც ბარტერად არ არის მონიშნული (მათ შორის შეუვსებელი).
+        const barterMatch = selectedBarter === ''
+            || (selectedBarter === BARTER_NO ? barterCode !== BARTER_YES : barterCode === selectedBarter);
+        return projectMatch && blockMatch && flatTypeMatch && barterMatch;
     });
 
     drawTable(getSorted(currentFilteredData));
@@ -571,6 +607,7 @@ function drawTable(filteredData) {
             <td>${safe(item.flatNum)}</td>
             <td>${safe(item.flatFloor)}</td>
             <td>${safe(item.xelshGafDate)}</td>
+            <td>${safe(item.barter)}</td>
             <td class="amount">${safe(item.PRICE)}</td>
             <td class="amount">${safe(item.daricxva)}</td>
             <td class="amount">${safe(item.gadaxda)}</td>
@@ -604,7 +641,7 @@ function exportTableToExcel() {
         const row = [];
         for (let j = 0; j < tbody.rows[i].cells.length; j++) {
             const cellText = tbody.rows[i].cells[j].innerText || '';
-            if (j === 1 || j === 3 || j >= 18) {
+            if (j === 1 || j === 3 || j >= 19) {
                 const number = parseFloat(cellText.replace(/,/g, ''));
                 row.push(isNaN(number) ? 0 : number);
             } else {

@@ -1030,8 +1030,16 @@ function reportFilterProducts(array $products, array $filters)
         if (!empty($filters['block']) && ($product[F_BLOCK] ?? '') != $filters['block']) {
             $match = false;
         }
-        if (!empty($filters['barter']) && (string)($product[D_BARTER] ?? '') !== (string)$filters['barter']) {
-            $match = false;
+        if (!empty($filters['barter'])) {
+            $barterValue = (string)($product[D_BARTER] ?? '');
+            if ((string)$filters['barter'] === D_BARTER_NO) {
+                // "არა" = ყველაფერი, რაც ბარტერად არ არის მონიშნული (მათ შორის ცარიელი).
+                if ($barterValue === D_BARTER_YES) {
+                    $match = false;
+                }
+            } elseif ($barterValue !== (string)$filters['barter']) {
+                $match = false;
+            }
         }
         if (!empty($filters['responsible']) && ($product['DEAL_RESPONSIBLE_NAME'] ?? '') != $filters['responsible']) {
             $match = false;
