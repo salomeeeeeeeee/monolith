@@ -10,11 +10,16 @@ $lang = $_GET['lang'] ?? 'ge';
 $t = reportGetProductLabels($lang);
 $t = array_merge($t, [
     'h2_summary' => $lang === 'eng' ? 'Sales Summary' : 'გაყიდვების შეჯამება',
-    'h2_avg' => $lang === 'eng' ? 'Average Price' : 'საშუალო ფასი',
     'col_count' => $lang === 'eng' ? 'Count' : 'რაოდენობა',
     'col_area' => $lang === 'eng' ? 'Total Area (m²)' : 'ჯამური ფართი (m²)',
-    'col_price' => $lang === 'eng' ? 'Total Price ($)' : 'ჯამური ფასი ($)',
-    'col_avg_price' => $lang === 'eng' ? 'Average Price ($)' : 'საშუალო ფასი ($)',
+    'col_deal_price' => $lang === 'eng' ? 'Sale Total Price ($)' : 'გაყიდვის ჯამური ფასი ($)',
+    'col_prod_price' => $lang === 'eng' ? 'Stock Price $' : 'Stock ფასი $',
+    'col_diff_price' => $lang === 'eng' ? 'Diff % (Total)' : 'სხვაობა % (ჯამური)',
+    'col_deal_avg' => $lang === 'eng' ? 'Sale Average Price ($)' : 'გაყიდვის საშუალო ფასი ($)',
+    'col_prod_avg' => $lang === 'eng' ? 'Stock Average Price $' : 'Stock საშუალო ფასი $',
+    'col_diff_avg' => $lang === 'eng' ? 'Diff % (Average)' : 'სხვაობა % (საშუალო)',
+    'xls_deal_price' => $lang === 'eng' ? 'Sale Price ($)' : 'გაყიდვის ფასი ($)',
+    'xls_deal_price_sqm' => $lang === 'eng' ? 'Sale Price per sqm ($)' : 'გაყიდვის ფასი კვ.მ-ზე ($)',
     'xls_num' => '#',
     'xls_project' => $lang === 'eng' ? 'Project' : 'პროექტი',
     'xls_block' => $lang === 'eng' ? 'Block' : 'ბლოკი',
@@ -51,44 +56,80 @@ $filterOptions = [
 ];
 $filteredProducts = reportFilterProducts($products, $filters);
 
+/** Percentage difference of the product value against the deal value. */
+function soldDiffPercent($dealValue, $productValue)
+{
+    $dealValue = (float)$dealValue;
+    if (abs($dealValue) < 0.005) {
+        return null;
+    }
+    return round((((float)$productValue - $dealValue) / $dealValue) * 100, 2);
+}
+
+function soldDiffCell($percent)
+{
+    if ($percent === null) {
+        return '<span class="diff diff--na">—</span>';
+    }
+    $class = 'diff--zero';
+    if ($percent > 0.005) {
+        $class = 'diff--pos';
+    } elseif ($percent < -0.005) {
+        $class = 'diff--neg';
+    }
+    $sign = $percent > 0.005 ? '+' : '';
+    return '<span class="diff ' . $class . '">' . $sign . number_format($percent, 2) . '%</span>';
+}
+
+$emptyBucket = [
+    'num' => 0,
+    'total_area' => 0,
+    'price' => 0,
+    'KVM_PRICE' => 0,
+    'deal_price' => 0,
+    'deal_kvm_price' => 0,
+];
+
 $resArray = [];
 foreach ($filteredProducts as $product) {
-    $prodType = reportResolveProductType($product);
-    if (!isset($resArray[$prodType])) {
-        $resArray[$prodType] = ['num' => 0, 'total_area' => 0, 'price' => 0, 'KVM_PRICE' => 0];
-    }
-    $resArray[$prodType]['num']++;
-    $resArray[$prodType]['total_area'] += (float)($product[F_TOTAL_AREA] ?? 0);
-    $resArray[$prodType]['price'] += (float)($product['PRICE'] ?? 0);
-    $resArray[$prodType]['KVM_PRICE'] += (float)($product['KVM_PRICE'] ?? 0);
-
+    $buckets = [reportResolveProductType($product)];
     $subType = reportResolveApartmentSubtype($product, true);
     if ($subType) {
-        if (!isset($resArray[$subType])) {
-            $resArray[$subType] = ['num' => 0, 'total_area' => 0, 'price' => 0, 'KVM_PRICE' => 0];
+        $buckets[] = $subType;
+    }
+
+    foreach ($buckets as $bucket) {
+        if (!isset($resArray[$bucket])) {
+            $resArray[$bucket] = $emptyBucket;
         }
-        $resArray[$subType]['num']++;
-        $resArray[$subType]['total_area'] += (float)($product[F_TOTAL_AREA] ?? 0);
-        $resArray[$subType]['price'] += (float)($product['PRICE'] ?? 0);
-        $resArray[$subType]['KVM_PRICE'] += (float)($product['KVM_PRICE'] ?? 0);
+        $resArray[$bucket]['num']++;
+        $resArray[$bucket]['total_area'] += (float)($product[F_TOTAL_AREA] ?? 0);
+        $resArray[$bucket]['price'] += (float)($product['PRICE'] ?? 0);
+        $resArray[$bucket]['KVM_PRICE'] += (float)($product['KVM_PRICE'] ?? 0);
+        $resArray[$bucket]['deal_price'] += (float)($product['DEAL_PRICE'] ?? 0);
+        $resArray[$bucket]['deal_kvm_price'] += (float)($product['DEAL_KVM_PRICE'] ?? 0);
     }
 }
 
 foreach ($resArray as $prodType => &$infos) {
     if ($infos['num'] <= 0) {
         $infos['average_price'] = 0;
+        $infos['deal_average_price'] = 0;
         continue;
     }
+    // Apartments and commercial units are compared per sqm, everything else by unit price.
     if (str_contains($prodType, 'ბინა') || $prodType === 'კომერციული') {
         $infos['average_price'] = round($infos['KVM_PRICE'] / $infos['num'], 2);
+        $infos['deal_average_price'] = round($infos['deal_kvm_price'] / $infos['num'], 2);
     } else {
         $infos['average_price'] = round($infos['price'] / $infos['num'], 2);
+        $infos['deal_average_price'] = round($infos['deal_price'] / $infos['num'], 2);
     }
 }
 unset($infos);
 $resArray = reportSortProductTypes($resArray);
 
-$total_num = $total_area = $total_price = 0;
+$total_num = $total_area = $total_price = $total_deal_price = 0;
 foreach ($resArray as $prodType => $infos) {
     if (in_array($prodType, REPORT_APARTMENT_SUBTYPES, true)) {
         continue;
@@ -96,6 +137,7 @@ foreach ($resArray as $prodType => $infos) {
     $total_num += $infos['num'];
     $total_area += $infos['total_area'];
     $total_price += $infos['price'];
+    $total_deal_price += $infos['deal_price'];
 }
 
 ob_end_clean();
@@ -107,13 +149,27 @@ reportPageBegin(
 reportRenderFilterForm($filters, $filterOptions, $t, $lang);
 ?>
 
-<?php reportBlockOpen($t['h2_summary']); ?>
+<style>
+    .report-table--compare { min-width: 1180px; }
+    .diff { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .diff--pos { color: #1b7f5a; }
+    .diff--neg { color: #c0392b; }
+    .diff--zero { color: #6b7a8a; }
+    .diff--na { color: #b0bac4; font-weight: 500; }
+</style>
+
+<?php reportBlockOpen($t['h2_summary'], 'report-table--compare'); ?>
     <thead>
         <tr>
             <th><?= $t['col_type'] ?></th>
             <th><?= $t['col_count'] ?></th>
             <th><?= $t['col_area'] ?></th>
-            <th><?= $t['col_price'] ?></th>
+            <th><?= $t['col_deal_price'] ?></th>
+            <th><?= $t['col_prod_price'] ?></th>
+            <th><?= $t['col_diff_price'] ?></th>
+            <th><?= $t['col_deal_avg'] ?></th>
+            <th><?= $t['col_prod_avg'] ?></th>
+            <th><?= $t['col_diff_avg'] ?></th>
         </tr>
     </thead>
     <tbody>
@@ -124,34 +180,25 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
             <td><?= reportSubTypeCell($prodType, $t, $isSubRow) ?></td>
             <td><?= $infos['num'] ?></td>
             <td><?= number_format($infos['total_area'], 2) ?></td>
+            <td>$<?= number_format($infos['deal_price'], 2) ?></td>
             <td>$<?= number_format($infos['price'], 2) ?></td>
+            <td><?= soldDiffCell(soldDiffPercent($infos['deal_price'], $infos['price'])) ?></td>
+            <td>$<?= number_format($infos['deal_average_price'], 2) ?></td>
+            <td>$<?= number_format($infos['average_price'], 2) ?></td>
+            <td><?= soldDiffCell(soldDiffPercent($infos['deal_average_price'], $infos['average_price'])) ?></td>
         </tr>
         <?php endforeach; ?>
         <tr class="total-row">
             <td><?= $t['col_total'] ?></td>
             <td><?= $total_num ?></td>
             <td><?= number_format($total_area, 2) ?></td>
+            <td>$<?= number_format($total_deal_price, 2) ?></td>
             <td>$<?= number_format($total_price, 2) ?></td>
+            <td><?= soldDiffCell(soldDiffPercent($total_deal_price, $total_price)) ?></td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
         </tr>
-    </tbody>
-<?php reportBlockClose(); ?>
-
-<?php reportBlockOpen($t['h2_avg']); ?>
-    <thead>
-        <tr>
-            <th><?= $t['col_type'] ?></th>
-            <th><?= $t['col_avg_price'] ?></th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($resArray as $prodType => $infos):
-            $isSubRow = in_array($prodType, REPORT_APARTMENT_SUBTYPES, true);
-        ?>
-        <tr <?= $isSubRow ? 'class="sub-row"' : '' ?>>
-            <td><?= reportSubTypeCell($prodType, $t, $isSubRow) ?></td>
-            <td>$<?= number_format($infos['average_price'], 2) ?></td>
-        </tr>
-        <?php endforeach; ?>
     </tbody>
 <?php reportBlockClose(); ?>
 
@@ -203,6 +250,8 @@ function exportToExcel() {
         { key: 'KVM_PRICE', label: t.xls_price_sqm },
         { key: 'PRICE', label: t.xls_price },
         { key: 'PRICE_GEL', label: t.xls_price_gel },
+        { key: 'DEAL_KVM_PRICE', label: t.xls_deal_price_sqm },
+        { key: 'DEAL_PRICE', label: t.xls_deal_price },
         { key: 'DEAL_RESPONSIBLE_NAME', label: t.xls_resp },
         { key: 'OWNER_CONTACT_NAME', label: t.xls_owner },
     ];

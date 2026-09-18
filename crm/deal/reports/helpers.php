@@ -472,7 +472,8 @@ function reportEnrichReservationMeta(array $products)
 }
 
 /**
- * Attach bedroom count and barter from linked OWNER_DEAL onto product rows.
+ * Attach bedroom count, barter and deal-side pricing from linked OWNER_DEAL onto product rows.
+ * Adds DEAL_PRICE (deal amount, OPPORTUNITY) and DEAL_KVM_PRICE (deal price per sqm).
  */
 function reportEnrichDealBedrooms(array $products)
 {
@@ -489,7 +490,7 @@ function reportEnrichDealBedrooms(array $products)
         $res = CCrmDeal::GetList(
             ['ID' => 'ASC'],
             ['ID' => array_keys($dealIds), 'CHECK_PERMISSIONS' => 'N'],
-            ['ID', D_BEDROOMS, D_BARTER]
+            ['ID', 'OPPORTUNITY', D_BEDROOMS, D_BARTER, D_KVM_PRICE]
         );
         while ($row = $res->Fetch()) {
             $dealMeta[(string)$row['ID']] = $row;
@@ -501,6 +502,8 @@ function reportEnrichDealBedrooms(array $products)
         $meta = ($dealId !== '' && isset($dealMeta[$dealId])) ? $dealMeta[$dealId] : null;
         $products[$id][D_BEDROOMS] = $meta ? (string)($meta[D_BEDROOMS] ?? '') : '';
         $products[$id][D_BARTER] = $meta ? (string)($meta[D_BARTER] ?? '') : '';
+        $products[$id]['DEAL_PRICE'] = $meta ? reportParseAmount($meta['OPPORTUNITY'] ?? '') : 0;
+        $products[$id]['DEAL_KVM_PRICE'] = $meta ? reportParseAmount($meta[D_KVM_PRICE] ?? '') : 0;
     }
 
     return $products;
