@@ -2,9 +2,12 @@
 /**
  * WON დილებზე პროდუქტის მიბმა: პროექტი + ფართის ტიპი,
  * მატჩი სექტორი / ბლოკი / სართული / ნომერი.
- * დილის OPPORTUNITY არ იცვლება (IS_MANUAL_OPPORTUNITY = Y).
+ * დილის OPPORTUNITY არ იცვლება (IS_MANUAL_OPPORTUNITY = Y) და
+ * პროდუქტის რიგის ფასიც დილის თანხიდან იწერება, არა პროდუქტის ფასიდან.
+ * თუ დილზე მიბმული პროდუქტი წაშლილია/დეაქტივირებულია — რიგი ჩანაცვლდება
+ * რეალურად არსებული პროდუქტით.
  *
- * UI: https://crm.monolith.ge/crm/deal/test.php
+ * UI: https://crm.monolith.ge/crm/deal/migration/mergeProdsWithDeals.php
  */
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_before.php');
 
@@ -97,16 +100,89 @@ function resolveDealContactId(array $deal)
     return 0;
 }
 
-function dealHasProducts($dealId)
+function loadDealProductRows($dealId)
 {
+    $rows = [];
     $res = CCrmProductRow::GetList(
         ['ID' => 'ASC'],
         ['OWNER_TYPE' => 'D', 'OWNER_ID' => (int)$dealId],
         false,
-        ['nTopCount' => 1],
-        ['ID']
+        false,
+        ['ID', 'PRODUCT_ID', 'PRODUCT_NAME', 'PRICE', 'QUANTITY']
     );
-    return (bool)$res->Fetch();
+    while ($row = $res->Fetch()) {
+        $rows[] = $row;
+    }
+    return $rows;
+}
+
+/**
+ * რომელი PRODUCT_ID არსებობს კატალოგში (და აქტიურია).
+ * წაშლილი ელემენტი აქ საერთოდ არ დაბრუნდება.
+ */
+function loadProductElementsState(array $productIds)
+{
+    $ids = [];
+    foreach ($productIds as $id) {
+        $id = (int)$id;
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+    }
+    if (!$ids) {
+        return [];
+    }
+
+    $state = [];
+    $res = CIBlockElement::GetList(
+        ['ID' => 'ASC'],
+        ['ID' => array_values($ids), 'CHECK_PERMISSIONS' => 'N'],
+        false,
+        false,
+        ['ID', 'IBLOCK_ID', 'ACTIVE', 'NAME']
+    );
+    while ($el = $res->Fetch()) {
+        $state[(int)$el['ID']] = [
+            'IBLOCK_ID' => (int)$el['IBLOCK_ID'],
+            'ACTIVE'    => (string)$el['ACTIVE'],
+            'NAME'      => (string)$el['NAME'],
+        ];
+    }
+    return $state;
+}
+
+/**
+ * დილის პროდუქტის რიგები ცოცხალ / მკვდარ ჯგუფებად.
+ * მკვდარი = PRODUCT_ID ცარიელია, ელემენტი წაშლილია ან დეაქტივირებულია.
+ */
+function splitDealProductRows($dealId)
+{
+    $rows = loadDealProductRows($dealId);
+    $state = loadProductElementsState(array_column($rows, 'PRODUCT_ID'));
+
+    $live = [];
+    $dead = [];
+    foreach ($rows as $row) {
+        $pid = (int)($row['PRODUCT_ID'] ?? 0);
+        $info = $state[$pid] ?? null;
+
+        if ($pid <= 0) {
+            $row['dead_reason'] = 'პროდუქტის გარეშე რიგი';
+        } elseif ($info === null) {
+            $row['dead_reason'] = 'პროდუქტი წაშლილია';
+        } elseif ($info['ACTIVE'] !== 'Y') {
+            $row['dead_reason'] = 'პროდუქტი დეაქტივირებულია';
+        } elseif ($info['IBLOCK_ID'] !== (int)PRODUCT_IBLOCK_ID) {
+            $row['dead_reason'] = 'პროდუქტი სხვა კატალოგშია (iblock ' . $info['IBLOCK_ID'] . ')';
+        } else {
+            $row['live_info'] = 'iblock ' . $info['IBLOCK_ID'] . ' / ' . $info['NAME'];
+            $live[] = $row;
+            continue;
+        }
+        $dead[] = $row;
+    }
+
+    return [$live, $dead];
 }
 
 function findMatchingProducts(array $deal)
@@ -251,11 +327,13 @@ $results = [];
 $counts = [
     'deals' => 0,
     'already_has_product' => 0,
+    'stale_product' => 0,
     'missing_fields' => 0,
     'not_found' => 0,
     'ambiguous' => 0,
     'matched' => 0,
     'attached' => 0,
+    'replaced' => 0,
     'failed' => 0,
 ];
 
@@ -276,11 +354,21 @@ $processDeal = function ($deal) use ($apply, &$results, &$counts) {
         'status' => '',
     ];
 
-    if (dealHasProducts($dealId)) {
+    [$liveRows, $deadRows] = splitDealProductRows($dealId);
+
+    if (!empty($liveRows)) {
         $row['status'] = 'already_has_product';
+        $row['live_rows'] = $liveRows;
         $counts['already_has_product']++;
         $results[] = $row;
         return;
+    }
+
+    // მხოლოდ წაშლილი/მკვდარი რიგები — ისინი ახლით ჩანაცვლდება
+    $isReplace = !empty($deadRows);
+    if ($isReplace) {
+        $row['dead_rows'] = $deadRows;
+        $counts['stale_product']++;
     }
 
     [$criteria, $matches] = findMatchingProducts($deal);
@@ -315,19 +403,26 @@ $processDeal = function ($deal) use ($apply, &$results, &$counts) {
     $row['product'] = $product;
     $counts['matched']++;
 
+    $originalOpportunity = (float)($deal['OPPORTUNITY'] ?? 0);
+    $currencyId = (string)($deal['CURRENCY_ID'] ?? '');
+
+    // ფასი დილიდან მოდის, პროდუქტის ფასი არ გადაეწერება.
+    // თუ დილს თანხა არ აქვს — მაშინ და მხოლოდ მაშინ იწერება პროდუქტის ფასი.
+    $rowPrice = $originalOpportunity > 0 ? round($originalOpportunity, 2) : (float)$product['PRICE'];
+    $row['row_price'] = $rowPrice;
+    $row['price_source'] = $originalOpportunity > 0 ? 'deal' : 'product';
+
     if (!$apply) {
-        $row['status'] = 'would_attach';
+        $row['status'] = $isReplace ? 'would_replace' : 'would_attach';
         $results[] = $row;
         return;
     }
 
-    $originalOpportunity = (float)($deal['OPPORTUNITY'] ?? 0);
-    $currencyId = (string)($deal['CURRENCY_ID'] ?? '');
-
     $saved = CCrmDeal::SaveProductRows($dealId, [[
-        'PRODUCT_ID' => $product['ID'],
-        'PRICE'      => $product['PRICE'],
-        'QUANTITY'   => 1,
+        'PRODUCT_ID'   => $product['ID'],
+        'PRODUCT_NAME' => $product['NAME'],
+        'PRICE'        => $rowPrice,
+        'QUANTITY'     => 1,
     ]]);
 
     if (!$saved) {
@@ -369,8 +464,11 @@ $processDeal = function ($deal) use ($apply, &$results, &$counts) {
         $row['owner_sync_error'] = $e->getMessage();
     }
 
-    $row['status'] = 'attached';
+    $row['status'] = $isReplace ? 'replaced' : 'attached';
     $counts['attached']++;
+    if ($isReplace) {
+        $counts['replaced']++;
+    }
     $results[] = $row;
 };
 
@@ -403,7 +501,9 @@ $statusLabels = [
     'not_found' => 'პროდუქტი ვერ მოიძებნა',
     'ambiguous' => 'რამდენიმე მატჩი',
     'would_attach' => 'მიება (dry run)',
+    'would_replace' => 'წაშლილის ჩანაცვლება (dry run)',
     'attached' => 'მიება',
+    'replaced' => 'წაშლილი ჩანაცვლდა',
     'save_failed' => 'შეცდომა',
 ];
 
@@ -476,7 +576,9 @@ header('Content-Type: text/html; charset=utf-8');
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
         th { font-size: 12px; color: var(--muted); }
-        .st-would_attach, .st-attached { color: #0e7c66; font-weight: 600; }
+        .st-would_attach, .st-attached, .st-would_replace, .st-replaced { color: #0e7c66; font-weight: 600; }
+        .dead { color: var(--danger); font-size: 12px; }
+        .price { color: var(--muted); font-size: 12px; }
         .st-not_found, .st-missing_fields, .st-save_failed, .st-ambiguous { color: var(--danger); font-weight: 600; }
         .st-already_has_product { color: var(--muted); }
         .warn { color: var(--danger); font-size: 13px; margin-top: 8px; }
@@ -484,8 +586,8 @@ header('Content-Type: text/html; charset=utf-8');
 </head>
 <body>
 <div class="wrap">
-    <h1>პროდუქტის მიბმა WON დილებზე</h1>
-    <p class="sub">აირჩიე პროექტი და ფართის ტიპი. სექტორი + ბლოკი + სართული + ნომერი ველებით იძებნება შესაბამისი პროდუქტი და ებმევა დილზე. დილის თანხა არ იცვლება. პროდუქტზეც ივსება მფლობელის დილი და კონტაქტი/კომპანია</p>
+    <h1>პროდუქტის მიბმა WON დილებზე <span style="font-size:12px;color:var(--muted);font-weight:400">build v2</span></h1>
+    <p class="sub">აირჩიე პროექტი და ფართის ტიპი. სექტორი + ბლოკი + სართული + ნომერი ველებით იძებნება შესაბამისი პროდუქტი და ებმევა დილზე. დილის თანხა არ იცვლება და პროდუქტის რიგის ფასი დილიდან იწერება. თუ ძველი მიბმული პროდუქტი წაშლილია — ჩანაცვლდება არსებულით. პროდუქტზეც ივსება მფლობელის დილი და კონტაქტი/კომპანია</p>
 
     <form class="card" method="get" id="bind-form">
         <input type="hidden" name="run" value="1">
@@ -514,7 +616,7 @@ header('Content-Type: text/html; charset=utf-8');
             <button type="submit" id="run-btn">ნახვა/გაშვება</button>
         </div>
         <p class="warn" id="apply-warn" style="<?= $apply ? '' : 'display:none' ?>">
-            Apply ჩართულია: პროდუქტი მიებმევა დილებს, რომლებსაც ჯერ პროდუქტი არ აქვთ.
+            Apply ჩართულია: პროდუქტი მიებმევა დილებს, რომლებსაც პროდუქტი არ აქვთ ან რომელთა პროდუქტიც წაშლილია.
         </p>
     </form>
 
@@ -528,11 +630,13 @@ header('Content-Type: text/html; charset=utf-8');
                     <span class="chip"><?= htmlspecialchars($filterProject) ?> / <?= htmlspecialchars($filterType) ?></span>
                     <span class="chip">დილები: <?= (int)$counts['deals'] ?></span>
                     <span class="chip">უკვე აქვს: <?= (int)$counts['already_has_product'] ?></span>
+                    <span class="chip">წაშლილი პროდუქტი: <?= (int)$counts['stale_product'] ?></span>
                     <span class="chip">აკლია ველი: <?= (int)$counts['missing_fields'] ?></span>
                     <span class="chip">ვერ მოიძებნა: <?= (int)$counts['not_found'] ?></span>
                     <span class="chip">რამდენიმე მატჩი: <?= (int)$counts['ambiguous'] ?></span>
                     <span class="chip">მატჩი: <?= (int)$counts['matched'] ?></span>
                     <span class="chip">მიება: <?= (int)$counts['attached'] ?></span>
+                    <span class="chip">ჩანაცვლდა: <?= (int)$counts['replaced'] ?></span>
                     <span class="chip">შეცდომა: <?= (int)$counts['failed'] ?></span>
                 </div>
                 <table>
@@ -559,6 +663,21 @@ header('Content-Type: text/html; charset=utf-8');
                             </td>
                             <td class="st-<?= htmlspecialchars($st) ?>">
                                 <?= htmlspecialchars($statusLabels[$st] ?? $st) ?>
+                                <?php foreach (($row['live_rows'] ?? []) as $lr): ?>
+                                    <div class="price">
+                                        row #<?= (int)($lr['ID'] ?? 0) ?>
+                                        · PRODUCT_ID: <?= (int)($lr['PRODUCT_ID'] ?? 0) ?>
+                                        · <?= htmlspecialchars((string)($lr['PRODUCT_NAME'] ?? '')) ?>
+                                        · <?= htmlspecialchars((string)($lr['live_info'] ?? '')) ?>
+                                    </div>
+                                <?php endforeach; ?>
+                                <?php foreach (($row['dead_rows'] ?? []) as $dr): ?>
+                                    <div class="dead">
+                                        #<?= (int)($dr['PRODUCT_ID'] ?? 0) ?>
+                                        <?= htmlspecialchars((string)($dr['PRODUCT_NAME'] ?? '')) ?>
+                                        — <?= htmlspecialchars((string)($dr['dead_reason'] ?? '')) ?>
+                                    </div>
+                                <?php endforeach; ?>
                             </td>
                             <td>
                                 <?= htmlspecialchars((string)($c['sector'] ?? '')) ?>
@@ -572,6 +691,13 @@ header('Content-Type: text/html; charset=utf-8');
                             <td>
                                 <?php if ($p): ?>
                                     #<?= (int)$p['ID'] ?> <?= htmlspecialchars((string)$p['NAME']) ?>
+                                    <?php if (isset($row['row_price'])): ?>
+                                        <div class="price">
+                                            ფასი: <?= number_format((float)$row['row_price'], 2, '.', ' ') ?>
+                                            <?= htmlspecialchars((string)($row['currency'] ?? '')) ?>
+                                            (<?= ($row['price_source'] ?? '') === 'deal' ? 'დილიდან' : 'პროდუქტიდან' ?>)
+                                        </div>
+                                    <?php endif; ?>
                                 <?php elseif (!empty($row['matches'])): ?>
                                     <?php foreach ($row['matches'] as $m): ?>
                                         <div>#<?= (int)$m['ID'] ?> <?= htmlspecialchars((string)$m['NAME']) ?></div>
