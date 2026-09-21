@@ -1,15 +1,21 @@
 <?php
 /**
- * Dailo სტატისტიკის სიების შექმნა — ერთჯერადი, იდემპოტენტური სკრიპტი.
+ * Dailo სტატისტიკის სიების შექმნა — იდემპოტენტური სკრიპტი.
  *
- * URL: https://crm.monolith.ge/custom/setup/dailoStatsLists.php
+ * URL:       https://crm.monolith.ge/custom/setup/dailoStatsLists.php
+ * Rebuild:   ?rebuild=1   — ცარიელ სიებს წაშლის და თავიდან შექმნის
  *
- * ქმნის ორ სიას (თუ უკვე არსებობს — მხოლოდ დაკლებულ ველებს ამატებს):
+ * ქმნის ორ სიას:
  *   DAILO_STATS_DAILY   — 1 ჩანაწერი = 1 დღე
  *   DAILO_STATS_CHANNEL — 1 ჩანაწერი = დღე + არხი
  *
- * სიის ტიპს, საიტს და უფლებებს არსებული "Dailo API" სიიდან (iblock 26) იღებს,
- * რომ ახალი სიები იმავე ადგილას გამოჩნდეს, სადაც დანარჩენი.
+ * ველები იქმნება Lists მოდულის API-ით (CList::AddField), და არა პირდაპირ
+ * CIBlockProperty::Add-ით: Lists-ს ველების საკუთარი რეგისტრი აქვს და "ნედლი"
+ * თვისება ბაზაში დევს, ინტერფეისში კი არ ჩანს.
+ *
+ * iblock-ის პარამეტრები (ტიპი, საიტი, უფლებები, VERSION, BIZPROC...) არსებული
+ * მომუშავე სიიდან — "Dailo API log" (iblock 26) — კოპირდება, რომ ახალი სიები
+ * ზუსტად ისევე მოიქცნენ.
  *
  * თარიღი განზრახ სტრიქონია YYYY-MM-DD ფორმატში — ასე სორტირება და პერიოდის
  * ფილტრი ლექსიკოგრაფიულადვე მუშაობს, თარიღის ფორმატის გარდაქმნების გარეშე.
@@ -19,18 +25,21 @@ require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/header.php');
 @set_time_limit(0);
 
 CModule::IncludeModule('iblock');
+$listsModule = CModule::IncludeModule('lists');
 
 global $USER, $APPLICATION;
 
 $APPLICATION->SetTitle('Dailo სტატისტიკის სიები');
 
 if (!is_object($USER) || !$USER->IsAdmin()) {
-    echo '<p style="color:#c0392b;font:14px Arial,sans-serif">ეს გვერდი მხოლოდ ადმინისტრატორისთვისაა.</p>';
+    echo '<p style="color:#c0392b">ეს გვერდი მხოლოდ ადმინისტრატორისთვისაა.</p>';
     require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/footer.php');
     die();
 }
 
-define('STATS_TEMPLATE_IBLOCK_ID', 26); // Dailo API log — ტიპის/საიტის/უფლებების წყარო
+define('STATS_TEMPLATE_IBLOCK_ID', 26); // Dailo API log — პარამეტრების წყარო
+
+$rebuild = isset($_GET['rebuild']) && $_GET['rebuild'] === '1';
 
 $LISTS = [
     [
@@ -67,7 +76,15 @@ function statsSetupTemplate()
     $row = CIBlock::GetList([], ['ID' => STATS_TEMPLATE_IBLOCK_ID, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
 
     if (!$row) {
-        return ['IBLOCK_TYPE_ID' => 'lists', 'LID' => 's1', 'GROUP_ID' => [1 => 'X', 2 => 'R']];
+        return [
+            'IBLOCK_TYPE_ID' => 'lists',
+            'LID'            => 's1',
+            'GROUP_ID'       => [1 => 'X', 2 => 'R'],
+            'VERSION'        => 1,
+            'BIZPROC'        => 'N',
+            'INDEX_ELEMENT'  => 'N',
+            'LIST_MODE'      => '',
+        ];
     }
 
     $groups = CIBlock::GetGroupPermissions(STATS_TEMPLATE_IBLOCK_ID);
@@ -76,6 +93,10 @@ function statsSetupTemplate()
         'IBLOCK_TYPE_ID' => $row['IBLOCK_TYPE_ID'],
         'LID'            => $row['LID'],
         'GROUP_ID'       => !empty($groups) ? $groups : [1 => 'X', 2 => 'R'],
+        'VERSION'        => (int)$row['VERSION'],
+        'BIZPROC'        => $row['BIZPROC'],
+        'INDEX_ELEMENT'  => $row['INDEX_ELEMENT'],
+        'LIST_MODE'      => $row['LIST_MODE'],
     ];
 }
 
@@ -83,6 +104,11 @@ function statsSetupFindIblock($code)
 {
     $row = CIBlock::GetList([], ['CODE' => $code, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
     return $row ? (int)$row['ID'] : 0;
+}
+
+function statsSetupElementCount($iblockId)
+{
+    return (int)CIBlockElement::GetList([], ['IBLOCK_ID' => $iblockId, 'CHECK_PERMISSIONS' => 'N'], []);
 }
 
 function statsSetupCreateIblock(array $definition, array $template, &$error)
@@ -97,12 +123,12 @@ function statsSetupCreateIblock(array $definition, array $template, &$error)
         'IBLOCK_TYPE_ID' => $template['IBLOCK_TYPE_ID'],
         'SITE_ID'        => [$template['LID']],
         'SORT'           => 500,
-        'VERSION'        => 2,
-        'INDEX_ELEMENT'  => 'N',
+        'VERSION'        => $template['VERSION'],
+        'BIZPROC'        => $template['BIZPROC'],
+        'INDEX_ELEMENT'  => $template['INDEX_ELEMENT'],
         'INDEX_SECTION'  => 'N',
+        'LIST_MODE'      => $template['LIST_MODE'],
         'WORKFLOW'       => 'N',
-        'BIZPROC'        => 'N',
-        'LIST_MODE'      => 'S',
         'GROUP_ID'       => $template['GROUP_ID'],
     ]);
 
@@ -114,33 +140,55 @@ function statsSetupCreateIblock(array $definition, array $template, &$error)
     return (int)$id;
 }
 
-function statsSetupExistingPropertyCodes($iblockId)
+/** CODE => თვისების ID (რაც ბაზაშია, Lists-ში დარეგისტრირების მიუხედავად). */
+function statsSetupPropertyMap($iblockId)
 {
-    $codes = [];
+    $map = [];
 
     $res = CIBlockProperty::GetList(['SORT' => 'ASC'], ['IBLOCK_ID' => $iblockId, 'CHECK_PERMISSIONS' => 'N']);
     while ($row = $res->Fetch()) {
         if (!empty($row['CODE'])) {
-            $codes[] = $row['CODE'];
+            $map[$row['CODE']] = (int)$row['ID'];
+        }
+    }
+
+    return $map;
+}
+
+/** ის CODE-ები, რომლებსაც Lists მოდული ხედავს. */
+function statsSetupRegisteredCodes($iblockId, array $propertyMap)
+{
+    if (!class_exists('CList')) {
+        return [];
+    }
+
+    $idToCode = array_flip($propertyMap);
+    $codes = [];
+
+    $obList = new CList($iblockId);
+    foreach (array_keys($obList->GetFields()) as $fieldId) {
+        if (preg_match('/^PROPERTY_(\d+)$/', $fieldId, $m)) {
+            $propertyId = (int)$m[1];
+            if (isset($idToCode[$propertyId])) {
+                $codes[] = $idToCode[$propertyId];
+            }
         }
     }
 
     return $codes;
 }
 
-function statsSetupAddProperty($iblockId, array $property, $sort, &$error)
+function statsSetupFieldValues(array $property, $sort)
 {
     $fields = [
-        'IBLOCK_ID'     => $iblockId,
-        'NAME'          => $property['NAME'],
-        'CODE'          => $property['CODE'],
-        'PROPERTY_TYPE' => $property['TYPE'],
-        'ACTIVE'        => 'Y',
-        'SORT'          => $sort,
-        'IS_REQUIRED'   => 'N',
-        'MULTIPLE'      => 'N',
-        'FILTRABLE'     => 'Y',
-        'SEARCHABLE'    => 'N',
+        'NAME'        => $property['NAME'],
+        'CODE'        => $property['CODE'],
+        'SORT'        => $sort,
+        'ACTIVE'      => 'Y',
+        'IS_REQUIRED' => 'N',
+        'MULTIPLE'    => 'N',
+        'FILTRABLE'   => 'Y',
+        'SEARCHABLE'  => 'N',
     ];
 
     if (!empty($property['ROWS'])) {
@@ -148,15 +196,36 @@ function statsSetupAddProperty($iblockId, array $property, $sort, &$error)
         $fields['COL_COUNT'] = 60;
     }
 
-    $prop = new CIBlockProperty();
-    $id = $prop->Add($fields);
+    return $fields;
+}
 
-    if (!$id) {
-        $error = $prop->LAST_ERROR;
-        return 0;
+/** ველის დამატება Lists-ის API-ით; თუ მოდული მიუწვდომელია — პირდაპირ თვისებად. */
+function statsSetupAddField($obList, $iblockId, array $property, $sort, &$error)
+{
+    $fields = statsSetupFieldValues($property, $sort);
+
+    if ($obList !== null) {
+        $fields['TYPE'] = $property['TYPE'];
+        $fieldId = $obList->AddField($fields);
+
+        if (!$fieldId) {
+            $error = 'CList::AddField ჩავარდა';
+            return false;
+        }
+
+        return true;
     }
 
-    return (int)$id;
+    $fields['IBLOCK_ID']     = $iblockId;
+    $fields['PROPERTY_TYPE'] = $property['TYPE'];
+
+    $prop = new CIBlockProperty();
+    if (!$prop->Add($fields)) {
+        $error = $prop->LAST_ERROR;
+        return false;
+    }
+
+    return true;
 }
 
 // ── გაშვება ─────────────────────────────────────────────────────────────
@@ -166,17 +235,31 @@ $report = [];
 
 foreach ($LISTS as $definition) {
     $entry = [
-        'CODE'        => $definition['CODE'],
-        'NAME'        => $definition['NAME'],
-        'ID'          => 0,
-        'CREATED'     => false,
-        'PROPS_ADDED' => [],
-        'PROPS_KEPT'  => [],
-        'ELEMENTS'    => 0,
-        'ERRORS'      => [],
+        'CODE'          => $definition['CODE'],
+        'NAME'          => $definition['NAME'],
+        'ID'            => 0,
+        'CREATED'       => false,
+        'REBUILT'       => false,
+        'FIELDS_ADDED'  => [],
+        'FIELDS_KEPT'   => [],
+        'ELEMENTS'      => 0,
+        'LIST_FIELDS'   => [],
+        'ERRORS'        => [],
     ];
 
     $iblockId = statsSetupFindIblock($definition['CODE']);
+
+    // rebuild — მხოლოდ ცარიელ სიას ვშლით, მონაცემიანს არასდროს
+    if ($rebuild && $iblockId > 0) {
+        if (statsSetupElementCount($iblockId) > 0) {
+            $entry['ERRORS'][] = 'rebuild გამოტოვებულია: სიაში ჩანაწერებია';
+        } elseif (CIBlock::Delete($iblockId)) {
+            $entry['REBUILT'] = true;
+            $iblockId = 0;
+        } else {
+            $entry['ERRORS'][] = 'ძველი სია ვერ წაიშალა';
+        }
+    }
 
     if ($iblockId <= 0) {
         $error = '';
@@ -192,32 +275,53 @@ foreach ($LISTS as $definition) {
     }
 
     $entry['ID'] = $iblockId;
+    $elementCount = statsSetupElementCount($iblockId);
+    $entry['ELEMENTS'] = $elementCount;
 
-    $existingCodes = statsSetupExistingPropertyCodes($iblockId);
+    $obList = ($listsModule && class_exists('CList')) ? new CList($iblockId) : null;
+
+    $propertyMap = statsSetupPropertyMap($iblockId);
+    $registered  = statsSetupRegisteredCodes($iblockId, $propertyMap);
     $sort = 100;
 
     foreach ($definition['PROPS'] as $property) {
-        if (in_array($property['CODE'], $existingCodes, true)) {
-            $entry['PROPS_KEPT'][] = $property['CODE'];
+        $code = $property['CODE'];
+
+        if (in_array($code, $registered, true)) {
+            $entry['FIELDS_KEPT'][] = $code;
             $sort += 100;
             continue;
         }
 
+        // ბაზაში დევს, მაგრამ Lists-ს არ უნახავს — ცარიელ სიაში ვშლით და თავიდან ვამატებთ
+        if (isset($propertyMap[$code])) {
+            if ($elementCount > 0) {
+                $entry['ERRORS'][] = $code . ' — ნედლი თვისება რჩება (სიაში ჩანაწერებია)';
+                $sort += 100;
+                continue;
+            }
+            CIBlockProperty::Delete($propertyMap[$code]);
+        }
+
         $error = '';
-        if (statsSetupAddProperty($iblockId, $property, $sort, $error) > 0) {
-            $entry['PROPS_ADDED'][] = $property['CODE'];
+        if (statsSetupAddField($obList, $iblockId, $property, $sort, $error)) {
+            $entry['FIELDS_ADDED'][] = $code;
         } else {
-            $entry['ERRORS'][] = $property['CODE'] . ' — ' . $error;
+            $entry['ERRORS'][] = $code . ' — ' . $error;
         }
 
         $sort += 100;
     }
 
-    $entry['ELEMENTS'] = (int)CIBlockElement::GetList(
-        [],
-        ['IBLOCK_ID' => $iblockId, 'CHECK_PERMISSIONS' => 'N'],
-        []
-    );
+    if ($obList !== null && method_exists($obList, 'Save')) {
+        $obList->Save();
+    }
+
+    // შემოწმება: რას ხედავს Lists მოდული ახლა
+    if (class_exists('CList')) {
+        $verify = new CList($iblockId);
+        $entry['LIST_FIELDS'] = array_keys($verify->GetFields());
+    }
 
     $report[] = $entry;
 }
@@ -240,6 +344,11 @@ if (is_readable($endpointFile) && preg_match("/STATS_API_TOKEN\s*=\s*'([^']+)'/"
 </style>
 
 <div class="stats-setup">
+    <p>
+        <b>lists მოდული:</b> <?= $listsModule ? 'ჩატვირთულია' : '<span class="err">არ ჩაიტვირთა — ველები Lists-ში არ გამოჩნდება</span>' ?>
+        · <a href="?rebuild=1" onclick="return confirm('ცარიელი სიები წაიშლება და თავიდან შეიქმნება. გავაგრძელო?')">თავიდან აგება</a>
+    </p>
+
 <?php foreach ($report as $entry): ?>
     <h2><?= htmlspecialcharsbx($entry['NAME']) ?></h2>
     <table>
@@ -248,18 +357,30 @@ if (is_readable($endpointFile) && preg_match("/STATS_API_TOKEN\s*=\s*'([^']+)'/"
         <tr>
             <th>სტატუსი</th>
             <td class="<?= $entry['CREATED'] ? 'ok' : '' ?>">
-                <?= $entry['CREATED'] ? 'ახლად შეიქმნა' : 'უკვე არსებობდა' ?>
+                <?php if ($entry['REBUILT']): ?>
+                    თავიდან აიგო
+                <?php elseif ($entry['CREATED']): ?>
+                    ახლად შეიქმნა
+                <?php else: ?>
+                    უკვე არსებობდა
+                <?php endif; ?>
             </td>
         </tr>
         <tr>
             <th>დამატებული ველები</th>
-            <td><?= $entry['PROPS_ADDED'] ? htmlspecialcharsbx(implode(', ', $entry['PROPS_ADDED'])) : '—' ?></td>
+            <td><?= $entry['FIELDS_ADDED'] ? htmlspecialcharsbx(implode(', ', $entry['FIELDS_ADDED'])) : '—' ?></td>
         </tr>
         <tr>
-            <th>უკვე არსებული ველები</th>
-            <td><?= $entry['PROPS_KEPT'] ? htmlspecialcharsbx(implode(', ', $entry['PROPS_KEPT'])) : '—' ?></td>
+            <th>უკვე დარეგისტრირებული</th>
+            <td><?= $entry['FIELDS_KEPT'] ? htmlspecialcharsbx(implode(', ', $entry['FIELDS_KEPT'])) : '—' ?></td>
         </tr>
         <tr><th>ჩანაწერები</th><td><?= (int)$entry['ELEMENTS'] ?></td></tr>
+        <tr>
+            <th>Lists ხედავს</th>
+            <td class="<?= count($entry['LIST_FIELDS']) > 1 ? 'ok' : 'err' ?>">
+                <?= $entry['LIST_FIELDS'] ? htmlspecialcharsbx(implode(', ', $entry['LIST_FIELDS'])) : '—' ?>
+            </td>
+        </tr>
         <?php if (!empty($entry['ERRORS'])): ?>
             <tr>
                 <th>შეცდომები</th>
@@ -268,9 +389,8 @@ if (is_readable($endpointFile) && preg_match("/STATS_API_TOKEN\s*=\s*'([^']+)'/"
         <?php endif; ?>
     </table>
     <?php if (!empty($entry['ID'])): ?>
-        <a href="/bitrix/admin/iblock_element_admin.php?IBLOCK_ID=<?= (int)$entry['ID'] ?>&amp;type=<?= htmlspecialcharsbx($template['IBLOCK_TYPE_ID']) ?>&amp;lang=<?= LANGUAGE_ID ?>">
-            ჩანაწერების ნახვა →
-        </a>
+        <a href="/services/lists/<?= (int)$entry['ID'] ?>/fields/">ველების კონფიგურაცია →</a> ·
+        <a href="/services/lists/<?= (int)$entry['ID'] ?>/view/">ჩანაწერები →</a>
     <?php endif; ?>
 <?php endforeach; ?>
 
