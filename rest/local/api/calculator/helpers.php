@@ -329,8 +329,9 @@ if (!function_exists('calcGetDiscountPercent')) {
                 continue;
             }
             $pct = calcParseNumberLoose($element[$code]);
-            if ($pct !== null && $pct > 0) {
-                return min($pct, 100);
+            // უარყოფითი = დანამატი (ისევე, როგორც DISCOUNT ($)-ში)
+            if ($pct !== null && $pct != 0) {
+                return max(-100, min($pct, 100));
             }
         }
         return 0;
@@ -342,7 +343,7 @@ if (!function_exists('calcResolveDiscountPerSqm')) {
     function calcResolveDiscountPerSqm($element, $startSqmPrice)
     {
         $pct = calcGetDiscountPercent($element);
-        if ($pct > 0) {
+        if ($pct != 0) {
             $perSqm = round(floatval($startSqmPrice) * $pct / 100, 2);
             return ['perSqm' => $perSqm, 'pct' => $pct];
         }
