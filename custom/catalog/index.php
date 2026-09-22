@@ -853,6 +853,13 @@ let propertyMap = {
     "_1_8M61S3": { name: "სველი წერტილი 1",            type: "S" },
     "_2_LK1VJB": { name: "სველი წერტილი 2",            type: "S" },
     "_UQIM2I":   { name: "აქცია",                      type: "S" },
+    "PROP_60__RHMZW7":  { name: "60 თვიანი დაშვება (მონოლითი)",              type: "S" },
+    "_60__WZXWF3":      { name: "სრული ფასი 60 თვიანი (მონოლითი)",          type: "S" },
+    "_60__Q44IB7":      { name: "ფასი კვ.მ 60 თვიანი (მონოლითი)",           type: "S" },
+    "_02080__AEC240":   { name: "ფასი 0/20/80 (მონოლითი)",                  type: "S" },
+    "_02080__1D1HZL":   { name: "კვმ 0/20/80 (მონოლითი)",                   type: "S" },
+    "__3OT6VA":         { name: "ფასი ერთიანი გადახდით (მონოლითი)",         type: "S" },
+    "__TTJCKI":         { name: "კვ.მ. ფასი ერთიანი გადახდით (მონოლითი)",   type: "S" },
 };
 
 
@@ -873,6 +880,7 @@ const SKIP_CODES = new Set([
     "PRICE","PRICE_GEL",
     "_P64GYD","Number","FLOOR","__X1GCRZ","_L24CUB",
     "__51MODL","__6ZWTER", "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL", "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
+    "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","__3OT6VA","__TTJCKI",
 ]);
 const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA"];
 
@@ -1013,6 +1021,13 @@ projectSelect.addEventListener("change", function() {
                 "FLOOR":     "სართული",
                 "TOTAL_AREA":"სრული ფართი",
                 "_MVA3NL":   "ბლოკი",
+                "PROP_60__RHMZW7": "60 თვიანი დაშვება (მონოლითი)",
+                "_60__WZXWF3":     "სრული ფასი 60 თვიანი (მონოლითი)",
+                "_60__Q44IB7":     "ფასი კვ.მ 60 თვიანი (მონოლითი)",
+                "_02080__AEC240":  "ფასი 0/20/80 (მონოლითი)",
+                "_02080__1D1HZL":  "კვმ 0/20/80 (მონოლითი)",
+                "__3OT6VA":        "ფასი ერთიანი გადახდით (მონოლითი)",
+                "__TTJCKI":        "კვ.მ. ფასი ერთიანი გადახდით (მონოლითი)",
             };
             propertyMap = {};
             Object.entries(FIELD_NAMES).forEach(([code, name]) => {
@@ -2017,6 +2032,7 @@ function renderBlockSections(apt) {
         "DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","OWNER_PERSONAL_CONTACT","QUEUE",
         "__51MODL","__6ZWTER",  "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL","RESERVATION_STAGE_ID","RESERVATION_DATE",
         "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
+        "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","__3OT6VA","__TTJCKI",
     ]);
     // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
@@ -2233,7 +2249,38 @@ function appendPriceSection(container, apt) {
     const priceGel = price ? Math.round(price * nbg) : 0;
     const kvmUsd   = parseFloat(String(apt[F_KVM_USD] || "0").replace(/[^0-9.]/g, "")) || 0;
     const kvmGel   = kvmUsd ? Math.round(kvmUsd * nbg) : 0;
-    if (!price && !priceGel && !kvmUsd) return;
+
+    // ── Payment-plan fields (მონოლითი) ─────────────────────────────
+    const plan60Down    = apt["PROP_60__RHMZW7"] || "";
+    const plan60Full    = parseFloat(String(apt["_60__WZXWF3"]    || "0").replace(/[^0-9.]/g, "")) || 0;
+    const plan60Kvm      = parseFloat(String(apt["_60__Q44IB7"]    || "0").replace(/[^0-9.]/g, "")) || 0;
+    const plan02080Full  = parseFloat(String(apt["_02080__AEC240"] || "0").replace(/[^0-9.]/g, "")) || 0;
+    const plan02080Kvm   = parseFloat(String(apt["_02080__1D1HZL"] || "0").replace(/[^0-9.]/g, "")) || 0;
+    const planOneFull    = parseFloat(String(apt["__3OT6VA"]       || "0").replace(/[^0-9.]/g, "")) || 0;
+    const planOneKvm     = parseFloat(String(apt["__TTJCKI"]       || "0").replace(/[^0-9.]/g, "")) || 0;
+
+    const hasPlans = !!(plan60Down || plan60Full || plan60Kvm || plan02080Full || plan02080Kvm || planOneFull || planOneKvm);
+
+    if (!price && !priceGel && !kvmUsd && !hasPlans) return;
+
+    function planBox(label, val, isGel) {
+        if (!val) return "";
+        const symbol = isGel ? "₾" : "$";
+        return `<div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:5px;padding:4px 7px;"><div style="font-size:8px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px;">${label}</div><div style="font-size:12px;font-weight:700;color:#047857;font-family:'JetBrains Mono',monospace;">${symbol}${fmt(val)}</div></div>`;
+    }
+
+    function planRow(title, fullVal, kvmVal, downVal) {
+        if (!fullVal && !kvmVal && !downVal) return "";
+        return `
+            <div style="margin-top:6px;padding-top:6px;border-top:1px dashed #a7f3d0;">
+                <div style="font-size:8px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">${title}</div>
+                ${downVal ? `<div style="font-size:10px;color:#047857;margin-bottom:3px;">დაშვება: ${downVal}</div>` : ""}
+                ${(fullVal || kvmVal) ? `<div style="display:flex;gap:4px;">
+                    ${planBox("სრული ფასი $", fullVal, false)}
+                    ${planBox("მ² ფასი $", kvmVal, false)}
+                </div>` : ""}
+            </div>`;
+    }
 
     const sec = document.createElement("div"); sec.className = "block-section";
     sec.innerHTML = `
@@ -2251,6 +2298,9 @@ function appendPriceSection(container, apt) {
                 ${priceGel ? `<div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:5px;padding:4px 7px;"><div style="font-size:8px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px;">სრული ფასი ₾</div><div style="font-size:12px;font-weight:700;color:#047857;font-family:'JetBrains Mono',monospace;">₾${fmt(priceGel)}</div></div>` : ""}
             </div>
             <div style="text-align:right;font-size:8px;color:#6b7280;padding-top:2px;border-top:1px solid #d1fae5;">NBG კურსი: <span style="font-weight:700;color:#047857;">${nbg} ₾</span></div>
+            ${planRow("60 თვიანი დაშვება (მონოლითი)", plan60Full, plan60Kvm, plan60Down)}
+            ${planRow("0/20/80 (მონოლითი)", plan02080Full, plan02080Kvm, "")}
+            ${planRow("ერთიანი გადახდით (მონოლითი)", planOneFull, planOneKvm, "")}
         </div>`;
     container.appendChild(sec);
 }
