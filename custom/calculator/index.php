@@ -70,6 +70,7 @@ $scheduleTypeArr['customType'] = [
     'kvmPrice' => $startSqmPrice,
     'discountAmount' => 0,
     'discountPerSqm' => 0,
+    'discountPct' => 0,
     'oldPrice' => $oldPrice,
     'TOTAL_AREA' => $totalKVM,
     'startSqmPrice' => $startSqmPrice,
@@ -80,6 +81,7 @@ $scheduleTypeArr['allCash'] = [
     'kvmPrice' => round($startSqmPrice - 70, 2),
     'discountAmount' => round(70 * $totalKVM, 2),
     'discountPerSqm' => 70,
+    'discountPct' => $startSqmPrice > 0 ? round(70 / $startSqmPrice * 100, 2) : 0,
     'oldPrice' => $oldPrice,
     'TOTAL_AREA' => $totalKVM,
     'startSqmPrice' => $startSqmPrice,
@@ -90,7 +92,10 @@ $scheduleTypeArr['allCash'] = [
 $instalmentPlanArr['allCash'] = 'ერთიანი გადახდა';
 
 foreach ($conditionElements as $element) {
-    $discountPerSqm = calcGetNumericProp($element, ['DISCOUNT', 'DISCOUNT_PER_SQM', 'FASDAKLEBA']);
+    // ფასდაკლება: DISCOUNT_PERCENT (%) უპირატესია, სხვა შემთხვევაში DISCOUNT ($)
+    $discountInfo = calcResolveDiscountPerSqm($element, $startSqmPrice);
+    $discountPerSqm = $discountInfo['perSqm'];
+    $discountPct = $discountInfo['pct'];
     $advancePct = calcGetConditionPercent(
         $element,
         ['ADVANCE_PAYNMENT', 'ADVANCE_PAYMENT', 'PIRVELADI_SHENETANI', 'FIRST_PAYMENT', 'ADVANCE_PERCENT'],
@@ -115,6 +120,7 @@ foreach ($conditionElements as $element) {
         'kvmPrice' => $kvmPrice,
         'discountAmount' => $discountAmount,
         'discountPerSqm' => $discountPerSqm,
+        'discountPct' => $discountPct,
         'oldPrice' => $oldPrice,
         'TOTAL_AREA' => $totalKVM,
         'startSqmPrice' => $startSqmPrice,
@@ -183,8 +189,10 @@ foreach ($conditionElements as $element) {
             grid-template-columns: repeat(4, 1fr);
             gap: 14px;
         }
+        .form-grid.grid-5 { grid-template-columns: repeat(5, 1fr); }
         @media (max-width: 1100px) { .form-grid { grid-template-columns: repeat(4, 1fr); } }
         @media (max-width: 600px)  { .form-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 600px)  { .form-grid.grid-5 { grid-template-columns: 1fr; } }
         .field label {
             display: block; font-size: 11px; font-weight: 600;
             color: var(--muted); margin-bottom: 5px;
@@ -344,7 +352,7 @@ foreach ($conditionElements as $element) {
 
 <!-- ფასები -->
 <div class="card-panel">
-    <div class="form-grid">
+    <div class="form-grid grid-5">
         <div class="field frozen" style="display:none;">
             <label>სულ ($)</label>
             <input id="totalPrice" value="<?= number_format($oldPrice, 2, '.', ',') ?>" disabled>
@@ -352,6 +360,10 @@ foreach ($conditionElements as $element) {
         <div class="field">
             <label>ფასდაკლება კვ.მ ($)</label>
             <input id="discountPerSqm" value="0" oninput="calculateDiscountPerSqm()" onblur="formatDiscountField('discountPerSqm')">
+        </div>
+        <div class="field">
+            <label>ფასდაკლება კვ.მ (%)</label>
+            <input id="discountPercent" value="0" oninput="calculateDiscountPercent()" onblur="formatDiscountField('discountPercent')">
         </div>
         <div class="field">
             <label>ფასდაკლება სრული ($)</label>
@@ -559,6 +571,7 @@ function onScheduleTypeChange() {
 function fillAllCashData() {
     const d = CONFIG.scheduleTypeArr.allCash;
     setValue('discountPerSqm', formatNumber(d.discountPerSqm));
+    setValue('discountPercent', formatNumber(d.discountPct || 0));
     setValue('discountNum', formatNumber(d.discountAmount));
     setValue('price', formatNumber(d.price));
     setValue('kvmPrice', formatNumber(d.kvmPrice));
@@ -570,22 +583,24 @@ function fillAllCashData() {
     setValue('lastPaymentPercent', '0');
     setValue('endDate', today());
     setValue('lastPayDate', today());
-    disableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
+    disableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
 }
 
 function fillCustomTypeData() {
     const d = CONFIG.scheduleTypeArr.customType;
     setValue('discountPerSqm', '0');
+    setValue('discountPercent', '0');
     setValue('discountNum', '0');
     setValue('price', formatNumber(d.price));
     setValue('kvmPrice', formatNumber(d.kvmPrice));
     setValue('priceGel', formatNumber(d.price * CONFIG.nbgKursi));
-    enableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','startDate','advancePayDate','lastPayDate']);
+    enableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','startDate','advancePayDate','lastPayDate']);
 }
 
 function fillScheduleData(id) {
     const d = CONFIG.scheduleTypeArr[id];
     setValue('discountPerSqm', formatNumber(d.discountPerSqm || 0));
+    setValue('discountPercent', formatNumber(d.discountPct || 0));
     setValue('discountNum', formatNumber(d.discountAmount));
     setValue('price', formatNumber(d.price));
     setValue('kvmPrice', formatNumber(d.kvmPrice));
@@ -624,7 +639,7 @@ function fillScheduleData(id) {
         setValue('lastPayDate', '');
     }
 
-    disableFields(['discountPerSqm','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','lastPayDate']);
+    disableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','lastPayDate']);
 }
 
 function applyPriceFromDiscount(discount, skipField) {
@@ -635,7 +650,9 @@ function applyPriceFromDiscount(discount, skipField) {
     setValue('price', formatNumber(price));
     setValue('kvmPrice', formatNumber(kvm));
     setValue('priceGel', formatNumber(price * CONFIG.nbgKursi));
+    const pct = CONFIG.startSqmPrice > 0 ? (perSqm / CONFIG.startSqmPrice) * 100 : 0;
     if (skipField !== 'discountPerSqm') setValue('discountPerSqm', formatNumber(perSqm));
+    if (skipField !== 'discountPercent') setValue('discountPercent', formatNumber(pct));
     if (skipField !== 'discountNum') setValue('discountNum', formatNumber(discount));
 }
 
@@ -650,6 +667,14 @@ function calculateDiscountPerSqm() {
     if (mode !== 'customType') return;
     const perSqm = parseFormattedNumber(getValue('discountPerSqm'));
     applyPriceFromDiscount(perSqm * CONFIG.totalKVM, 'discountPerSqm');
+}
+
+function calculateDiscountPercent() {
+    const mode = getValue('paymentMode');
+    if (mode !== 'customType') return;
+    const pct = parseFormattedNumber(getValue('discountPercent'));
+    const perSqm = CONFIG.startSqmPrice * pct / 100;
+    applyPriceFromDiscount(perSqm * CONFIG.totalKVM, 'discountPercent');
 }
 
 function formatDiscountField(id) {
@@ -849,6 +874,8 @@ async function saveGraph() {
         lastPayment: `${lastPayment} $ / ${lastPaymentPercent} %`,
         DistributedPayment: `${distributed} $ / ${distributedPct} %`,
         discountAmount: `${parseFormattedNumber(getValue('discountNum'))} $`,
+        discountPerSqm: `${parseFormattedNumber(getValue('discountPerSqm'))} $`,
+        discountPercent: `${parseFormattedNumber(getValue('discountPercent'))} %`,
         lastAmount: `${formatNumber(price)} $`,
     };
 

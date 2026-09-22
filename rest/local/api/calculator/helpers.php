@@ -305,6 +305,53 @@ if (!function_exists('calcGetNumericProp')) {
     }
 }
 
+if (!function_exists('calcParseNumberLoose')) {
+    function calcParseNumberLoose($value)
+    {
+        $text = trim(calcGetIblockPropText($value));
+        if ($text === '') {
+            return null;
+        }
+        $text = str_replace([' ', '%', '$', ','], ['', '', '', '.'], $text);
+        if (preg_match('/-?\d+(\.\d+)?/', $text, $m)) {
+            return floatval($m[0]);
+        }
+        return null;
+    }
+}
+
+if (!function_exists('calcGetDiscountPercent')) {
+    // ფასდაკლება კვადრატულზე % (ლისტი 20 — DISCOUNT_PERCENT)
+    function calcGetDiscountPercent($element, $codes = ['DISCOUNT_PERCENT', 'DISCOUNT_PCT', 'FASDAKLEBA_PERCENT'])
+    {
+        foreach ($codes as $code) {
+            if (!isset($element[$code])) {
+                continue;
+            }
+            $pct = calcParseNumberLoose($element[$code]);
+            if ($pct !== null && $pct > 0) {
+                return min($pct, 100);
+            }
+        }
+        return 0;
+    }
+}
+
+if (!function_exists('calcResolveDiscountPerSqm')) {
+    // % უპირატესია: თუ DISCOUNT_PERCENT შევსებულია, $ ველი იგნორირდება
+    function calcResolveDiscountPerSqm($element, $startSqmPrice)
+    {
+        $pct = calcGetDiscountPercent($element);
+        if ($pct > 0) {
+            $perSqm = round(floatval($startSqmPrice) * $pct / 100, 2);
+            return ['perSqm' => $perSqm, 'pct' => $pct];
+        }
+        $perSqm = calcGetNumericProp($element, ['DISCOUNT', 'DISCOUNT_PER_SQM', 'FASDAKLEBA']);
+        $pct = $startSqmPrice > 0 ? round($perSqm / floatval($startSqmPrice) * 100, 2) : 0;
+        return ['perSqm' => $perSqm, 'pct' => $pct];
+    }
+}
+
 if (!function_exists('calcParseAdvancePctFromName')) {
     function calcParseAdvancePctFromName($name)
     {
