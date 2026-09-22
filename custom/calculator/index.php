@@ -59,8 +59,9 @@ $binisNomeri = ($dealData['UF_CRM_1779277613798'] ?? null) ?: $prod['Number'];
 $dateForNBG = date('Y-m-d');
 $nbgKursi = calcGetNbgRate($dateForNBG);
 
-// ── განვადების პირობები (ლისტი 20) — პროექტის მიხედვით PHP-ში ფილტრაცია ──
-$conditionElements = calcGetInstallmentConditions($projectName, 20);
+// ── განვადების პირობები (ლისტი 20) — პროექტის და ფართის ტიპის მიხედვით ფილტრაცია ──
+$productType = $prod['PRODUCT_TYPE'] ?? '';
+$conditionElements = calcGetInstallmentConditions($projectName, 20, $productType);
 
 $instalmentPlanArr = [];
 $scheduleTypeArr = [];
@@ -111,6 +112,8 @@ foreach ($conditionElements as $element) {
     $kvmPrice = $totalKVM > 0 ? round($price / $totalKVM, 2) : 0;
     $months = calcParseMonthsFromName($element['NAME']);
     $endDateFixed = calcFormatBitrixDate($element['END_DATE'] ?? '');
+    // MONTH_AMOUNT შევსებულია → END_DATE იგნორირდება, გრაფიკი ამდენი შენატანისგან შედგება
+    $monthAmount = calcGetMonthAmount($element);
 
     $instalmentPlanArr[$element['ID']] = $element['NAME'];
 
@@ -128,6 +131,7 @@ foreach ($conditionElements as $element) {
         'lastPaymentPct' => $lastPct,
         'months' => $months,
         'endDateFixed' => $endDateFixed,
+        'monthAmount' => $monthAmount,
     ];
 }
 ?>
@@ -336,7 +340,7 @@ foreach ($conditionElements as $element) {
         </div>
         <div class="field">
             <label>გადახდის პერიოდულობა</label>
-            <select id="period">
+            <select id="period" onchange="onPeriodChange()">
                 <option value="1" selected>თვეში ერთხელ</option>
                 <option value="3">3 თვეში ერთხელ</option>
                 <option value="6">6 თვეში ერთხელ</option>
@@ -415,6 +419,10 @@ foreach ($conditionElements as $element) {
             <label>ბოლო შენატანი (%)</label>
             <input id="lastPaymentPercent" inputmode="decimal" oninput="onLastChange('percent')" onkeypress="return isNumericKey(event)">
         </div>
+        <div class="field" id="fieldMonthAmount">
+            <label>გადასანაწილებელი თვეების რაოდენობა</label>
+            <input id="monthAmount" inputmode="numeric" placeholder="მაგ. 60" oninput="onMonthAmountChange()" onkeypress="return isNumericKey(event)">
+        </div>
         <div class="field" id="fieldEndDate">
             <label>განვადების დასრულების თარიღი</label>
             <input id="endDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
@@ -444,7 +452,7 @@ foreach ($conditionElements as $element) {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 const DATE_FIELD_IDS = ['advancePayDate', 'startDate', 'endDate', 'lastPayDate'];
-const ALL_CASH_HIDDEN_FIELDS = ['fieldStartDate', 'fieldEndDate', 'fieldLastPayDate', 'fieldLastPayment', 'fieldLastPaymentPercent'];
+const ALL_CASH_HIDDEN_FIELDS = ['fieldStartDate', 'fieldEndDate', 'fieldLastPayDate', 'fieldLastPayment', 'fieldLastPaymentPercent', 'fieldMonthAmount'];
 const DATE_PICKER_OPTS = {
     dateFormat: 'd/m/Y',
     allowInput: false,
@@ -462,6 +470,7 @@ const CONFIG = {
     totalKVM: <?= json_encode($totalKVM) ?>,
     userID: <?= json_encode($USER->GetID()) ?>,
     projectName: <?= json_encode($projectName, JSON_UNESCAPED_UNICODE) ?>,
+    productType: <?= json_encode($productType, JSON_UNESCAPED_UNICODE) ?>,
 };
 
 // Stores the saved dataID returned from saveGraphEndRunWorkflow.php
@@ -473,6 +482,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('in-sidepanel');
     }
     initDatePickers();
+    // endDate ხელით შეიცვალა → თვეების რაოდენობა აღარ არის ძალაში
+    const endDateEl = document.getElementById('endDate');
+    if (endDateEl && endDateEl._flatpickr) {
+        endDateEl._flatpickr.set('onChange', () => setValue('monthAmount', ''));
+    }
+    // startDate ხელით შეიცვალა → იმავე რაოდენობით გადაიწევს
+    const startDateEl = document.getElementById('startDate');
+    if (startDateEl && startDateEl._flatpickr) {
+        startDateEl._flatpickr.set('onChange', () => reapplyMonthAmount());
+    }
     onPaymentModeChange();
     setDateValue('startDate', dateAddMonth(today(), 1));
     setDateValue('advancePayDate', today());
@@ -555,7 +574,8 @@ function fillScheduleOptions() {
         count++;
     }
     if (count === 0) {
-        showError('ამ პროექტისთვის (' + CONFIG.projectName + ') განვადების პირობები ვერ მოიძებნა ლისტ 20-ში');
+        showError('ლისტ 20-ში პირობა ვერ მოიძებნა — პროექტი: ' + (CONFIG.projectName || '—')
+            + ', ფართის ტიპი: ' + (CONFIG.productType || '—'));
     } else {
         showError('');
     }
@@ -583,7 +603,8 @@ function fillAllCashData() {
     setValue('lastPaymentPercent', '0');
     setValue('endDate', today());
     setValue('lastPayDate', today());
-    disableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent']);
+    setValue('monthAmount', '');
+    disableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','monthAmount']);
 }
 
 function fillCustomTypeData() {
@@ -594,7 +615,8 @@ function fillCustomTypeData() {
     setValue('price', formatNumber(d.price));
     setValue('kvmPrice', formatNumber(d.kvmPrice));
     setValue('priceGel', formatNumber(d.price * CONFIG.nbgKursi));
-    enableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','startDate','advancePayDate','lastPayDate']);
+    setValue('monthAmount', '');
+    enableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','startDate','advancePayDate','lastPayDate','monthAmount']);
 }
 
 function fillScheduleData(id) {
@@ -607,14 +629,13 @@ function fillScheduleData(id) {
     setValue('priceGel', formatNumber(d.price * CONFIG.nbgKursi));
 
     const calcDate = today();
-    let endDate = d.endDateFixed;
-    if (d.months) {
-        endDate = dateAddMonth(calcDate, d.months);
-    }
-    setValue('endDate', endDate);
-    setValue('startDate', dateAddMonth(calcDate, 1));
+    const startDate = dateAddMonth(calcDate, 1);
+    const monthAmount = parseInt(d.monthAmount) || 0;
+    setValue('monthAmount', monthAmount > 0 ? monthAmount : '');
+    setValue('startDate', startDate);
     setValue('advancePayDate', calcDate);
 
+    // პირველადი/ბოლო ჯერ უნდა შეივსოს — monthAmount-ის დაშლა მათზეა დამოკიდებული
     const price = d.price;
     const advancePct = parseFloat(d.advancePaymentPct) || 0;
     if (advancePct > 0) {
@@ -631,15 +652,25 @@ function fillScheduleData(id) {
         const last = (price / 100 * lastPct).toFixed(2);
         setValue('lastPayment', formatNumber(last));
         setValue('lastPaymentPercent', formatNumber(lastPct));
-        setValue('lastPayDate', endDate);
-        setValue('endDate', dateAddMonth(endDate, -1));
     } else {
         setValue('lastPayment', '0');
         setValue('lastPaymentPercent', '0');
-        setValue('lastPayDate', '');
     }
 
-    disableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','lastPayDate']);
+    // MONTH_AMOUNT (ლისტი 20) უპირატესია END_DATE-ზე
+    if (!applyMonthAmountDates(monthAmount, startDate)) {
+        // ძველი ლოგიკა: დასახელებიდან ამოკითხული თვეები, შემდეგ END_DATE
+        const endDate = d.months ? dateAddMonth(calcDate, d.months) : d.endDateFixed;
+        if (lastPct > 0 && endDate) {
+            setValue('lastPayDate', endDate);
+            setValue('endDate', dateAddMonth(endDate, -1));
+        } else {
+            setValue('lastPayDate', '');
+            setValue('endDate', endDate);
+        }
+    }
+
+    disableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','lastPayDate','monthAmount']);
 }
 
 function applyPriceFromDiscount(discount, skipField) {
@@ -695,6 +726,40 @@ function sanitizeNumericField(id) {
     if (el.value !== cleaned) el.value = cleaned;
 }
 
+// monthAmount = გრაფიკის სულ რიგების რაოდენობა — პირველადი და ბოლო შენატანიც ამაში შედის.
+// გადანაწილებული = monthAmount - (პირველადი?1:0) - (ბოლო?1:0), დანარჩენი თარიღები აქედან დგება.
+// ცარიელია → false და თარიღები ძველი ლოგიკით რჩება.
+function applyMonthAmountDates(monthAmount, startDate) {
+    const total = parseInt(monthAmount) || 0;
+    if (total <= 0) return false;
+    const start = startDate || getValue('startDate') || dateAddMonth(today(), 1);
+    const period = parseInt(getValue('period')) || 1;
+    const hasAdvance = parseFormattedNumber(getValue('advancePayment')) > 0;
+    const hasLast = parseFormattedNumber(getValue('lastPayment')) > 0;
+    const distributed = Math.max(1, total - (hasAdvance ? 1 : 0) - (hasLast ? 1 : 0));
+    setValue('startDate', start);
+    setValue('endDate', dateAddMonth(start, (distributed - 1) * period));
+    setValue('lastPayDate', hasLast ? dateAddMonth(start, distributed * period) : '');
+    return true;
+}
+
+function reapplyMonthAmount() {
+    const ma = getValue('monthAmount');
+    if (ma) applyMonthAmountDates(ma, getValue('startDate'));
+}
+
+function onMonthAmountChange() {
+    const el = document.getElementById('monthAmount');
+    if (!el) return;
+    const cleaned = el.value.replace(/[^0-9]/g, '');
+    if (el.value !== cleaned) el.value = cleaned;
+    applyMonthAmountDates(cleaned, getValue('startDate'));
+}
+
+function onPeriodChange() {
+    reapplyMonthAmount();
+}
+
 function onAdvanceChange(type) {
     if (type === 'amount') sanitizeNumericField('advancePayment');
     else sanitizeNumericField('advancePaymentPercent');
@@ -707,6 +772,7 @@ function onAdvanceChange(type) {
         const pct = parseFormattedNumber(getValue('advancePaymentPercent'));
         setValue('advancePayment', formatNumber(price / 100 * pct));
     }
+    reapplyMonthAmount();
 }
 
 function onLastChange(type) {
@@ -721,6 +787,7 @@ function onLastChange(type) {
         const pct = parseFormattedNumber(getValue('lastPaymentPercent'));
         setValue('lastPayment', formatNumber(price / 100 * pct));
     }
+    reapplyMonthAmount();
 }
 
 async function getAndFillGraph() {

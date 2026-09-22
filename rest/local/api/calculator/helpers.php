@@ -10,9 +10,18 @@ if (!function_exists('calcGetCIBlockElementsByFilter')) {
     function calcGetCIBlockElementsByFilter($arFilter, $arSelect = ['ID', 'IBLOCK_ID', 'NAME', 'DATE_ACTIVE_FROM', 'PROPERTY_*'], $arSort = ['ID' => 'ASC'], $count = 9999)
     {
         $arElements = [];
+        $seen = [];
         $res = CIBlockElement::GetList($arSort, $arFilter, false, ['nPageSize' => $count], $arSelect);
         while ($ob = $res->GetNextElement()) {
             $arFields = $ob->GetFields();
+            // Multiple ველებზე GetList ერთ ელემენტს რამდენჯერმე აბრუნებს — ID-ით ვფილტრავთ
+            $id = $arFields['ID'] ?? null;
+            if ($id !== null) {
+                if (isset($seen[$id])) {
+                    continue;
+                }
+                $seen[$id] = true;
+            }
             $arProps = $ob->GetProperties();
             $row = [];
             foreach ($arFields as $key => $val) {
@@ -229,11 +238,113 @@ if (!function_exists('calcParseMonthsFromName')) {
     }
 }
 
+if (!function_exists('calcGetMonthAmount')) {
+    // გადასანაწილებელი თვეების რაოდენობა (ლისტი 20 — MONTH_AMOUNT).
+    // შევსებული ველი END_DATE-ზე უპირატესია. არაა შევსებული → null (ძველი ლოგიკა).
+    function calcGetMonthAmount($element, $codes = ['MONTH_AMOUNT', 'MONTHS_AMOUNT', 'MONTH_COUNT', 'TVEEBIS_RAODENOBA'])
+    {
+        foreach ($codes as $code) {
+            if (!isset($element[$code])) {
+                continue;
+            }
+            $value = calcParseNumberLoose($element[$code]);
+            if ($value !== null && $value > 0) {
+                return intval(round($value));
+            }
+        }
+        return null;
+    }
+}
+
+if (!function_exists('calcNormalizeText')) {
+    function calcNormalizeText($value)
+    {
+        $value = is_array($value) ? ($value[0] ?? '') : (string)$value;
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $value)));
+    }
+}
+
 if (!function_exists('calcNormalizeProjectName')) {
     function calcNormalizeProjectName($name)
     {
-        $name = is_array($name) ? ($name[0] ?? '') : (string)$name;
-        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $name)));
+        return calcNormalizeText($name);
+    }
+}
+
+if (!function_exists('calcResolveEnumText')) {
+    function calcResolveEnumText($enumId)
+    {
+        static $cache = [];
+        $enumId = (int)$enumId;
+        if (isset($cache[$enumId])) {
+            return $cache[$enumId];
+        }
+        $enum = CIBlockPropertyEnum::GetByID($enumId);
+        $cache[$enumId] = ($enum && isset($enum['VALUE'])) ? trim((string)$enum['VALUE']) : (string)$enumId;
+        return $cache[$enumId];
+    }
+}
+
+if (!function_exists('calcGetListValues')) {
+    // List ტიპის ველი — ერთიც და მრავალარჩევანიც, ყოველთვის მასივად ბრუნდება
+    function calcGetListValues($element, $codes)
+    {
+        if (!is_array($codes)) {
+            $codes = [$codes];
+        }
+        foreach ($codes as $code) {
+            if (!isset($element[$code])) {
+                continue;
+            }
+            $raw = $element[$code];
+            $items = [];
+            if (is_array($raw) && !isset($raw['TEXT']) && !isset($raw['VALUE'])) {
+                foreach ($raw as $one) {
+                    $items[] = calcGetIblockPropText($one);
+                }
+            } else {
+                $items[] = calcGetIblockPropText($raw);
+            }
+            $items = array_values(array_filter(array_map('trim', $items), function ($v) {
+                return $v !== '';
+            }));
+            // ზოგ კონფიგურაციაში List ველი enum ID-ს აბრუნებს ტექსტის ნაცვლად
+            foreach ($items as $i => $item) {
+                if (ctype_digit($item)) {
+                    $items[$i] = calcResolveEnumText($item);
+                }
+            }
+            if ($items) {
+                return $items;
+            }
+        }
+        return [];
+    }
+}
+
+if (!function_exists('calcListMatches')) {
+    // ცარიელი სია = შეზღუდვა არ არის, ყველაფერზე ვრცელდება.
+    // შედარება რეგისტრის გარეშე, ორივე მხრიდან ქვესტრიქონით
+    // ("ავტოსადგომი" ⊃ "შიდა ავტოსადგომი", "ბინა" ⊃ "ბინა (2 საძ.)").
+    function calcListMatches($listValues, $target)
+    {
+        if (empty($listValues)) {
+            return true;
+        }
+        $b = calcNormalizeText($target);
+        if ($b === '') {
+            return true;
+        }
+        foreach ($listValues as $value) {
+            $a = calcNormalizeText($value);
+            if ($a === '') {
+                continue;
+            }
+            if ($a === $b || mb_strpos($a, $b) !== false || mb_strpos($b, $a) !== false) {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
@@ -268,7 +379,7 @@ if (!function_exists('calcIsActiveCondition')) {
 }
 
 if (!function_exists('calcGetInstallmentConditions')) {
-    function calcGetInstallmentConditions($projectName, $iblockId = 20)
+    function calcGetInstallmentConditions($projectName, $iblockId = 20, $productType = '')
     {
         $all = calcGetCIBlockElementsByFilter(['IBLOCK_ID' => $iblockId]);
         $matched = [];
@@ -276,8 +387,17 @@ if (!function_exists('calcGetInstallmentConditions')) {
             if (!calcIsActiveCondition($element['ACTIVE'] ?? '')) {
                 continue;
             }
-            $elProject = $element['PROJECT'] ?? '';
-            if (!calcProjectMatches($elProject, $projectName)) {
+            // PROJECT_LIST (List) უპირატესია; ძველი PROJECT (String) fallback-ად რჩება
+            $projects = calcGetListValues($element, ['PROJECT_LIST']);
+            if ($projects) {
+                if (!calcListMatches($projects, $projectName)) {
+                    continue;
+                }
+            } elseif (!calcProjectMatches($element['PROJECT'] ?? '', $projectName)) {
+                continue;
+            }
+            // FART_TYPE_LIST — ცარიელი ნიშნავს ყველა ფართის ტიპს
+            if (!calcListMatches(calcGetListValues($element, ['FART_TYPE_LIST']), $productType)) {
                 continue;
             }
             $matched[] = $element;
