@@ -405,6 +405,10 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
                     <span class="report-nav__label" id="nav-cashflow-label">ქეშფლოუ რეპორტი</span>
                     <span class="report-nav__hint" id="nav-cashflow-hint">ფინანსური მოძრაობა პერიოდით</span>
                 </button>
+                <button type="button" data-url="/crm/deal/reports/reconcileReport.php" data-key="reconcile" onclick="selectReport(this)">
+                    <span class="report-nav__label" id="nav-reconcile-label">შედარების რეპორტი</span>
+                    <span class="report-nav__hint" id="nav-reconcile-hint">დილები vs პროდუქტები</span>
+                </button>
             </div>
         </aside>
 
@@ -445,6 +449,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
             reservation: ['რეზერვაციის რეპორტი', 'დაჯავშნილი დილები'],
             debitors: ['დავალიანების რეპორტი', 'დარიცხვა vs გადახდა'],
             cashflow: ['ქეშფლოუ რეპორტი', 'ფინანსური მოძრაობა პერიოდით'],
+            reconcile: ['შედარების რეპორტი', 'დილები vs პროდუქტები'],
         },
         eng: {
             hubHome: 'Main Page',
@@ -461,6 +466,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
             reservation: ['Reservation Report', 'Reserved deals'],
             debitors: ['Debt Report', 'Scheduled vs paid amounts'],
             cashflow: ['Cashflow Report', 'Financial movement by period'],
+            reconcile: ['Reconcile Report', 'Deals vs products'],
         }
     };
 
@@ -477,7 +483,7 @@ $APPLICATION->SetTitle('ფინანსური სტატისტიკ�
         document.getElementById('loaderText').innerText = t.loading;
         document.getElementById('loaderSub').innerText = t.loadingSub;
         if (!currentUrl) document.getElementById('viewerTitle').innerText = t.viewerPick;
-        ['product', 'sold', 'reservation', 'debitors', 'cashflow'].forEach(key => {
+        ['product', 'sold', 'reservation', 'debitors', 'cashflow', 'reconcile'].forEach(key => {
             document.getElementById(`nav-${key}-label`).innerText = t[key][0];
             document.getElementById(`nav-${key}-hint`).innerText = t[key][1];
         });

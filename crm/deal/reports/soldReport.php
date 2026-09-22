@@ -56,14 +56,14 @@ $filterOptions = [
 ];
 $filteredProducts = reportFilterProducts($products, $filters);
 
-/** Percentage difference of the product value against the deal value. */
-function soldDiffPercent($dealValue, $productValue)
+/** Percentage difference of the sale value against the stock value (stock is the baseline). */
+function soldDiffPercent($saleValue, $stockValue)
 {
-    $dealValue = (float)$dealValue;
-    if (abs($dealValue) < 0.005) {
+    $stockValue = (float)$stockValue;
+    if (abs($stockValue) < 0.005) {
         return null;
     }
-    return round((((float)$productValue - $dealValue) / $dealValue) * 100, 2);
+    return round((((float)$saleValue - $stockValue) / $stockValue) * 100, 2);
 }
 
 function soldDiffCell($percent)
