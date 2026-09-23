@@ -244,8 +244,8 @@ reportRenderCashflowFilterForm($period, $fromDate, $toDate, $project, $projects)
         <tbody>
             <tr>
                 <?php foreach ($allDates as $date): ?>
-                    <td><?= number_format($grouped_daricxvebi[$date] ?? 0, 2, '.', ',') ?></td>
-                    <td><?= number_format($grouped_gadaxdebi[$date] ?? 0, 2, '.', ',') ?></td>
+                    <td>$<?= number_format($grouped_daricxvebi[$date] ?? 0, 2, '.', ',') ?></td>
+                    <td>$<?= number_format($grouped_gadaxdebi[$date] ?? 0, 2, '.', ',') ?></td>
                 <?php endforeach; ?>
             </tr>
         </tbody>
@@ -270,16 +270,16 @@ function exportTableToExcel() {
             'კლიენტი': deal.CONTACT_FULL_NAME || '',
             'ხელშეკრულება': deal.TITLE || '',
             'გაფორმების თარიღი': deal['<?= D_CONTRACT_DATE ?>'] || '',
-            'კონტრ. ღირებულება': deal.OPPORTUNITY || 0,
-            'გადაიხადა': deal.payment || 0,
-            'დარჩენილი': (deal.OPPORTUNITY || 0) - (deal.payment || 0),
+            'კონტრ. ღირებულება ($)': deal.OPPORTUNITY || 0,
+            'გადაიხადა ($)': deal.payment || 0,
+            'დარჩენილი ($)': (deal.OPPORTUNITY || 0) - (deal.payment || 0),
         };
         allDates.forEach(date => {
-            row[`დარიცხვა ${date}`] = deal.gadaxdebi_and_daricxvebi_by_dates?.[date]?.daricxva || 0;
-            row[`გადახდა ${date}`] = deal.gadaxdebi_and_daricxvebi_by_dates?.[date]?.gadaxda || 0;
+            row[`დარიცხვა ${date} ($)`] = deal.gadaxdebi_and_daricxvebi_by_dates?.[date]?.daricxva || 0;
+            row[`გადახდა ${date} ($)`] = deal.gadaxdebi_and_daricxvebi_by_dates?.[date]?.gadaxda || 0;
         });
-        row['ჯამური დარიცხვა'] = Object.values(deal.gadaxdebi_and_daricxvebi_by_dates || {}).reduce((s, v) => s + (v.daricxva || 0), 0);
-        row['ჯამური გადახდა'] = Object.values(deal.gadaxdebi_and_daricxvebi_by_dates || {}).reduce((s, v) => s + (v.gadaxda || 0), 0);
+        row['ჯამური დარიცხვა ($)'] = Object.values(deal.gadaxdebi_and_daricxvebi_by_dates || {}).reduce((s, v) => s + (v.daricxva || 0), 0);
+        row['ჯამური გადახდა ($)'] = Object.values(deal.gadaxdebi_and_daricxvebi_by_dates || {}).reduce((s, v) => s + (v.gadaxda || 0), 0);
         data.push(row);
     });
     const ws = XLSX.utils.json_to_sheet(data);

@@ -21,7 +21,7 @@ if ($lang === 'eng') {
     $t = array_merge($t, [
         'h2_count' => 'სტატუსების მიხედვით - რაოდენობები',
         'h2_area' => 'სტატუსების მიხედვით - კვადრატულობები',
-        'h2_price' => 'სტატუსების მიხედვით - თანხები',
+        'h2_price' => 'სტატუსების მიხედვით - თანხები ($)',
         'col_free' => 'თავისუფალი',
         'col_reserved' => 'დაჯავშნილი',
         'col_sold' => 'გაყიდული',
@@ -223,10 +223,10 @@ $reportPct = static function ($value, $total): string {
             <?php foreach ($statuses as $status):
                 $val = $infos[$status]['price'] ?? 0;
             ?>
-                <td><?= number_format($val, 2) ?></td>
+                <td>$<?= number_format($val, 2) ?></td>
                 <td><?= $reportPct($val, $row_total) ?></td>
             <?php endforeach; ?>
-            <td><?= number_format($row_total, 2) ?></td>
+            <td>$<?= number_format($row_total, 2) ?></td>
         </tr>
         <?php endforeach; ?>
         <?php $grand_total_price = array_sum($status_totals_price); ?>
@@ -235,10 +235,10 @@ $reportPct = static function ($value, $total): string {
             <?php foreach ($statuses as $status):
                 $val = $status_totals_price[$status];
             ?>
-                <td><?= number_format($val, 2) ?></td>
+                <td>$<?= number_format($val, 2) ?></td>
                 <td><?= $reportPct($val, $grand_total_price) ?></td>
             <?php endforeach; ?>
-            <td><?= number_format($grand_total_price, 2) ?></td>
+            <td>$<?= number_format($grand_total_price, 2) ?></td>
         </tr>
     </tbody>
 <?php reportBlockClose(); ?>
@@ -264,7 +264,7 @@ function exportToExcel() {
             const row = [];
             tr.querySelectorAll('td').forEach(function(td) {
                 let val = td.innerText.trim();
-                const num = parseFloat(val.replace(/,/g, ''));
+                const num = parseFloat(val.replace(/[$,]/g, ''));
                 if (!isNaN(num) && val !== '') val = num;
                 row.push(val);
             });

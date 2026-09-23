@@ -10,10 +10,10 @@ $t = reportGetProductLabels($lang);
 $t = array_merge($t, [
     'title_general' => $lang === 'eng' ? 'General Products' : 'ზოგადი პროდუქტები',
     'col_prod_type' => $lang === 'eng' ? 'Product Type' : 'პროდუქტის ტიპი',
-    'col_sold_amt' => $lang === 'eng' ? 'Total Sale Amount' : 'ჯამური გაყიდვების თანხა',
-    'col_scheduled' => $lang === 'eng' ? 'Total Scheduled' : 'ჯამური დარიცხვა',
-    'col_paid' => $lang === 'eng' ? 'Total Paid' : 'ჯამური გადახდა',
-    'col_debt' => $lang === 'eng' ? 'Current Debt' : 'მიმდინარე დავალიანება',
+    'col_sold_amt' => $lang === 'eng' ? 'Total Sale Amount ($)' : 'ჯამური გაყიდვების თანხა ($)',
+    'col_scheduled' => $lang === 'eng' ? 'Total Scheduled ($)' : 'ჯამური დარიცხვა ($)',
+    'col_paid' => $lang === 'eng' ? 'Total Paid ($)' : 'ჯამური გადახდა ($)',
+    'col_debt' => $lang === 'eng' ? 'Current Debt ($)' : 'მიმდინარე დავალიანება ($)',
     'no_data' => $lang === 'eng' ? 'No data available' : 'მონაცემი არ მოიძებნა',
     'xls_deal' => $lang === 'eng' ? 'Deal#' : 'გარიგება#',
     'xls_client' => $lang === 'eng' ? 'Client' : 'კლიენტი',
@@ -211,18 +211,18 @@ reportRenderFilterForm(
             ?>
             <tr <?= $isSubRow ? 'class="sub-row"' : '' ?>>
                 <td><?= reportSubTypeCell($prodType, $t, $isSubRow) ?></td>
-                <td class="amount"><?= number_format($data['jamuriGayidvebisAmount'], 2) ?></td>
-                <td class="amount"><?= number_format($data['jamuriDaricxvaUpToToday'], 2) ?></td>
-                <td class="amount"><?= number_format($data['jamuriGadaxdaUpToToday'], 2) ?></td>
-                <td class="amount"><?= number_format($data['mimdinareDavalianeba'], 2) ?></td>
+                <td class="amount">$<?= number_format($data['jamuriGayidvebisAmount'], 2) ?></td>
+                <td class="amount">$<?= number_format($data['jamuriDaricxvaUpToToday'], 2) ?></td>
+                <td class="amount">$<?= number_format($data['jamuriGadaxdaUpToToday'], 2) ?></td>
+                <td class="amount">$<?= number_format($data['mimdinareDavalianeba'], 2) ?></td>
             </tr>
             <?php endforeach; ?>
             <tr class="total-row">
                 <td><?= $t['col_total'] ?></td>
-                <td class="amount"><?= number_format($generalTotals['jamuriGayidvebisAmount'], 2) ?></td>
-                <td class="amount"><?= number_format($generalTotals['jamuriDaricxvaUpToToday'], 2) ?></td>
-                <td class="amount"><?= number_format($generalTotals['jamuriGadaxdaUpToToday'], 2) ?></td>
-                <td class="amount"><?= number_format($generalTotals['mimdinareDavalianeba'], 2) ?></td>
+                <td class="amount">$<?= number_format($generalTotals['jamuriGayidvebisAmount'], 2) ?></td>
+                <td class="amount">$<?= number_format($generalTotals['jamuriDaricxvaUpToToday'], 2) ?></td>
+                <td class="amount">$<?= number_format($generalTotals['jamuriGadaxdaUpToToday'], 2) ?></td>
+                <td class="amount">$<?= number_format($generalTotals['mimdinareDavalianeba'], 2) ?></td>
             </tr>
         <?php endif; ?>
     </tbody>
@@ -245,7 +245,7 @@ function exportToExcel() {
         const row = [];
         tr.querySelectorAll('td').forEach(function(td) {
             let val = td.innerText.trim();
-            const num = parseFloat(val.replace(/,/g, ''));
+            const num = parseFloat(val.replace(/[$,]/g, ''));
             if (!isNaN(num) && val !== '') val = num;
             row.push(val);
         });
