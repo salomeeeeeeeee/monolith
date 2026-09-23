@@ -2074,4 +2074,80 @@ BX.ready(function() {
 
     PaymentInfoManager.init();
 })();
+
+
+</script>
+
+<?php
+// LOSE stage — frozen for everyone except user 3
+$canSetLoseStage = ((int)$userID === 3);
+$loseStageName = '';
+if (Main\Loader::includeModule('crm')) {
+	$dealStageList = \CCrmStatus::GetStatusList('DEAL_STAGE');
+	$loseStageName = isset($dealStageList['LOSE']) ? trim($dealStageList['LOSE']) : '';
+}
+?>
+<script>
+(function() {
+    if (window.__dmgLoseStageLockBound) {
+        return;
+    }
+    window.__dmgLoseStageLockBound = true;
+
+    var canSetLose = <?= $canSetLoseStage ? 'true' : 'false' ?>;
+    if (canSetLose) {
+        return;
+    }
+
+    var loseStageName = <?= json_encode($loseStageName, JSON_UNESCAPED_UNICODE) ?>;
+
+    function isLoseStageId(id) {
+        return id === 'LOSE' || /:LOSE$/.test(id || '');
+    }
+
+    function isLoseMenuItem(item) {
+        if (!item || !loseStageName) return false;
+        if (!item.closest('[id^="menu-popup-entity_progress_FAILURE_MENU"]')) return false;
+        var textSpan = item.querySelector('.menu-popup-item-text');
+        return !!textSpan && (textSpan.textContent || '').trim() === loseStageName;
+    }
+
+    function lockLoseStage() {
+        // Progress bar cell
+        document.querySelectorAll('[data-id]').forEach(function(cell) {
+            if (!isLoseStageId(cell.getAttribute('data-id'))) return;
+            if (cell.hasAttribute('data-dmg-lose-locked')) return;
+
+            cell.setAttribute('data-dmg-lose-locked', 'true');
+            cell.setAttribute('data-dmg-stage-locked', 'true'); // skips the "previous stage" confirm
+            cell.style.pointerEvents = 'none';
+            cell.style.cursor = 'not-allowed';
+            cell.style.opacity = '0.5';
+        });
+
+        // "Deal failed" popup menu item
+        document.querySelectorAll('[id^="menu-popup-entity_progress_FAILURE_MENU"] .menu-popup-item').forEach(function(item) {
+            if (isLoseMenuItem(item)) {
+                item.style.display = 'none';
+            }
+        });
+    }
+
+    // Capture-phase block in case the pointer-events lock is bypassed
+    document.addEventListener('click', function(e) {
+        if (!e.target || !e.target.closest) return;
+
+        var cell = e.target.closest('[data-id]');
+        var menuItem = e.target.closest('.menu-popup-item');
+
+        if ((cell && isLoseStageId(cell.getAttribute('data-id'))) || isLoseMenuItem(menuItem)) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+
+    lockLoseStage();
+    setInterval(lockLoseStage, 300);
+})();
 </script>
