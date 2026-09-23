@@ -7,8 +7,12 @@ define('DisableEventsCheck', true);
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
 CModule::IncludeModule('crm');
 CModule::IncludeModule('iblock');
+CModule::IncludeModule('bizproc');
 
 date_default_timezone_set('Asia/Tbilisi');
+
+// გაყიდვის BP შაბლონი — იგივე ID გამოიყენება pending-შემოწმებისთვისაც
+$sellTemplateId = 26;
 
 /** Absolute public URL with encoded filename (spaces, (), etc.) */
 function buildPassportFileLink($fileId) {
@@ -39,10 +43,62 @@ function getCIBlockElementsByFilter($arFilter) {
     return $arElements;
 }
 
+// ── Helper: is there a running (not yet approved/rejected) sell workflow on this deal? ──
+if (!function_exists('hasPendingSellRequest')) {
+    function hasPendingSellRequest($dealId, $templateId) {
+        if (!\Bitrix\Main\Loader::includeModule('bizproc')) {
+            return false;
+        }
+
+        $instances = \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable::getList([
+            'select' => ['ID'],
+            'filter' => [
+                '=MODULE_ID'   => 'crm',
+                '=ENTITY'      => 'CCrmDocumentDeal',
+                '=DOCUMENT_ID' => 'DEAL_' . (int)$dealId,
+            ],
+        ])->fetchAll();
+
+        if (empty($instances)) {
+            return false;
+        }
+
+        $state = \Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable::getList([
+            'select' => ['ID'],
+            'filter' => [
+                '@ID'                   => array_column($instances, 'ID'),
+                '=WORKFLOW_TEMPLATE_ID' => (int)$templateId,
+            ],
+            'limit' => 1,
+        ])->fetch();
+
+        return (bool)$state;
+    }
+}
+
+function sendJsonAndExit($resArr) {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($resArr, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // ── Inputs ──────────────────────────────────────────────────────────
 $dealId    = intval($_POST['deal_id']  ?? 0);
 $contrDate = trim($_POST['contr_date'] ?? '');   // YYYY-MM-DD from <input type="date">
 $paymentMethod = trim($_POST['payment_method'] ?? '');   // "cash" or "საბანკო გადარიცხვა"
+
+if ($dealId <= 0) {
+    sendJsonAndExit(["status" => 405, "message" => "Invalid deal ID"]);
+}
+
+// ── Block duplicate requests: nothing is uploaded or updated while one is pending ──
+if (hasPendingSellRequest($dealId, $sellTemplateId)) {
+    sendJsonAndExit([
+        "status"  => 409,
+        "message" => "გაყიდვის მოთხოვნა უკვე გაგზავნილია და ელოდება დადასტურებას",
+    ]);
+}
 
 // clients: [{contact_id, firstName, lastName, idNumber}, ...]
 $clientsRaw = $_POST['clients'] ?? '[]';
@@ -223,7 +279,7 @@ $params = [
 // ── Start workflow ───────────────────────────────────────────────────
 $arErrorsTmp = [];
 $wfId = CBPDocument::StartWorkflow(
-    26,   // <-- replace with your actual sell workflow ID
+    $sellTemplateId,
     ["crm", "CCrmDocumentDeal", "DEAL_$dealId"],
     $params,
     $arErrorsTmp
@@ -245,19 +301,13 @@ file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/savesell_errors.txt",
 );
 
 // ── Response ─────────────────────────────────────────────────────────
-$resArr = [];
-if ($dealId > 0) {
-    $resArr["status"]  = 200;
-    $resArr["message"] = "Sent successfully";
-    if (!$wfId) {
-        $resArr["wf_warning"] = "Workflow may not have started";
-        $resArr["wf_errors"]  = $arErrorsTmp;
-    }
-} else {
-    $resArr["status"]  = 405;
-    $resArr["message"] = "Invalid deal ID";
+$resArr = [
+    "status"  => 200,
+    "message" => "Sent successfully",
+];
+if (!$wfId) {
+    $resArr["wf_warning"] = "Workflow may not have started";
+    $resArr["wf_errors"]  = $arErrorsTmp;
 }
 
-ob_end_clean();
-header('Content-Type: application/json; charset=utf-8');
-echo json_encode($resArr, JSON_UNESCAPED_UNICODE);
+sendJsonAndExit($resArr);

@@ -7,6 +7,7 @@ use Bitrix\Main\Loader;
 if (!Loader::includeModule('crm')) {
     die('CRM module not loaded');
 }
+Loader::includeModule('iblock');
 
 $APPLICATION->SetTitle("გაყიდვა");
 
@@ -37,6 +38,92 @@ foreach ($contactIds as $cid) {
 if (empty($contacts)) {
     $contacts[] = ['id' => 0, 'firstName' => '', 'lastName' => '', 'idNumber' => ''];
 }
+
+// ── მიმდინარე (დაუდასტურებელი) გაყიდვის მოთხოვნა ──
+// Pending = გაშვებული BP ინსტანსი შაბლონით 26 ამ დილზე.
+// Bitrix შლის ინსტანსს BP-ის დასრულებისას (უარყოფა/დადასტურება) → ფორმა ისევ იხსნება.
+$sellTemplateId = 26;
+
+if (!function_exists('hasPendingSellRequest')) {
+    function hasPendingSellRequest($dealId, $templateId) {
+        if (!\Bitrix\Main\Loader::includeModule('bizproc')) {
+            return false;
+        }
+
+        $instances = \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable::getList([
+            'select' => ['ID'],
+            'filter' => [
+                '=MODULE_ID'   => 'crm',
+                '=ENTITY'      => 'CCrmDocumentDeal',
+                '=DOCUMENT_ID' => 'DEAL_' . (int)$dealId,
+            ],
+        ])->fetchAll();
+
+        if (empty($instances)) {
+            return false;
+        }
+
+        $state = \Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable::getList([
+            'select' => ['ID'],
+            'filter' => [
+                '@ID'                   => array_column($instances, 'ID'),
+                '=WORKFLOW_TEMPLATE_ID' => (int)$templateId,
+            ],
+            'limit' => 1,
+        ])->fetch();
+
+        return (bool)$state;
+    }
+}
+
+$sellPending = hasPendingSellRequest($deal_id, $sellTemplateId);
+
+// ── პროდუქტის ღირებულება vs განვადება (სია 22) ──
+if (!function_exists('sellFormMoneyToNum')) {
+    function sellFormMoneyToNum($v) {
+        if (is_array($v)) $v = reset($v);
+        return (float)preg_replace('/[^\d.]/', '', (string)$v);
+    }
+}
+if (!function_exists('sellFormMoneyFormat')) {
+    function sellFormMoneyFormat($num, $isGel) {
+        return $isGel ? number_format($num, 2) . '₾' : '$' . number_format($num, 2);
+    }
+}
+
+$dealRow = CCrmDeal::GetListEx(
+    [],
+    ['ID' => $deal_id, 'CHECK_PERMISSIONS' => 'N'],
+    false,
+    false,
+    ['ID', 'OPPORTUNITY', 'CURRENCY_ID']
+)->Fetch();
+
+$isGel       = !empty($dealRow['CURRENCY_ID']) && $dealRow['CURRENCY_ID'] === 'GEL';
+$opportunity = round(sellFormMoneyToNum($dealRow['OPPORTUNITY'] ?? 0), 2);
+$planSum     = 0;
+$planField   = $isGel ? 'amount_GEL' : 'TANXA';
+
+$resPlan = CIBlockElement::GetList(
+    [],
+    ['IBLOCK_ID' => 22, 'PROPERTY_DEAL' => $deal_id],
+    false,
+    false,
+    ['ID', 'IBLOCK_ID']
+);
+while ($ob = $resPlan->GetNextElement()) {
+    $props = $ob->GetProperties();
+    $planSum += sellFormMoneyToNum($props[$planField]['VALUE'] ?? 0);
+}
+$planSum = round($planSum, 2);
+$diff    = round($opportunity - $planSum, 2);
+
+$planCheck = [
+    'match'       => abs($diff) < 0.01,
+    'opportunity' => sellFormMoneyFormat($opportunity, $isGel),
+    'planSum'     => sellFormMoneyFormat($planSum, $isGel),
+    'diff'        => sellFormMoneyFormat($diff, $isGel),
+];
 
 ob_end_clean();
 ?>
@@ -124,6 +211,24 @@ ob_end_clean();
   .panel-body {
     padding: 28px 32px 32px;
   }
+
+  /* pending request notice */
+  .pending-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 24px;
+    color: #92400e;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  .pending-note svg { flex-shrink: 0; margin-top: 2px; }
+  .pending-note + .section-label { margin-top: 0; }
 
   /* section label */
   .section-label {
@@ -288,6 +393,70 @@ ob_end_clean();
   #status.info  { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
   #status.ok    { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
   #status.error { background:#fff1f2; color:#be123c; border:1px solid #fecdd3; }
+
+  /* mismatch popup */
+  .mm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+  }
+  .mm-overlay.show { display: flex; }
+  .mm-box {
+    width: 100%;
+    max-width: 400px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+    overflow: hidden;
+    animation: mmIn .18s ease-out;
+  }
+  @keyframes mmIn {
+    from { transform: translateY(8px); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+  }
+  .mm-head {
+    background: #fff1f2;
+    border-bottom: 1px solid #fecdd3;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #be123c;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .mm-body { padding: 18px 20px 6px; }
+  .mm-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px dashed #e2e8f0;
+    font-size: 13px;
+    color: #475569;
+  }
+  .mm-row:last-child { border-bottom: none; }
+  .mm-row b { color: #1e293b; white-space: nowrap; }
+  .mm-row.diff b { color: #be123c; }
+  .mm-foot { padding: 14px 20px 20px; }
+  .mm-btn {
+    width: 100%;
+    background: #be123c;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: 'Noto Sans Georgian', sans-serif;
+    cursor: pointer;
+  }
+  .mm-btn:hover { opacity: .9; }
 </style>
 </head>
 <body>
@@ -305,6 +474,16 @@ ob_end_clean();
   </div>
 
   <div class="panel-body">
+
+    <?php if ($sellPending): ?>
+    <div class="pending-note">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>გაყიდვის მოთხოვნა უკვე გაგზავნილია და ელოდება დადასტურებას. ახალი მოთხოვნის გაგზავნა შესაძლებელი იქნება მხოლოდ მიმდინარე მოთხოვნის უარყოფის შემდეგ.</span>
+    </div>
+    <?php endif; ?>
 
     <div class="section-label">ხელშეკრულება</div>
 
@@ -327,7 +506,7 @@ ob_end_clean();
     <div class="field" id="receiptField" style="display:none;">
       <label>ჩარიცხვის ქვითარი</label>
       <div class="drop-zone" id="receiptDropZone" onclick="document.getElementById('receiptFile').click()">
-        <input type="file" id="receiptFile" accept="image/,.pdf" onchange="handleReceiptFile(this.files[0])">
+        <input type="file" id="receiptFile" accept="image/*,.pdf" onchange="handleReceiptFile(this.files[0])">
         <div class="dz-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#0d9488" stroke-width="1.8" stroke-linejoin="round"/>
@@ -396,7 +575,7 @@ ob_end_clean();
   <div id="status"></div>
 
   <div class="panel-footer">
-    <button class="btn-save" id="saveBtn" onclick="saveSell()">
+    <button class="btn-save" id="saveBtn" onclick="saveSell()"<?= $sellPending ? ' disabled' : '' ?>>
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
         <path d="M2 8l4 4 8-9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -406,9 +585,32 @@ ob_end_clean();
 
 </div>
 
+<!-- mismatch popup -->
+<div class="mm-overlay" id="mismatchPopup" onclick="if (event.target === this) closeMismatchPopup()">
+  <div class="mm-box">
+    <div class="mm-head">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      პროდუქტის ღირებულება და განვადება არ ემთხვევა
+    </div>
+    <div class="mm-body">
+      <div class="mm-row"><span>პროდუქტის ღირებულება</span><b id="mmOpportunity"></b></div>
+      <div class="mm-row"><span>განვადება</span><b id="mmPlanSum"></b></div>
+      <div class="mm-row diff"><span>სხვაობა</span><b id="mmDiff"></b></div>
+    </div>
+    <div class="mm-foot">
+      <button type="button" class="mm-btn" onclick="closeMismatchPopup()">დახურვა</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var selectedFile = null;
 var selectedReceiptFile = null;
+var planCheck = <?= json_encode($planCheck, JSON_UNESCAPED_UNICODE) ?>;
+var sellPending = <?= $sellPending ? 'true' : 'false' ?>;
 
 (function(){
   var dz = document.getElementById('dropZone');
@@ -471,7 +673,34 @@ function setStatus(type, msg) {
   ) + ' ' + msg;
 }
 
+function showMismatchPopup() {
+  document.getElementById('mmOpportunity').textContent = planCheck.opportunity;
+  document.getElementById('mmPlanSum').textContent     = planCheck.planSum;
+  document.getElementById('mmDiff').textContent        = planCheck.diff;
+  document.getElementById('mismatchPopup').classList.add('show');
+}
+
+function closeMismatchPopup() {
+  document.getElementById('mismatchPopup').classList.remove('show');
+}
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') closeMismatchPopup();
+});
+
 function saveSell() {
+  // მიმდინარე მოთხოვნა ჯერ არ არის უარყოფილი → ახალს ვერ გავაგზავნით
+  if (sellPending) {
+    setStatus('error', 'გაყიდვის მოთხოვნა უკვე გაგზავნილია და ელოდება დადასტურებას');
+    return;
+  }
+
+  // პროდუქტის ღირებულება ≠ განვადება → popup, არაფერი იგზავნება
+  if (!planCheck.match) {
+    showMismatchPopup();
+    return;
+  }
+
   var deal_id       = <?= json_encode($deal_id) ?>;
   var contr_date    = document.getElementById('contr_date').value;
   var paymentMethod = document.getElementById('paymentMethod').value;
@@ -522,6 +751,7 @@ function saveSell() {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.status === 200) {
+      sellPending = true;
       setStatus('ok', 'წარმატებით გაიგზავნა');
       setTimeout(function(){
         var BX = window.top.BX;
@@ -530,6 +760,10 @@ function saveSell() {
           if (slider) slider.close();
         }
       }, 1200);
+    } else if (data.status === 409) {
+      // სერვერმა დაადასტურა, რომ მოთხოვნა უკვე მიმდინარეობს
+      sellPending = true;
+      setStatus('error', data.message);
     } else {
       setStatus('error', 'შეცდომა: ' + (data.message || 'უცნობი შეცდომა'));
       btn.disabled = false;
