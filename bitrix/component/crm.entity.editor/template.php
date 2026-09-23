@@ -2151,3 +2151,176 @@ if (Main\Loader::includeModule('crm')) {
     setInterval(lockLoseStage, 300);
 })();
 </script>
+
+<script>
+// UF_CRM_1785491867 (ბროკერი): ერთი სახელის დუბლიკატები ვიზუალურად დამალე
+(function() {
+	if (window.__dmgBrokerDupHideBound) {
+		return;
+	}
+	window.__dmgBrokerDupHideBound = true;
+
+	var FIELD = 'UF_CRM_1785491867';
+	var brokerDropdownArmedUntil = 0;
+
+	function normalizeName(text) {
+		return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+	}
+
+	function getSelectedValue() {
+		var inp = document.querySelector('input[name="' + FIELD + '"]');
+		if (inp) return String(inp.value || '');
+
+		var select = document.querySelector('select[name="' + FIELD + '"]');
+		if (select) return String(select.value || '');
+
+		var ctrl = document.querySelector('[data-name="' + FIELD + '"]');
+		if (ctrl) {
+			try {
+				var obj = JSON.parse(ctrl.getAttribute('data-value') || '{}');
+				return String(obj.VALUE || '');
+			} catch (e) {}
+		}
+
+		return '';
+	}
+
+	function hideDuplicateBrokerOptions(select) {
+		if (!select || !select.options) return;
+
+		var selectedValue = String(select.value || '');
+		var groups = {};
+
+		Array.prototype.forEach.call(select.options, function(opt) {
+			opt.hidden = false;
+			opt.removeAttribute('hidden');
+
+			var val = String(opt.value || '');
+			if (!val) return;
+
+			var key = normalizeName(opt.textContent);
+			if (!key) return;
+
+			if (!groups[key]) groups[key] = [];
+			groups[key].push(opt);
+		});
+
+		Object.keys(groups).forEach(function(key) {
+			var opts = groups[key];
+			if (opts.length < 2) return;
+
+			var keep = null;
+			for (var i = 0; i < opts.length; i++) {
+				if (String(opts[i].value) === selectedValue) {
+					keep = opts[i];
+					break;
+				}
+			}
+			if (!keep) keep = opts[0];
+
+			opts.forEach(function(opt) {
+				if (opt === keep) return;
+				opt.hidden = true;
+				opt.setAttribute('hidden', 'hidden');
+			});
+		});
+	}
+
+	function isBrokerPopup(popup) {
+		if (!popup) return false;
+
+		var fieldRoot = document.querySelector('[data-cid="' + FIELD + '"]')
+			|| document.querySelector('[data-name="' + FIELD + '"]');
+		if (fieldRoot && fieldRoot.contains(popup)) return true;
+
+		if (Date.now() < brokerDropdownArmedUntil) return true;
+
+		var brokerCtrl = document.querySelector('[data-name="' + FIELD + '"].main-ui-control');
+		if (!brokerCtrl) return false;
+
+		return brokerCtrl.classList.contains('main-ui-popup-show')
+			|| brokerCtrl.classList.contains('main-ui-select-shown')
+			|| brokerCtrl.getAttribute('aria-expanded') === 'true';
+	}
+
+	function hideDuplicatePopupItems(popup) {
+		if (!popup) return;
+
+		var selectedValue = getSelectedValue();
+		var groups = {};
+
+		popup.querySelectorAll('.main-ui-select-inner-item').forEach(function(el) {
+			el.style.display = '';
+			el.hidden = false;
+			el.removeAttribute('hidden');
+
+			try {
+				var obj = JSON.parse(el.getAttribute('data-item') || '{}');
+				var val = String(obj.VALUE || '');
+				if (!val) return;
+
+				var key = normalizeName(obj.NAME || el.textContent);
+				if (!key) return;
+
+				if (!groups[key]) groups[key] = [];
+				groups[key].push({ el: el, val: val });
+			} catch (e) {}
+		});
+
+		Object.keys(groups).forEach(function(key) {
+			var opts = groups[key];
+			if (opts.length < 2) return;
+
+			var keep = null;
+			for (var i = 0; i < opts.length; i++) {
+				if (opts[i].val === selectedValue) {
+					keep = opts[i];
+					break;
+				}
+			}
+			if (!keep) keep = opts[0];
+
+			opts.forEach(function(opt) {
+				if (opt === keep) return;
+				opt.el.style.display = 'none';
+				opt.el.hidden = true;
+				opt.el.setAttribute('hidden', 'hidden');
+			});
+		});
+	}
+
+	function run() {
+		document.querySelectorAll('select[name="' + FIELD + '"]').forEach(hideDuplicateBrokerOptions);
+
+		document.querySelectorAll('.popup-select-content, .main-ui-select-inner').forEach(function(popup) {
+			if (isBrokerPopup(popup)) {
+				hideDuplicatePopupItems(popup);
+			}
+		});
+	}
+
+	document.addEventListener('click', function(e) {
+		if (!e.target || !e.target.closest) return;
+
+		var field = e.target.closest(
+			'[data-cid="' + FIELD + '"], [data-name="' + FIELD + '"], select[name="' + FIELD + '"]'
+		);
+		if (field) {
+			brokerDropdownArmedUntil = Date.now() + 4000;
+			setTimeout(run, 50);
+			setTimeout(run, 200);
+			setTimeout(run, 400);
+			return;
+		}
+
+		if (e.target.closest('.popup-select-content, .main-ui-select-inner, .popup-window')) {
+			return;
+		}
+
+		brokerDropdownArmedUntil = 0;
+	}, true);
+
+	run();
+	setInterval(run, 500);
+})();
+</script>
