@@ -19,7 +19,7 @@ const DAILO_LOG_IBLOCK_ID = 26;
 
 const LEAD_CATEGORY_ID    = 0;
 const LEAD_STAGE_ID       = "NEW";
-const LEAD_ASSIGNED_BY_ID = 1;
+const LEAD_ASSIGNED_BY_ID = 3;
 
 const F_SOURCE_NAME     = "UF_CRM_1785330209796"; // list: 480 = the page, 481 = campaign name
 const F_TOPIC           = "UF_CRM_1785482520";
