@@ -2480,6 +2480,10 @@ async function exportToExcel() {
         visibleIds.forEach(id=>{const a=all.find(p=>p["ID"]==id);if(a&&!seen.has(id)){seen.add(id);apts.push(a);}});
 
         const skipExport=new Set([...SKIP_CODES,"~ID","~NAME","~IBLOCK_ID","~IBLOCK_SECTION_ID","MORE_PHOTO","PREVIEW_PICTURE","DETAIL_PICTURE","~DETAIL_PICTURE","image","image2","image3","image4","image5","binis_gegmareba","render_3D","sartulis2D","binisNaxazi2D","erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo","threedrender","floorplan","mtavari_foto"]);
+
+        // ── Status must always be exported (it's in SKIP_CODES for the popup/filters only) ──
+        skipExport.delete("_P64GYD");
+
         const priorityKeys = ["ID","_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA","PRICE","PRICE_GEL", F_KVM_USD];
 
         const dataKeys = new Set();
@@ -2500,7 +2504,10 @@ async function exportToExcel() {
             }
         });
 
-        const getName=code=>propertyMap[code]?.name||code;
+        const getName=code=>{
+            if (code === "_P64GYD") return "სტატუსი";
+            return propertyMap[code]?.name||code;
+        };
 
         const wb=new ExcelJS.Workbook(), ws=wb.addWorksheet("ბინები");
         ws.columns = orderedKeys.map((k) => ({
@@ -2518,7 +2525,16 @@ async function exportToExcel() {
         }
         hdr.height=28;
 
-        const statusColors={"თავისუფალი":"FF28C7A9","დაჯავშნილი":"FFF9C74F","გაყიდული":"FFE63946","ჯავშნის რიგში":"FFDB2777","NFS":"FF9B59B6"};
+        // Same colors as the grid tiles — valid 8-char ARGB
+        const statusColors={
+            "თავისუფალი":    { fill:"FF7CDF9C", font:"FF087A58" },
+            "დაჯავშნილი":    { fill:"FFFFCF37", font:"FFB35900" },
+            "გაყიდული":      { fill:"FFF67581", font:"FFA8202C" },
+            "ჯავშნის რიგში": { fill:"FFB69BFF", font:"FF5433C1" },
+            "NFS":           { fill:"FFC0C0C0", font:"FF4E3F45" },
+        };
+        const statusCol = orderedKeys.indexOf("_P64GYD") + 1;
+
         apts.forEach((apt, i) => {
             const rd = {};
             orderedKeys.forEach(k => {
@@ -2535,12 +2551,12 @@ async function exportToExcel() {
                 cell.alignment = { vertical:"middle" };
                 cell.font = { size:10 };
             }
-            const statusCol = orderedKeys.indexOf("_P64GYD") + 1;
             const sc = statusColors[apt["_P64GYD"]];
             if (sc && statusCol > 0) {
                 const c = row.getCell(statusCol);
-                c.fill = { type:"pattern", pattern:"solid", fgColor:{argb:sc+"33"} };
-                c.font = { bold:true, size:10 };
+                c.fill = { type:"pattern", pattern:"solid", fgColor:{argb:sc.fill} };
+                c.font = { bold:true, size:10, color:{argb:sc.font} };
+                c.alignment = { vertical:"middle", horizontal:"center" };
             }
             row.height = 18;
         });
@@ -2721,7 +2737,7 @@ document.getElementById("resComment").value = "";
     document.getElementById("resPersonWrap").style.display = "none";
 
     if (choice === "41") {
-    document.getElementById("resDate").value       = resToDatetimeLocal(resAddWorkingDays(now, 3));
+    document.getElementById("resDate").value       = resToDatetimeLocal(resAddWorkingDays(now, 5));
     document.getElementById("resDate").style.display       = "";
     document.getElementById("resDate").style.pointerEvents = "none";
     document.getElementById("resDate").style.background    = "#f0f0f0";

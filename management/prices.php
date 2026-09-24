@@ -6,14 +6,15 @@ $APPLICATION->SetTitle("პროდუქტების მოდული");
 \Bitrix\Main\Loader::includeModule("catalog");
 
 /* =====================================================================
- *  CONFIG — the only section to edit for a new project
+ *  CONFIG
+ *  Lines marked // SYNC must match status-change.php
  *  Open the page with ?debug_props=1 (admin only) to see the real codes
  * ===================================================================== */
 function pmCfg() {
     static $cfg = array(
-        "IBLOCK_ID" => 14,
+        "IBLOCK_ID" => 14, // SYNC
 
-        // logical key => property CODE in the iblock
+        // logical key => property CODE in the iblock // SYNC
         "PROPS" => array(
             "PROJECT"     => "__VO9RG4",
             "TYPE"        => "__X1GCRZ",
@@ -32,15 +33,18 @@ function pmCfg() {
             "SALE_PRICE"  => "__YOIUM1",
         ),
 
+        // ONLY products with these statuses are loaded (empty array = all) // SYNC
+        "VISIBLE_STATUSES" => array("თავისუფალი", "NFS"),
+
         // Sort order (natural compare, in PHP)
         "SORT_KEYS" => array("PROJECT", "BLOCK", "FLOOR", "NUMBER"),
 
-        // Dropdown filters: POST name, logical key, label, required star
+        // Dropdown filters (in display order): POST name, logical key, label, required star
         "SELECT_FILTERS" => array(
             array("name" => "f_project",  "key" => "PROJECT",  "label" => "პროექტი",             "req" => true),
             array("name" => "f_type",     "key" => "TYPE",     "label" => "უძრავი ქონების ტიპი", "req" => true),
-            array("name" => "f_block",    "key" => "BLOCK",    "label" => "ბლოკი",               "req" => false),
             array("name" => "f_sector",   "key" => "SECTOR",   "label" => "სექტორი",             "req" => false),
+            array("name" => "f_block",    "key" => "BLOCK",    "label" => "ბლოკი",               "req" => false),
             array("name" => "f_entrance", "key" => "ENTRANCE", "label" => "სადარბაზო",           "req" => false),
             array("name" => "f_status",   "key" => "STATUS",   "label" => "სტატუსი",             "req" => true),
         ),
@@ -67,17 +71,9 @@ function pmCfg() {
             "CATALOG_PRICE" => "კატალოგის<br>ფასი",
         ),
 
-        // Price tab area choices (key sent to API => label). One item = selector hidden
-        "PRICE_AREAS" => array(
-            "total" => "სრული ფართი",
-        ),
-
-        // Status property is a string: value written to the iblock => label
-        // (existing values found in the data are appended automatically)
+        // Statuses that can be SET: value written => label // SYNC
         "STATUS_OPTIONS" => array(
             "თავისუფალი" => "თავისუფალი",
-            "გაყიდული"   => "გაყიდული",
-            "დაჯავშნილი" => "დაჯავშნილი",
             "NFS"        => "NFS",
         ),
 
@@ -86,7 +82,6 @@ function pmCfg() {
         "PROMOTION_NO"              => array("N", "No", "NO", "არა", "0"),
         "PROMOTION_ANY_ENUM_IS_YES" => false,
 
-        "API_PRICE"  => "/rest/local/api/product/price-change.php",
         "API_STATUS" => "/rest/local/api/product/status-change.php",
     );
     return $cfg;
@@ -116,6 +111,17 @@ function scalarPropertyValue($v) {
 function pv($p, $key) {
     $code = pmCode($key);
     return scalarPropertyValue(isset($p[$code]) ? $p[$code] : "");
+}
+
+/** Is the product's status one of VISIBLE_STATUSES (case/space-insensitive) */
+function isVisibleStatus($p) {
+    $allowed = pmCfg()["VISIBLE_STATUSES"];
+    if (empty($allowed)) return true;
+    $st = mb_strtolower(pv($p, "STATUS"));
+    foreach ($allowed as $a) {
+        if ($st === mb_strtolower(trim($a))) return true;
+    }
+    return false;
 }
 
 function isPromoYes($p) {
@@ -193,21 +199,29 @@ function printArr($arr) {
 }
 
 $CFG = pmCfg();
-$products = getCIBlockElementsByFilter(array("IBLOCK_ID" => $CFG["IBLOCK_ID"]));
 
-// Unique values for each dropdown filter
+/* ---------- Debug flag (admin only) ---------- */
+global $USER;
+$pmDebug = (is_object($USER) && $USER->IsAdmin() && ($_GET["debug_props"] ?? "") === "1");
+
+/* ---------- Load products: only VISIBLE_STATUSES ---------- */
+$arBaseFilter = array("IBLOCK_ID" => $CFG["IBLOCK_ID"]);
+if (!empty($CFG["VISIBLE_STATUSES"])) {
+    $arBaseFilter["PROPERTY_" . pmCode("STATUS")] = $CFG["VISIBLE_STATUSES"];
+}
+$products = array_values(array_filter(getCIBlockElementsByFilter($arBaseFilter), "isVisibleStatus"));
+
+// Debug view shows the whole iblock (all statuses) — only with ?debug_props=1
+$debugProducts = $pmDebug ? getCIBlockElementsByFilter(array("IBLOCK_ID" => $CFG["IBLOCK_ID"])) : array();
+
+// Unique values for each dropdown filter (built from loaded products only)
 $selectOptions = array();
 foreach ($CFG["SELECT_FILTERS"] as $sf) {
     $selectOptions[$sf["name"]] = getUniqueValues($products, $sf["key"]);
 }
 
-// Status options for the status tab: config + any existing values not listed
+// Status options for the status panel: only the configured ones
 $statusOptions = $CFG["STATUS_OPTIONS"];
-foreach (getUniqueValues($products, "STATUS") as $st) {
-    if (!array_key_exists($st, $statusOptions)) {
-        $statusOptions[$st] = $st;
-    }
-}
 
 $filtered   = $products;
 $isFiltered = false;
@@ -255,10 +269,6 @@ if (!empty($_POST["f_area_from"]) || !empty($_POST["f_area_to"])) {
     $filterInfoParts[] = "ფართი მ²: " . ($_POST["f_area_from"] ?? "") . "-" . ($_POST["f_area_to"] ?? "");
 }
 $filterInfo = implode(" | ", $filterInfoParts);
-
-/* ---------- Debug: property list for mapping (admin only) ---------- */
-global $USER;
-$pmDebug = (is_object($USER) && $USER->IsAdmin() && ($_GET["debug_props"] ?? "") === "1");
 ?>
 <!DOCTYPE html>
 <html lang="ka">
@@ -286,46 +296,21 @@ $pmDebug = (is_object($USER) && $USER->IsAdmin() && ($_GET["debug_props"] ?? "")
     td { padding: 6px 5px; border: 1px solid #ddd; text-align: center; }
     tr:nth-child(even) td { background: #f0f5ff; }
 
-    .tabs-container { margin-top: 20px; margin-bottom: 10px; }
-    .tab-buttons { display: flex; gap: 0; }
-    .tab-btn {
-        padding: 10px 28px; cursor: pointer; border: 1px solid #ccc;
-        background: #e8e8e8; font-size: 13px; border-bottom: none;
-        border-radius: 4px 4px 0 0; font-family: Arial, sans-serif;
-        transition: background .15s;
-    }
-    .tab-btn.active { background: #2c6fad; color: #fff; border-color: #2c6fad; }
-    .tab-content { border: 1px solid #ccc; padding: 20px; border-radius: 0 4px 4px 4px; background: #fafafa; display: none; }
-    .tab-content.active { display: block; }
+    /* სტატუსი / აქცია პანელი */
+    .action-panel { margin-top: 20px; margin-bottom: 10px; border: 1px solid #ccc; padding: 20px; border-radius: 4px; background: #fafafa; }
+    .action-panel h3 { margin: 0 0 14px; font-size: 14px; color: #2c6fad; }
     .form-row { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
     .form-group label { font-weight: bold; font-size: 13px; }
-    .form-group select,
-    .form-group input[type="number"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; min-width: 180px; }
+    .form-group select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; min-width: 180px; }
 
     .btn-action { color: #fff; border: none; padding: 9px 22px; font-size: 14px; border-radius: 4px; cursor: pointer; }
-    .btn-minus  { background: #c0392b; }
-    .btn-minus:hover  { background: #96281b; }
-    .btn-plus   { background: #27ae60; }
-    .btn-plus:hover   { background: #1e8449; }
     .btn-update { background: #2c6fad; }
     .btn-update:hover { background: #1a4f85; }
-    .btn-group  { display: flex; gap: 8px; align-items: flex-end; }
-
-    .dynamic-field { display: none; }
-    .dynamic-field.visible { display: flex; flex-direction: column; gap: 4px; }
 
     .loading-msg { display: none; margin-top: 12px; padding: 10px 16px; background: #fff8e1; border: 1px solid #f0c040; border-radius: 4px; font-size: 13px; color: #7a5800; }
     .success-msg { display: none; margin-top: 12px; padding: 10px 16px; background: #e8f5e9; border: 1px solid #66bb6a; border-radius: 4px; font-size: 13px; color: #2e7d32; }
     .error-msg   { display: none; margin-top: 12px; padding: 10px 16px; background: #ffebee; border: 1px solid #ef9a9a; border-radius: 4px; font-size: 13px; color: #b71c1c; }
-
-    .spinner {
-        display: inline-block; width: 16px; height: 16px;
-        border: 2px solid #f0c040; border-top: 2px solid #7a5800;
-        border-radius: 50%; animation: spin 0.8s linear infinite;
-        margin-right: 8px; vertical-align: middle;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
     .table-wrap { overflow-x: auto; }
     .debug-box { background: #fffbe6; border: 1px solid #e0c060; padding: 12px; margin-bottom: 20px; border-radius: 6px; }
@@ -355,19 +340,19 @@ $pmDebug = (is_object($USER) && $USER->IsAdmin() && ($_GET["debug_props"] ?? "")
             }
             $enumText = implode("; ", $enums);
         }
-        $sample = isset($products[0][$code]) ? $products[0][$code] : "";
+        $sample = isset($debugProducts[0][$code]) ? $debugProducts[0][$code] : "";
         $rows[] = array($prop["ID"], $code, $prop["NAME"], $prop["PROPERTY_TYPE"] . ($prop["USER_TYPE"] ? "/" . $prop["USER_TYPE"] : ""), $prop["MULTIPLE"], $enumText, is_array($sample) ? json_encode($sample, JSON_UNESCAPED_UNICODE) : $sample);
     }
     ?>
     <p><b>Config mapping check:</b></p>
     <ul>
-        <?php foreach ($CFG["PROPS"] as $logical => $code): $ok = in_array($code, $existingCodes, true); ?>
+        <?php foreach ($CFG["PROPS"] as $logical => $code): if ($code === "") continue; $ok = in_array($code, $existingCodes, true); ?>
             <li class="<?= $ok ? "debug-ok" : "debug-missing" ?>"><?= htmlspecialchars($logical) ?> → <?= htmlspecialchars($code) ?> <?= $ok ? "✔" : "✘ NOT FOUND" ?></li>
         <?php endforeach; ?>
     </ul>
-    <p><b>Distinct values:</b>
-        სტატუსი: <?= htmlspecialchars(implode(", ", getUniqueValues($products, "STATUS"))) ?> —
-        აქცია: <?= htmlspecialchars(implode(", ", getUniqueValues($products, "PROMOTION"))) ?: "(ცარიელი)" ?>
+    <p><b>Distinct values (whole iblock):</b>
+        სტატუსი: <?= htmlspecialchars(implode(", ", getUniqueValues($debugProducts, "STATUS"))) ?> —
+        აქცია: <?= htmlspecialchars(implode(", ", getUniqueValues($debugProducts, "PROMOTION"))) ?: "(ცარიელი)" ?>
     </p>
     <div class="table-wrap">
     <table>
@@ -379,7 +364,7 @@ $pmDebug = (is_object($USER) && $USER->IsAdmin() && ($_GET["debug_props"] ?? "")
         </tbody>
     </table>
     </div>
-    <p>Elements loaded: <?= count($products) ?></p>
+    <p>Elements in iblock: <?= count($debugProducts) ?> — shown on dashboard (<?= htmlspecialchars(implode(", ", $CFG["VISIBLE_STATUSES"])) ?>): <?= count($products) ?></p>
 </div>
 <?php endif; ?>
 
@@ -432,92 +417,37 @@ $pmDebug = (is_object($USER) && $USER->IsAdmin() && ($_GET["debug_props"] ?? "")
 
 <?php if ($isFiltered): ?>
 
-    <div class="tabs-container">
-        <div class="tab-buttons">
-            <button class="tab-btn active" onclick="switchTab(this, 'price')">ფასის ცვლილება</button>
-            <button class="tab-btn"        onclick="switchTab(this, 'status')">სტატუსი / აქცია</button>
-        </div>
-
-        <!-- ფასის ცვლილება -->
-        <div id="tab-price" class="tab-content active">
-            <div class="form-row">
-
-                <?php if (count($CFG["PRICE_AREAS"]) > 1): ?>
-                <div class="form-group">
-                    <label>1 კვ.მ. ფასის ცვლილების სახე</label>
-                    <select id="price-area">
-                        <?php foreach ($CFG["PRICE_AREAS"] as $k => $label): ?>
-                            <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <?php else: ?>
-                    <input type="hidden" id="price-area" value="<?= htmlspecialchars(array_key_first($CFG["PRICE_AREAS"])) ?>">
-                <?php endif; ?>
-
-                <div class="form-group">
-                    <label>ცვლილების ტიპი</label>
-                    <select id="price-change-type" onchange="onPriceTypeChange()">
-                        <option value="">-- აირჩიეთ --</option>
-                        <option value="fixed">განსაზღვრული ფასი</option>
-                        <option value="percent">პროცენტი</option>
-                    </select>
-                </div>
-
-                <div class="form-group dynamic-field" id="field-fixed">
-                    <label>ახალი 1 კვ.მ. ფასი ($)</label>
-                    <input type="number" id="price-fixed-value" placeholder="მაგ: 1200" min="0" step="0.01">
-                </div>
-
-                <div class="form-group dynamic-field" id="field-percent">
-                    <label>პროცენტი (%)</label>
-                    <input type="number" id="price-percent-value" placeholder="მაგ: 5" min="0" step="0.01">
-                </div>
-
-                <div class="form-group" style="justify-content: flex-end;">
-                    <div class="btn-group">
-                        <button class="btn-action btn-plus"  onclick="submitPriceChange('increase')">მომატება</button>
-                        <button class="btn-action btn-minus" onclick="submitPriceChange('decrease')">დაკლება</button>
-                    </div>
-                </div>
+    <!-- სტატუსი / აქცია -->
+    <div class="action-panel">
+        <h3>სტატუსი / აქცია</h3>
+        <div class="form-row">
+            <div class="form-group">
+                <label>სტატუსი</label>
+                <select id="status-value">
+                    <option value="">— არ შეცვალოთ —</option>
+                    <?php foreach ($statusOptions as $k => $label): ?>
+                        <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
 
-            <div class="loading-msg" id="price-loading"><span class="spinner"></span> მიმდინარეობს მონაცემების დამუშავება...</div>
-            <div class="success-msg" id="price-success">✅ დასრულებულია მონაცემების დამუშავება</div>
-            <div class="error-msg"   id="price-error">❌ შეცდომა მონაცემების დამუშავებისას</div>
-        </div>
-
-        <!-- სტატუსის ცვლილება -->
-        <div id="tab-status" class="tab-content">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>სტატუსი</label>
-                    <select id="status-value">
-                        <option value="">— არ შეცვალოთ —</option>
-                        <?php foreach ($statusOptions as $k => $label): ?>
-                            <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>აქცია</label>
-                    <select id="status-promotion">
-                        <option value="">— არ შეცვალოთ —</option>
-                        <option value="Y">Yes</option>
-                        <option value="N">No</option>
-                    </select>
-                </div>
-
-                <div class="form-group" style="justify-content: flex-end;">
-                    <button class="btn-action btn-update" onclick="submitStatusChange()">განახლება</button>
-                </div>
+            <div class="form-group">
+                <label>აქცია</label>
+                <select id="status-promotion">
+                    <option value="">— არ შეცვალოთ —</option>
+                    <option value="Y">Yes</option>
+                    <option value="N">No</option>
+                </select>
             </div>
-            <p style="margin: 0 0 12px; font-size: 12px; color: #555;">აირჩიეთ მინიმუმ ერთი ველი (სტატუსი ან აქცია); დანარჩენი უცვლელი დარჩება.</p>
-            <div class="loading-msg" id="status-loading">⏳ მიმდინარეობს მონაცემების დამუშავება...</div>
-            <div class="success-msg" id="status-success">✅ დასრულებულია მონაცემების დამუშავება</div>
-            <div class="error-msg"   id="status-error">❌ შეცდომა მონაცემების დამუშავებისას</div>
+
+            <div class="form-group" style="justify-content: flex-end;">
+                <button class="btn-action btn-update" onclick="submitStatusChange()">განახლება</button>
+            </div>
         </div>
+        <p style="margin: 12px 0 0; font-size: 12px; color: #555;">აირჩიეთ მინიმუმ ერთი ველი (სტატუსი ან აქცია); დანარჩენი უცვლელი დარჩება.</p>
+        <div class="loading-msg" id="status-loading">⏳ მიმდინარეობს მონაცემების დამუშავება...</div>
+        <div class="success-msg" id="status-success">✅ დასრულებულია მონაცემების დამუშავება</div>
+        <div class="error-msg"   id="status-error">❌ შეცდომა მონაცემების დამუშავებისას</div>
     </div>
 
     <div class="count-line">რაოდენობა: <?= count($filtered) ?></div>
@@ -549,22 +479,8 @@ $pmDebug = (is_object($USER) && $USER->IsAdmin() && ($_GET["debug_props"] ?? "")
 
     <script>
     const filteredIds = <?= json_encode(array_column($filtered, "ID")) ?>;
-    const API_PRICE   = <?= json_encode($CFG["API_PRICE"]) ?>;
     const API_STATUS  = <?= json_encode($CFG["API_STATUS"]) ?>;
     const filterInfo  = <?= json_encode($filterInfo, JSON_UNESCAPED_UNICODE) ?>;
-
-    function switchTab(btn, tab) {
-        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-        btn.classList.add("active");
-        document.getElementById("tab-" + tab).classList.add("active");
-    }
-
-    function onPriceTypeChange() {
-        const type = document.getElementById("price-change-type").value;
-        document.getElementById("field-fixed").classList.toggle("visible", type === "fixed");
-        document.getElementById("field-percent").classList.toggle("visible", type === "percent");
-    }
 
     function setMsg(prefix, state) {
         ["loading", "success", "error"].forEach(s =>
@@ -580,47 +496,6 @@ $pmDebug = (is_object($USER) && $USER->IsAdmin() && ($_GET["debug_props"] ?? "")
             redirect: "follow", referrerPolicy: "no-referrer",
             body: JSON.stringify(data)
         });
-    }
-
-    async function submitPriceChange(direction) {
-        const changeType = document.getElementById("price-change-type").value;
-        if (!changeType) { alert("გთხოვთ აირჩიოთ ცვლილების ტიპი"); return; }
-
-        const rawValue = changeType === "fixed"
-            ? parseFloat(document.getElementById("price-fixed-value").value)
-            : parseFloat(document.getElementById("price-percent-value").value);
-
-        if (isNaN(rawValue) || rawValue <= 0) { alert("გთხოვთ შეიყვანოთ დადებითი მნიშვნელობა"); return; }
-        if (!filteredIds.length) { alert("ფილტრის შედეგი ცარიელია"); return; }
-
-        setMsg("price", "loading");
-
-        try {
-            const res  = await post_fetch(API_PRICE, {
-                ids:         filteredIds,
-                change_type: changeType,
-                area:        document.getElementById("price-area").value,
-                direction:   direction,
-                value:       rawValue,
-                filter_info: filterInfo
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                document.getElementById("price-success").innerText =
-                    "✅ დასრულებულია — განახლდა " + data.updated + " პროდუქტი";
-                setMsg("price", "success");
-            } else {
-                document.getElementById("price-error").innerText =
-                    "❌ შეცდომა" + (data.failed_ids
-                        ? ": " + data.failed_ids.map(f => "ID:" + f.id + " (" + f.error + ")").join(", ")
-                        : (data.error ? ": " + data.error : ""));
-                setMsg("price", "error");
-            }
-        } catch (e) {
-            document.getElementById("price-error").innerText = "❌ შეცდომა: " + e.message;
-            setMsg("price", "error");
-        }
     }
 
     async function submitStatusChange() {
