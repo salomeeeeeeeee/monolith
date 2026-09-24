@@ -13,7 +13,7 @@ CModule::IncludeModule('crm');
 CModule::IncludeModule('bizproc');
 
 const AGENT_LEAD_CATEGORY_ID    = 0;
-const AGENT_LEAD_STAGE_ID       = "NEW";
+const AGENT_LEAD_STAGE_ID       = "UC_0WHVSO";
 const AGENT_LEAD_ASSIGNED_BY_ID = 1;
 const AGENT_LEAD_WORKFLOW_ID    = 86;
 const AGENT_LEAD_SOURCE_ID      = "UC_HN9W32";
