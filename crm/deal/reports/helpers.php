@@ -509,17 +509,44 @@ function reportEnrichDealBedrooms(array $products)
     return $products;
 }
 
-function reportGetUniqueValues($items, $field)
+/**
+ * Display form of a filter value: trimmed, "X /X /X" collapsed to "X",
+ * then the REPORT_FILTER_LABELS label if there is one.
+ */
+function reportFilterLabel($value)
 {
-    $values = [];
-    foreach ($items as $item) {
-        // Trimmed, so " ვ1" and "ვ1" are one option (reportValueMatches() trims too).
-        $value = trim((string)reportScalarProp($item[$field] ?? ''));
-        if (!empty($value)) {
-            $values[$value] = true;
+    $text = trim((string)reportScalarProp($value));
+    if (strpos($text, '/') !== false) {
+        $parts = array_values(array_filter(array_map('trim', explode('/', $text)), 'strlen'));
+        if ($parts && count(array_unique(array_map('mb_strtolower', $parts))) === 1) {
+            $text = $parts[0];
         }
     }
-    $values = array_keys($values);
+    return REPORT_FILTER_LABELS[mb_strtolower($text)] ?? $text;
+}
+
+/** Comparison key: values with the same key are one filter option. */
+function reportFilterKey($value)
+{
+    return mb_strtolower(reportFilterLabel($value));
+}
+
+/** Filter options of a field: one per key, labelled with its most common spelling. */
+function reportGetUniqueValues($items, $field)
+{
+    $spellings = [];
+    foreach ($items as $item) {
+        $label = reportFilterLabel($item[$field] ?? '');
+        if (!empty($label)) {
+            $key = mb_strtolower($label);
+            $spellings[$key][$label] = ($spellings[$key][$label] ?? 0) + 1;
+        }
+    }
+    $values = [];
+    foreach ($spellings as $counts) {
+        arsort($counts);
+        $values[] = (string)key($counts);
+    }
     sort($values);
     return $values;
 }
@@ -1044,13 +1071,16 @@ function reportGetFilterValues($name)
     return $values;
 }
 
-/** True when nothing is selected (= all) or the value is one of the selected ones. */
+/**
+ * True when nothing is selected (= all) or the value is one of the selected ones.
+ * Compared by reportFilterKey(), so "Ethno City", "Ethno city" and "Ethno city /Ethno city" match each other.
+ */
 function reportValueMatches($value, array $selected)
 {
     if (empty($selected)) {
         return true;
     }
-    return in_array(trim((string)reportScalarProp($value)), $selected, true);
+    return in_array(reportFilterKey($value), array_map('reportFilterKey', $selected), true);
 }
 
 function reportFilterProducts(array $products, array $filters)
@@ -1088,12 +1118,12 @@ function reportFilterProducts(array $products, array $filters)
  */
 function reportRenderMultiSelect($name, $id, $allLabel, array $options, array $selected, $assoc = false)
 {
-    $selected = array_map('strval', $selected);
+    $selectedKeys = array_map('reportFilterKey', $selected);
     ?>
     <select name="<?= htmlspecialchars($name) ?>[]" id="<?= htmlspecialchars($id) ?>" multiple data-multi data-all="<?= htmlspecialchars($allLabel) ?>">
         <?php foreach ($options as $key => $option): ?>
             <?php $optValue = (string)($assoc ? $key : $option); ?>
-            <option value="<?= htmlspecialchars($optValue) ?>" <?= in_array($optValue, $selected, true) ? 'selected' : '' ?>>
+            <option value="<?= htmlspecialchars($optValue) ?>" <?= in_array(reportFilterKey($optValue), $selectedKeys, true) ? 'selected' : '' ?>>
                 <?= htmlspecialchars($option) ?>
             </option>
         <?php endforeach; ?>

@@ -455,20 +455,17 @@ function leadsFilterByProject(array $deals, array $projects)
         return $deals;
     }
     return array_filter($deals, function ($deal) use ($projects) {
-        return in_array(leadsFirstValue($deal[D_PROJECT] ?? ''), $projects, true);
+        return reportValueMatches(leadsFirstValue($deal[D_PROJECT] ?? ''), $projects);
     });
 }
 
 function leadsProjectOptions(array $deals)
 {
-    $projects = [];
+    $values = [];
     foreach ($deals as $deal) {
-        $value = leadsFirstValue($deal[D_PROJECT] ?? '');
-        if ($value !== '') {
-            $projects[$value] = true;
-        }
+        $values[] = ['project' => leadsFirstValue($deal[D_PROJECT] ?? '')];
     }
-    $projects = array_keys($projects);
+    $projects = reportGetUniqueValues($values, 'project');
     usort($projects, 'leadsCompareStrings');
     return $projects;
 }

@@ -472,29 +472,25 @@ uasort($summary, static function ($a, $b) {
 
 /* ------------------------------------------------------------------ filters */
 
-$projectOptions = [];
+$projectValues = [];
 foreach ($issues as $issue) {
-    foreach ([$issue['deal_project'], $issue['product_project']] as $value) {
-        if (trim((string)$value) !== '') {
-            $projectOptions[rcNorm($value)] = $value;
-        }
-    }
+    $projectValues[] = ['project' => $issue['deal_project']];
+    $projectValues[] = ['project' => $issue['product_project']];
 }
-ksort($projectOptions);
+$projectOptions = reportGetUniqueValues($projectValues, 'project');
 
 $issueCounts = [];
 foreach ($issues as $issue) {
     $issueCounts[$issue['issue']] = ($issueCounts[$issue['issue']] ?? 0) + 1;
 }
 
-$wantedProjects = array_map('rcNorm', $filters['project']);
-$filteredIssues = array_values(array_filter($issues, static function ($issue) use ($filters, $wantedProjects) {
+$filteredIssues = array_values(array_filter($issues, static function ($issue) use ($filters) {
     if ($filters['issue'] && !in_array($issue['issue'], $filters['issue'], true)) {
         return false;
     }
-    if ($wantedProjects
-        && !in_array(rcNorm($issue['deal_project']), $wantedProjects, true)
-        && !in_array(rcNorm($issue['product_project']), $wantedProjects, true)) {
+    if ($filters['project']
+        && !reportValueMatches($issue['deal_project'], $filters['project'])
+        && !reportValueMatches($issue['product_project'], $filters['project'])) {
         return false;
     }
     return true;
@@ -529,15 +525,7 @@ reportPageBegin(
         <div class="report-filter__grid">
             <div class="report-field">
                 <label for="project"><?= $t['filter_project'] ?></label>
-                <?php
-                $selectedProjects = [];
-                foreach ($projectOptions as $value) {
-                    if (in_array(rcNorm($value), $wantedProjects, true)) {
-                        $selectedProjects[] = $value;
-                    }
-                }
-                reportRenderMultiSelect('project', 'project', $t['all_projects'], array_values($projectOptions), $selectedProjects);
-                ?>
+                <?php reportRenderMultiSelect('project', 'project', $t['all_projects'], $projectOptions, $filters['project']); ?>
             </div>
             <div class="report-field">
                 <label for="issue"><?= $t['filter_issue'] ?></label>

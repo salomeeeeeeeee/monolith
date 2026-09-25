@@ -54,3 +54,13 @@ define('REPORT_TYPE_ORDER', [
 define('REPORT_APARTMENT_SUBTYPES', ['ბინა (1 საძ.)', 'ბინა (2 საძ.)', 'ბინა (3 საძ.)']);
 
 define('REPORT_STATUSES', ['თავისუფალი', 'დაჯავშნილი', 'გაყიდული', 'NFS']);
+
+// Filter options: one label per value that CRM spells differently (lowercase spelling => label).
+// Case and "X /X /X" repeats are merged anyway; list here names that differ otherwise.
+define('REPORT_FILTER_LABELS', [
+    'dighomi'          => 'Dighomi',
+    'ethno city'       => 'Ethno city',
+    'green city'       => 'Green city',
+    'new depo'         => 'New Depo',
+    'მონოლით ნიუ დეპო' => 'New Depo',
+]);

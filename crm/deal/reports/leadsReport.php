@@ -250,8 +250,16 @@ reportPageBegin(
             </div>
             <div class="report-field">
                 <label for="project">პროექტი</label>
-                <?php // არჩეული პროექტი, რომელსაც ამ პერიოდში ლიდი არ აქვს, სიაში მაინც რჩება
-                reportRenderMultiSelect('project', 'project', 'ყველა', array_values(array_unique(array_merge($projects, $project))), $project); ?>
+                <?php
+                // არჩეული პროექტი, რომელსაც ამ პერიოდში ლიდი არ აქვს, სიაში მაინც რჩება
+                $projectChoices = $projects;
+                foreach ($project as $value) {
+                    if (!in_array(reportFilterKey($value), array_map('reportFilterKey', $projectChoices), true)) {
+                        $projectChoices[] = reportFilterLabel($value);
+                    }
+                }
+                reportRenderMultiSelect('project', 'project', 'ყველა', $projectChoices, $project);
+                ?>
             </div>
         </div>
         <div class="report-filter__actions">
