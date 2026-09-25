@@ -5,7 +5,7 @@ require_once __DIR__ . '/helpers.php';
 
 $fromDate = !empty($_GET['from_date']) ? $_GET['from_date'] : null;
 $toDate = !empty($_GET['to_date']) ? $_GET['to_date'] : null;
-$project = $_GET['project'] ?? '';
+$project = reportGetFilterValues('project');
 $period = $_GET['period'] ?? 'year';
 
 if (!empty($fromDate) && !empty($toDate)) {
@@ -27,14 +27,13 @@ if (!empty($fromDate) && !empty($toDate)) {
     }
 }
 
-$arFilter = ['STAGE_ID' => REPORT_CASHFLOW_STAGES];
-if (!empty($project)) {
-    $arFilter[D_PROJECT] = $project;
-}
-
-$deals = reportGetDealsByFilter($arFilter, [
+// All cashflow-stage deals: project options come from them, the report from the filtered subset.
+$allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_CASHFLOW_STAGES], [
     'ID', 'TITLE', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_CONTRACT_DATE,
 ]);
+$deals = array_filter($allDeals, static function ($deal) use ($project) {
+    return reportValueMatches($deal[D_PROJECT] ?? '', $project);
+});
 $dealsIds = array_keys($deals);
 
 $filterDealIds = [];
@@ -177,14 +176,7 @@ switch ($period) {
         break;
 }
 
-$allDealsForProjects = reportGetDealsByFilter(['STAGE_ID' => REPORT_CASHFLOW_STAGES], ['ID', D_PROJECT]);
-$projects = [];
-foreach ($allDealsForProjects as $deal) {
-    if (!empty($deal[D_PROJECT]) && !in_array($deal[D_PROJECT], $projects, true)) {
-        $projects[] = $deal[D_PROJECT];
-    }
-}
-sort($projects);
+$projects = reportGetUniqueValues($allDeals, D_PROJECT);
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
     ob_end_clean();

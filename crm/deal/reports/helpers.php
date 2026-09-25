@@ -513,8 +513,10 @@ function reportGetUniqueValues($items, $field)
 {
     $values = [];
     foreach ($items as $item) {
-        if (!empty($item[$field])) {
-            $values[$item[$field]] = true;
+        // Trimmed, so " ვ1" and "ვ1" are one option (reportValueMatches() trims too).
+        $value = trim((string)reportScalarProp($item[$field] ?? ''));
+        if (!empty($value)) {
+            $values[$value] = true;
         }
     }
     $values = array_keys($values);
@@ -1019,33 +1021,57 @@ function reportTranslateProdType($name, $labels)
     return $labels['prod_types'][$name] ?? $name;
 }
 
+/**
+ * Selected values of a multi-select filter from GET (name[]=a&name[]=b).
+ * A plain name=a is accepted too, so old links keep working.
+ */
+function reportGetFilterValues($name)
+{
+    $raw = $_GET[$name] ?? [];
+    if (!is_array($raw)) {
+        $raw = [$raw];
+    }
+    $values = [];
+    foreach ($raw as $value) {
+        if (!is_scalar($value)) {
+            continue;
+        }
+        $value = trim((string)$value);
+        if ($value !== '' && !in_array($value, $values, true)) {
+            $values[] = $value;
+        }
+    }
+    return $values;
+}
+
+/** True when nothing is selected (= all) or the value is one of the selected ones. */
+function reportValueMatches($value, array $selected)
+{
+    if (empty($selected)) {
+        return true;
+    }
+    return in_array(trim((string)reportScalarProp($value)), $selected, true);
+}
+
 function reportFilterProducts(array $products, array $filters)
 {
     $filtered = [];
     foreach ($products as $product) {
-        $match = true;
-        if (!empty($filters['project']) && ($product[F_PROJECT] ?? '') != $filters['project']) {
-            $match = false;
-        }
-        if (!empty($filters['sector']) && ($product[F_SECTOR] ?? '') != $filters['sector']) {
-            $match = false;
-        }
-        if (!empty($filters['block']) && ($product[F_BLOCK] ?? '') != $filters['block']) {
-            $match = false;
-        }
-        if (!empty($filters['barter'])) {
+        $match = reportValueMatches($product[F_PROJECT] ?? '', $filters['project'] ?? [])
+            && reportValueMatches($product[F_SECTOR] ?? '', $filters['sector'] ?? [])
+            && reportValueMatches($product[F_BLOCK] ?? '', $filters['block'] ?? [])
+            && reportValueMatches($product['DEAL_RESPONSIBLE_NAME'] ?? '', $filters['responsible'] ?? []);
+        if ($match && !empty($filters['barter'])) {
             $barterValue = (string)($product[D_BARTER] ?? '');
-            if ((string)$filters['barter'] === D_BARTER_NO) {
+            $barterMatch = false;
+            foreach ($filters['barter'] as $wanted) {
                 // "არა" = ყველაფერი, რაც ბარტერად არ არის მონიშნული (მათ შორის ცარიელი).
-                if ($barterValue === D_BARTER_YES) {
-                    $match = false;
+                if ((string)$wanted === D_BARTER_NO ? $barterValue !== D_BARTER_YES : $barterValue === (string)$wanted) {
+                    $barterMatch = true;
+                    break;
                 }
-            } elseif ($barterValue !== (string)$filters['barter']) {
-                $match = false;
             }
-        }
-        if (!empty($filters['responsible']) && ($product['DEAL_RESPONSIBLE_NAME'] ?? '') != $filters['responsible']) {
-            $match = false;
+            $match = $barterMatch;
         }
         if ($match) {
             $filtered[$product['ID']] = $product;
@@ -1054,20 +1080,41 @@ function reportFilterProducts(array $products, array $filters)
     return $filtered;
 }
 
+/**
+ * <select multiple> that reportPageEnd() turns into a checkbox dropdown.
+ * Nothing selected means "all" ($allLabel is shown then).
+ *
+ * @param array $options value list, or value => label map when $assoc is true
+ */
+function reportRenderMultiSelect($name, $id, $allLabel, array $options, array $selected, $assoc = false)
+{
+    $selected = array_map('strval', $selected);
+    ?>
+    <select name="<?= htmlspecialchars($name) ?>[]" id="<?= htmlspecialchars($id) ?>" multiple data-multi data-all="<?= htmlspecialchars($allLabel) ?>">
+        <?php foreach ($options as $key => $option): ?>
+            <?php $optValue = (string)($assoc ? $key : $option); ?>
+            <option value="<?= htmlspecialchars($optValue) ?>" <?= in_array($optValue, $selected, true) ? 'selected' : '' ?>>
+                <?= htmlspecialchars($option) ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    <?php
+}
+
 function reportRenderFilterForm($filters, $options, $labels, $lang, $schema = 'inventory')
 {
     $fields = [];
     if ($schema === 'deals') {
         $fields = [
-            ['name' => 'project', 'id' => 'project', 'label' => $labels['filter_project'], 'all' => $labels['all_projects'], 'options' => $options['projects'] ?? [], 'value' => $filters['project'] ?? ''],
-            ['name' => 'block', 'id' => 'block', 'label' => $labels['filter_block'], 'all' => $labels['all_blocks'], 'options' => $options['blocks'] ?? [], 'value' => $filters['block'] ?? ''],
-            ['name' => 'responsible', 'id' => 'responsible', 'label' => $labels['filter_responsible'], 'all' => $labels['all_responsible'], 'options' => $options['responsibles'] ?? [], 'value' => $filters['responsible'] ?? '', 'assoc' => true],
+            ['name' => 'project', 'id' => 'project', 'label' => $labels['filter_project'], 'all' => $labels['all_projects'], 'options' => $options['projects'] ?? [], 'value' => $filters['project'] ?? []],
+            ['name' => 'block', 'id' => 'block', 'label' => $labels['filter_block'], 'all' => $labels['all_blocks'], 'options' => $options['blocks'] ?? [], 'value' => $filters['block'] ?? []],
+            ['name' => 'responsible', 'id' => 'responsible', 'label' => $labels['filter_responsible'], 'all' => $labels['all_responsible'], 'options' => $options['responsibles'] ?? [], 'value' => $filters['responsible'] ?? [], 'assoc' => true],
         ];
     } else {
         $fields = [
-            ['name' => 'project', 'id' => 'project', 'label' => $labels['filter_project'], 'all' => $labels['all_projects'], 'options' => $options['projects'] ?? [], 'value' => $filters['project'] ?? ''],
-            ['name' => 'sector', 'id' => 'sector', 'label' => $labels['filter_sector'], 'all' => $labels['all_sectors'], 'options' => $options['sectors'] ?? [], 'value' => $filters['sector'] ?? ''],
-            ['name' => 'block', 'id' => 'block', 'label' => $labels['filter_block'], 'all' => $labels['all_blocks'], 'options' => $options['blocks'] ?? [], 'value' => $filters['block'] ?? ''],
+            ['name' => 'project', 'id' => 'project', 'label' => $labels['filter_project'], 'all' => $labels['all_projects'], 'options' => $options['projects'] ?? [], 'value' => $filters['project'] ?? []],
+            ['name' => 'sector', 'id' => 'sector', 'label' => $labels['filter_sector'], 'all' => $labels['all_sectors'], 'options' => $options['sectors'] ?? [], 'value' => $filters['sector'] ?? []],
+            ['name' => 'block', 'id' => 'block', 'label' => $labels['filter_block'], 'all' => $labels['all_blocks'], 'options' => $options['blocks'] ?? [], 'value' => $filters['block'] ?? []],
         ];
         if (!empty($options['barters'])) {
             $fields[] = [
@@ -1076,11 +1123,11 @@ function reportRenderFilterForm($filters, $options, $labels, $lang, $schema = 'i
                 'label' => $labels['filter_barter'],
                 'all' => $labels['all_barter'],
                 'options' => $options['barters'],
-                'value' => $filters['barter'] ?? '',
+                'value' => $filters['barter'] ?? [],
                 'assoc' => true,
             ];
         }
-        $fields[] = ['name' => 'responsible', 'id' => 'responsible', 'label' => $labels['filter_responsible'], 'all' => $labels['all_responsible'], 'options' => $options['responsibles'] ?? [], 'value' => $filters['responsible'] ?? ''];
+        $fields[] = ['name' => 'responsible', 'id' => 'responsible', 'label' => $labels['filter_responsible'], 'all' => $labels['all_responsible'], 'options' => $options['responsibles'] ?? [], 'value' => $filters['responsible'] ?? []];
     }
     ?>
     <section class="report-filter">
@@ -1090,19 +1137,7 @@ function reportRenderFilterForm($filters, $options, $labels, $lang, $schema = 'i
                 <?php foreach ($fields as $field): ?>
                     <div class="report-field">
                         <label for="<?= $field['id'] ?>"><?= $field['label'] ?></label>
-                        <select name="<?= $field['name'] ?>" id="<?= $field['id'] ?>">
-                            <option value=""><?= $field['all'] ?></option>
-                            <?php foreach ($field['options'] as $key => $option): ?>
-                                <?php
-                                $optValue = !empty($field['assoc']) ? $key : $option;
-                                $optLabel = !empty($field['assoc']) ? $option : $option;
-                                $selected = (string)$field['value'] === (string)$optValue;
-                                ?>
-                                <option value="<?= htmlspecialchars($optValue) ?>" <?= $selected ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($optLabel) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <?php reportRenderMultiSelect($field['name'], $field['id'], $field['all'], $field['options'], (array)$field['value'], !empty($field['assoc'])); ?>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -1144,12 +1179,7 @@ function reportRenderCashflowFilterForm($period, $fromDate, $toDate, $project, $
                 </div>
                 <div class="report-field">
                     <label for="project">პროექტი</label>
-                    <select name="project" id="project">
-                        <option value="">ყველა</option>
-                        <?php foreach ($projects as $proj): ?>
-                            <option value="<?= htmlspecialchars($proj) ?>" <?= $project == $proj ? 'selected' : '' ?>><?= htmlspecialchars($proj) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <?php reportRenderMultiSelect('project', 'project', 'ყველა', $projects, (array)$project); ?>
                 </div>
             </div>
             <div class="report-filter__actions">
@@ -1189,6 +1219,9 @@ function reportPageEnd($lang = 'ge')
 {
     $loadingText = $lang === 'eng' ? 'Filtering...' : 'ფილტრდება...';
     $loadingSub = $lang === 'eng' ? 'Please wait' : 'გთხოვთ, დაელოდოთ';
+    $multiText = $lang === 'eng'
+        ? ['all' => 'All', 'search' => 'Search...', 'noMatch' => 'No matches']
+        : ['all' => 'ყველა', 'search' => 'ძებნა...', 'noMatch' => 'ვერ მოიძებნა'];
     ?>
         </main>
         <div class="report-page-loader" id="reportPageLoader" aria-live="polite" aria-busy="false" hidden>
@@ -1224,6 +1257,173 @@ function reportPageEnd($lang = 'ge')
             btn.addEventListener('click', function () {
                 showReportLoader();
             });
+        });
+    })();
+
+    // Multi-select filters: <select multiple data-multi> -> dropdown with checkboxes.
+    (function () {
+        var TEXT = <?= json_encode($multiText, JSON_UNESCAPED_UNICODE) ?>;
+        var current = null;
+
+        function close() {
+            if (!current) return;
+            current.panel.hidden = true;
+            current.toggle.setAttribute('aria-expanded', 'false');
+            current.root.classList.remove('is-open');
+            current = null;
+        }
+
+        function makeRow(label) {
+            var row = document.createElement('label');
+            row.className = 'ms__option';
+            var box = document.createElement('input');
+            box.type = 'checkbox';
+            var span = document.createElement('span');
+            span.textContent = label;
+            row.appendChild(box);
+            row.appendChild(span);
+            return { row: row, box: box, label: label };
+        }
+
+        function init(select) {
+            var allLabel = select.getAttribute('data-all') || TEXT.all;
+            var root = document.createElement('div');
+            root.className = 'ms';
+
+            var toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'ms__toggle';
+            toggle.setAttribute('aria-haspopup', 'true');
+            toggle.setAttribute('aria-expanded', 'false');
+            if (select.id) toggle.id = select.id + '__ms';
+            var text = document.createElement('span');
+            text.className = 'ms__text';
+            var count = document.createElement('span');
+            count.className = 'ms__count';
+            toggle.appendChild(text);
+            toggle.appendChild(count);
+
+            var panel = document.createElement('div');
+            panel.className = 'ms__panel';
+            panel.hidden = true;
+
+            var search = null;
+            if (select.options.length > 8) {
+                search = document.createElement('input');
+                search.type = 'search';
+                search.className = 'ms__search';
+                search.placeholder = TEXT.search;
+                panel.appendChild(search);
+            }
+
+            var list = document.createElement('div');
+            list.className = 'ms__list';
+            panel.appendChild(list);
+
+            var allRow = makeRow(allLabel);
+            allRow.row.classList.add('ms__option--all');
+            list.appendChild(allRow.row);
+
+            var rows = [];
+            Array.prototype.forEach.call(select.options, function (option) {
+                var r = makeRow(option.text.trim());
+                r.option = option;
+                r.box.addEventListener('change', function () {
+                    option.selected = r.box.checked;
+                    refresh();
+                });
+                rows.push(r);
+                list.appendChild(r.row);
+            });
+
+            var empty = document.createElement('div');
+            empty.className = 'ms__empty';
+            empty.textContent = TEXT.noMatch;
+            empty.hidden = true;
+            list.appendChild(empty);
+
+            // "ყველა" = nothing selected.
+            allRow.box.addEventListener('change', function () {
+                rows.forEach(function (r) { r.option.selected = false; });
+                refresh();
+            });
+
+            function refresh() {
+                var chosen = rows.filter(function (r) { return r.option.selected; });
+                rows.forEach(function (r) { r.box.checked = r.option.selected; });
+                allRow.box.checked = chosen.length === 0;
+                text.textContent = chosen.length
+                    ? chosen.map(function (r) { return r.label; }).join(', ')
+                    : allLabel;
+                count.textContent = chosen.length;
+                count.hidden = chosen.length < 2;
+                toggle.classList.toggle('has-value', chosen.length > 0);
+                toggle.title = chosen.length ? text.textContent : '';
+            }
+
+            function applySearch() {
+                var q = search ? search.value.trim().toLowerCase() : '';
+                var visible = 0;
+                rows.forEach(function (r) {
+                    var show = q === '' || r.label.toLowerCase().indexOf(q) !== -1;
+                    r.row.hidden = !show;
+                    if (show) visible++;
+                });
+                allRow.row.hidden = q !== '';
+                empty.hidden = visible > 0;
+            }
+
+            if (search) {
+                search.addEventListener('input', applySearch);
+                search.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') e.preventDefault();
+                });
+            }
+
+            toggle.addEventListener('click', function () {
+                if (current && current.root === root) {
+                    close();
+                    return;
+                }
+                close();
+                panel.classList.remove('ms__panel--right');
+                panel.hidden = false;
+                if (panel.getBoundingClientRect().right > document.documentElement.clientWidth - 8) {
+                    panel.classList.add('ms__panel--right');
+                }
+                toggle.setAttribute('aria-expanded', 'true');
+                root.classList.add('is-open');
+                current = { root: root, panel: panel, toggle: toggle };
+                if (search) {
+                    search.value = '';
+                    applySearch();
+                    search.focus();
+                }
+            });
+
+            select.parentNode.insertBefore(root, select);
+            root.appendChild(toggle);
+            root.appendChild(panel);
+            root.appendChild(select);
+            select.classList.add('ms-native');
+            if (select.id) {
+                var label = document.querySelector('label[for="' + select.id + '"]');
+                if (label) label.htmlFor = toggle.id;
+            }
+            refresh();
+        }
+
+        document.querySelectorAll('select[multiple][data-multi]').forEach(init);
+
+        document.addEventListener('click', function (e) {
+            if (current && !current.root.contains(e.target)) close();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && current) {
+                var toggle = current.toggle;
+                close();
+                toggle.focus();
+            }
         });
     })();
     </script>
@@ -1424,6 +1624,159 @@ function reportCommonStyles()
             border-color: var(--rp-accent);
             background: #fff;
             box-shadow: 0 0 0 4px rgba(114, 196, 177, 0.2);
+        }
+
+        .ms { position: relative; }
+        .ms-native { display: none !important; }
+
+        .ms__toggle {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px 34px 12px 14px;
+            border: 1px solid var(--rp-border);
+            border-radius: 4px;
+            background: var(--rp-surface-2);
+            color: var(--rp-text);
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+
+        .ms__toggle::after {
+            content: "";
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            width: 6px;
+            height: 6px;
+            border-right: 2px solid var(--rp-muted);
+            border-bottom: 2px solid var(--rp-muted);
+            transform: translateY(-70%) rotate(45deg);
+            transition: transform 0.15s ease;
+        }
+
+        .ms.is-open .ms__toggle::after { transform: translateY(-25%) rotate(-135deg); }
+
+        .ms__toggle:focus,
+        .ms.is-open .ms__toggle {
+            outline: none;
+            border-color: var(--rp-accent);
+            background: #fff;
+            box-shadow: 0 0 0 4px rgba(114, 196, 177, 0.2);
+        }
+
+        .ms__toggle.has-value {
+            background: #fff;
+            border-color: #b8e4da;
+        }
+
+        .ms__text {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ms__count {
+            flex-shrink: 0;
+            min-width: 20px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            background: var(--rp-primary);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .ms__count[hidden],
+        .ms__panel[hidden],
+        .ms .ms__option[hidden],
+        .ms__empty[hidden] { display: none; }
+
+        .ms__panel {
+            position: absolute;
+            z-index: 60;
+            top: calc(100% + 4px);
+            left: 0;
+            min-width: 100%;
+            width: max-content;
+            max-width: 340px;
+            padding: 6px;
+            border: 1px solid var(--rp-border);
+            border-radius: 4px;
+            background: #fff;
+            box-shadow: 0 16px 40px rgba(0, 51, 91, 0.16);
+        }
+
+        .ms__panel--right {
+            left: auto;
+            right: 0;
+        }
+
+        .ms__search {
+            width: 100%;
+            margin-bottom: 6px;
+            padding: 8px 10px;
+            border: 1px solid var(--rp-border);
+            border-radius: 4px;
+            font: inherit;
+            font-size: 13px;
+            color: var(--rp-text);
+        }
+
+        .ms__search:focus {
+            outline: none;
+            border-color: var(--rp-accent);
+        }
+
+        .ms__list {
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .ms .ms__option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0;
+            padding: 7px 8px;
+            border-radius: 3px;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0;
+            text-transform: none;
+            color: var(--rp-text);
+            cursor: pointer;
+        }
+
+        .ms .ms__option:hover { background: var(--rp-accent-soft); }
+
+        .ms .ms__option--all {
+            margin-bottom: 4px;
+            border-bottom: 1px solid #eef1f4;
+            border-radius: 0;
+            font-weight: 700;
+        }
+
+        .ms__option input {
+            flex-shrink: 0;
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            accent-color: var(--rp-primary);
+            cursor: pointer;
+        }
+
+        .ms__empty {
+            padding: 8px;
+            font-size: 12px;
+            color: var(--rp-muted);
         }
 
         .report-filter__actions {

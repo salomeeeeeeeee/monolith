@@ -70,8 +70,8 @@ $issueMeta = [
 ];
 
 $filters = [
-    'project' => trim((string)($_GET['project'] ?? '')),
-    'issue' => trim((string)($_GET['issue'] ?? '')),
+    'project' => reportGetFilterValues('project'),
+    'issue' => reportGetFilterValues('issue'),
 ];
 
 /* ------------------------------------------------------------------ helpers */
@@ -487,15 +487,15 @@ foreach ($issues as $issue) {
     $issueCounts[$issue['issue']] = ($issueCounts[$issue['issue']] ?? 0) + 1;
 }
 
-$filteredIssues = array_values(array_filter($issues, static function ($issue) use ($filters) {
-    if ($filters['issue'] !== '' && $issue['issue'] !== $filters['issue']) {
+$wantedProjects = array_map('rcNorm', $filters['project']);
+$filteredIssues = array_values(array_filter($issues, static function ($issue) use ($filters, $wantedProjects) {
+    if ($filters['issue'] && !in_array($issue['issue'], $filters['issue'], true)) {
         return false;
     }
-    if ($filters['project'] !== '') {
-        $wanted = rcNorm($filters['project']);
-        if (rcNorm($issue['deal_project']) !== $wanted && rcNorm($issue['product_project']) !== $wanted) {
-            return false;
-        }
+    if ($wantedProjects
+        && !in_array(rcNorm($issue['deal_project']), $wantedProjects, true)
+        && !in_array(rcNorm($issue['product_project']), $wantedProjects, true)) {
+        return false;
     }
     return true;
 }));
@@ -529,26 +529,27 @@ reportPageBegin(
         <div class="report-filter__grid">
             <div class="report-field">
                 <label for="project"><?= $t['filter_project'] ?></label>
-                <select name="project" id="project">
-                    <option value=""><?= $t['all_projects'] ?></option>
-                    <?php foreach ($projectOptions as $value): ?>
-                        <option value="<?= htmlspecialchars($value) ?>" <?= rcNorm($filters['project']) === rcNorm($value) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($value) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <?php
+                $selectedProjects = [];
+                foreach ($projectOptions as $value) {
+                    if (in_array(rcNorm($value), $wantedProjects, true)) {
+                        $selectedProjects[] = $value;
+                    }
+                }
+                reportRenderMultiSelect('project', 'project', $t['all_projects'], array_values($projectOptions), $selectedProjects);
+                ?>
             </div>
             <div class="report-field">
                 <label for="issue"><?= $t['filter_issue'] ?></label>
-                <select name="issue" id="issue">
-                    <option value=""><?= $t['all_issues'] ?> (<?= count($issues) ?>)</option>
-                    <?php foreach ($issueMeta as $code => $meta): ?>
-                        <?php if (empty($issueCounts[$code])) { continue; } ?>
-                        <option value="<?= htmlspecialchars($code) ?>" <?= $filters['issue'] === $code ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($meta[0]) ?> (<?= (int)$issueCounts[$code] ?>)
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <?php
+                $issueOptions = [];
+                foreach ($issueMeta as $code => $meta) {
+                    if (!empty($issueCounts[$code])) {
+                        $issueOptions[$code] = $meta[0] . ' (' . (int)$issueCounts[$code] . ')';
+                    }
+                }
+                reportRenderMultiSelect('issue', 'issue', $t['all_issues'] . ' (' . count($issues) . ')', $issueOptions, $filters['issue'], true);
+                ?>
             </div>
         </div>
         <div class="report-filter__actions">

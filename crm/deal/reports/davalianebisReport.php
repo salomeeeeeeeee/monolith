@@ -24,24 +24,19 @@ $t = array_merge($t, [
     'xls_debt' => $lang === 'eng' ? 'Current Debt ($)' : 'მიმდინარე დავალიანება ($)',
 ]);
 
-$filterProject = trim($_GET['project'] ?? '');
-$filterBlock = trim($_GET['block'] ?? '');
-$filterResponsible = trim($_GET['responsible'] ?? '');
+$filterProject = reportGetFilterValues('project');
+$filterBlock = reportGetFilterValues('block');
+$filterResponsible = reportGetFilterValues('responsible');
 
-$arFilter = ['STAGE_ID' => REPORT_WON_STAGE];
-if ($filterProject !== '') {
-    $arFilter[D_PROJECT] = $filterProject;
-}
-if ($filterBlock !== '') {
-    $arFilter[D_BLOCK] = $filterBlock;
-}
-if ($filterResponsible !== '') {
-    $arFilter['ASSIGNED_BY_ID'] = $filterResponsible;
-}
-
-$deals = reportGetDealsByFilter($arFilter, [
+// All won deals: filter options come from them, the report from the filtered subset.
+$allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_WON_STAGE], [
     'ID', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_BLOCK, D_TYPE, D_BEDROOMS, 'ASSIGNED_BY_ID',
 ]);
+$deals = array_filter($allDeals, static function ($deal) use ($filterProject, $filterBlock, $filterResponsible) {
+    return reportValueMatches($deal[D_PROJECT] ?? '', $filterProject)
+        && reportValueMatches($deal[D_BLOCK] ?? '', $filterBlock)
+        && reportValueMatches($deal['ASSIGNED_BY_ID'] ?? '', $filterResponsible);
+});
 $dealsIds = array_keys($deals);
 
 // Full schedule from list 22 (all rows), not only dates <= today
@@ -152,21 +147,14 @@ foreach ($resArray as $prodType => $data) {
     $generalTotals['mimdinareDavalianeba'] += $data['mimdinareDavalianeba'];
 }
 
-$allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_WON_STAGE], ['ID', D_PROJECT, D_BLOCK, 'ASSIGNED_BY_ID']);
-$projects = $blocks = $responsibles = [];
+$projects = reportGetUniqueValues($allDeals, D_PROJECT);
+$blocks = array_values(array_diff(reportGetUniqueValues($allDeals, D_BLOCK), ['P']));
+$responsibles = [];
 foreach ($allDeals as $deal) {
-    if (!empty($deal[D_PROJECT]) && !in_array($deal[D_PROJECT], $projects, true)) {
-        $projects[] = $deal[D_PROJECT];
-    }
-    if (!empty($deal[D_BLOCK]) && $deal[D_BLOCK] !== 'P' && !in_array($deal[D_BLOCK], $blocks, true)) {
-        $blocks[] = $deal[D_BLOCK];
-    }
     if (!empty($deal['ASSIGNED_BY_ID'])) {
         $responsibles[$deal['ASSIGNED_BY_ID']] = reportGetUserName($deal['ASSIGNED_BY_ID']);
     }
 }
-sort($projects);
-sort($blocks);
 asort($responsibles);
 
 ob_end_clean();

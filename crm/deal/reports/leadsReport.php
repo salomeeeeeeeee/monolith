@@ -17,7 +17,7 @@ $to = leadsParseYmd($_GET['to'] ?? '') ?: date('Y-m-d');
 if ($from > $to) {
     list($from, $to) = [$to, $from];
 }
-$project = trim((string)($_GET['project'] ?? ''));
+$project = reportGetFilterValues('project');
 
 $compareFrom = leadsParseYmd($_GET['compare_from'] ?? '');
 $compareTo = leadsParseYmd($_GET['compare_to'] ?? '');
@@ -226,7 +226,7 @@ $exports = [
     'dailo' => [['თარიღი', 'საუბრები', 'ლიდები', 'კონვ.%', 'კომენტარები', 'პასუხგაცემული', 'დამალული']],
 ];
 
-$projectSuffix = $project !== '' ? ' · ' . $project : '';
+$projectSuffix = $project ? ' · ' . implode(', ', $project) : '';
 
 ob_end_clean();
 reportPageBegin(
@@ -250,15 +250,8 @@ reportPageBegin(
             </div>
             <div class="report-field">
                 <label for="project">პროექტი</label>
-                <select name="project" id="project">
-                    <option value="">ყველა</option>
-                    <?php foreach ($projects as $option): ?>
-                        <option value="<?= lrH($option) ?>" <?= $option === $project ? 'selected' : '' ?>><?= lrH($option) ?></option>
-                    <?php endforeach; ?>
-                    <?php if ($project !== '' && !in_array($project, $projects, true)): ?>
-                        <option value="<?= lrH($project) ?>" selected><?= lrH($project) ?></option>
-                    <?php endif; ?>
-                </select>
+                <?php // არჩეული პროექტი, რომელსაც ამ პერიოდში ლიდი არ აქვს, სიაში მაინც რჩება
+                reportRenderMultiSelect('project', 'project', 'ყველა', array_values(array_unique(array_merge($projects, $project))), $project); ?>
             </div>
         </div>
         <div class="report-filter__actions">
@@ -509,7 +502,9 @@ lrSectionClose(); ?>
                     <input type="hidden" name="lang" value="<?= lrH($lang) ?>">
                     <input type="hidden" name="from" value="<?= lrH($from) ?>">
                     <input type="hidden" name="to" value="<?= lrH($to) ?>">
-                    <input type="hidden" name="project" value="<?= lrH($project) ?>">
+                    <?php foreach ($project as $value): ?>
+                        <input type="hidden" name="project[]" value="<?= lrH($value) ?>">
+                    <?php endforeach; ?>
                     <input type="date" name="compare_from" value="<?= lrH($compareFrom) ?>">
                     <span>—</span>
                     <input type="date" name="compare_to" value="<?= lrH($compareTo) ?>">
@@ -672,8 +667,8 @@ lrSectionOpen(
 <?php // ── სოციალური არხები — Dailo (addStats) ──────────────────────────── ?>
 <?php
 $dailoHint = 'მონაცემი Dailo-დან (addStats სერვისი) · დღე = სტატისტიკის თარიღი (STAT_DATE), იგივე პერიოდი რაც მთავარ ფილტრში.';
-if ($project !== '') {
-    $dailoHint .= ' Dailo-ს მონაცემი პროექტის ფილტრს არ ექვემდებარება — CRM სვეტები კი მხოლოდ „' . $project . '“-ს ითვლის.';
+if ($project) {
+    $dailoHint .= ' Dailo-ს მონაცემი პროექტის ფილტრს არ ექვემდებარება — CRM სვეტები კი მხოლოდ „' . implode('“, „', $project) . '“-ს ითვლის.';
 }
 lrSectionOpen(
     'სოციალური არხები — Dailo',

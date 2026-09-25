@@ -448,13 +448,14 @@ function leadsLoadDeals($from, $to)
     return reportGetDealsByFilter($filter, $select, ['DATE_CREATE' => 'ASC', 'ID' => 'ASC']);
 }
 
-function leadsFilterByProject(array $deals, $project)
+/** @param array $projects selected projects; empty = all */
+function leadsFilterByProject(array $deals, array $projects)
 {
-    if ($project === '') {
+    if (!$projects) {
         return $deals;
     }
-    return array_filter($deals, function ($deal) use ($project) {
-        return leadsFirstValue($deal[D_PROJECT] ?? '') === $project;
+    return array_filter($deals, function ($deal) use ($projects) {
+        return in_array(leadsFirstValue($deal[D_PROJECT] ?? ''), $projects, true);
     });
 }
 

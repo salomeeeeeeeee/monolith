@@ -29,10 +29,10 @@ if ($lang === 'eng') {
 }
 
 $filters = [
-    'project' => $_GET['project'] ?? '',
-    'sector' => $_GET['sector'] ?? '',
-    'block' => $_GET['block'] ?? '',
-    'responsible' => $_GET['responsible'] ?? '',
+    'project' => reportGetFilterValues('project'),
+    'sector' => reportGetFilterValues('sector'),
+    'block' => reportGetFilterValues('block'),
+    'responsible' => reportGetFilterValues('responsible'),
 ];
 
 $products = reportGetAllInventoryProducts();

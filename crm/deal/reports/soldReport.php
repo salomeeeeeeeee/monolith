@@ -35,11 +35,11 @@ $t = array_merge($t, [
 ]);
 
 $filters = [
-    'project' => $_GET['project'] ?? '',
-    'sector' => $_GET['sector'] ?? '',
-    'block' => $_GET['block'] ?? '',
-    'barter' => $_GET['barter'] ?? '',
-    'responsible' => $_GET['responsible'] ?? '',
+    'project' => reportGetFilterValues('project'),
+    'sector' => reportGetFilterValues('sector'),
+    'block' => reportGetFilterValues('block'),
+    'barter' => reportGetFilterValues('barter'),
+    'responsible' => reportGetFilterValues('responsible'),
 ];
 
 $products = reportGetSoldProducts();
