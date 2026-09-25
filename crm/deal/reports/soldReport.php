@@ -112,19 +112,14 @@ foreach ($filteredProducts as $product) {
 }
 
 foreach ($resArray as $prodType => &$infos) {
-    if ($infos['num'] <= 0) {
+    if ($infos['total_area'] <= 0) {
         $infos['average_price'] = 0;
         $infos['deal_average_price'] = 0;
         continue;
     }
-    // Apartments and commercial units are compared per sqm, everything else by unit price.
-    if (str_contains($prodType, 'ბინა') || $prodType === 'კომერციული') {
-        $infos['average_price'] = round($infos['KVM_PRICE'] / $infos['num'], 2);
-        $infos['deal_average_price'] = round($infos['deal_kvm_price'] / $infos['num'], 2);
-    } else {
-        $infos['average_price'] = round($infos['price'] / $infos['num'], 2);
-        $infos['deal_average_price'] = round($infos['deal_price'] / $infos['num'], 2);
-    }
+    // Average = total price / total area (same for sale and stock so Diff % stays comparable).
+    $infos['average_price'] = round($infos['price'] / $infos['total_area'], 2);
+    $infos['deal_average_price'] = round($infos['deal_price'] / $infos['total_area'], 2);
 }
 unset($infos);
 $resArray = reportSortProductTypes($resArray);
