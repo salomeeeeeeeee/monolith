@@ -20,6 +20,7 @@ const AGENT_LEAD_SOURCE_ID      = "UC_HN9W32";
 const AGENT_LEAD_TITLE_PREFIX   = "აგენტის ფორმა — ";
 // აგენტის მიერ დაფიქსირებული ნომერი ამდენი თვის შემდეგ თავისუფლდება
 const AGENT_LEAD_FIXATION_MONTHS = 3;
+const AGENT_LEAD_F_AGENCY_AGENT  = "UF_CRM_1790340288"; // string: სააგენტო/აგენტი ფორმიდან
 
 function agentLeadRespond(array $payload, $httpCode = 200)
 {
@@ -353,19 +354,13 @@ if (empty($phones)) {
     agentLeadRespond(['status' => 400, 'message' => 'მიუთითეთ მინიმუმ ერთი ტელეფონის ნომერი'], 400);
 }
 
-// 1 რიგში: მიმდინარე დილზე მიბმული ნომრით ახალი დილი არ იქმნება
-$busyPhones = agentLeadBusyPhones($phones);
-if (!empty($busyPhones)) {
-    agentLeadRespond([
-        'status'     => 409,
-        'message'    => (count($busyPhones) > 1 ? 'ნომრები ' : 'ნომერი ') . implode(', ', $busyPhones) . ' უკვე ფიქსირდება სისტემაში',
-        'busyPhones' => $busyPhones,
-    ], 409);
+if ($agency === '' && $agent === '') {
+    agentLeadRespond(['status' => 400, 'message' => 'მიუთითეთ სააგენტო ან აგენტი'], 400);
 }
 
-if ($agency === '' || $agent === '') {
-    agentLeadRespond(['status' => 400, 'message' => 'სააგენტო და აგენტი სავალდებულოა'], 400);
-}
+// მიმდინარე დილზე მიბმული ნომერი მხოლოდ ინფორმაციაა — დილი მაინც იქმნება.
+// ახალი დილის შექმნამდე ვამოწმებთ, თორემ თავად ის დაიკავებდა ნომერს.
+$busyPhones = agentLeadBusyPhones($phones);
 
 $displayName = trim($firstName . ' ' . $lastName);
 if ($displayName === '') {
@@ -485,6 +480,8 @@ $dealFields = [
     'ASSIGNED_BY_ID' => AGENT_LEAD_ASSIGNED_BY_ID,
     'OPENED'         => 'Y',
     'COMMENTS'       => $commentsHtml !== '' ? $commentsHtml : $comments,
+    // ფორმაში ჩაწერილი სააგენტო/აგენტი — ორივე თუ მიუთითეს, „სააგენტო / აგენტი“
+    AGENT_LEAD_F_AGENCY_AGENT => implode(' / ', array_filter([$agency, $agent], 'strlen')),
 ];
 
 $deal = new CCrmDeal(false);
@@ -561,6 +558,7 @@ $response = [
     'dealTitle'      => $dealTitle,
     'workflowId'     => AGENT_LEAD_WORKFLOW_ID,
     'commentId'      => (int)$timelineCommentId,
+    'busyPhones'     => $busyPhones,
 ];
 
 if (!$startedWorkflow) {
