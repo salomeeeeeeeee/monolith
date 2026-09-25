@@ -1,6 +1,6 @@
 <?php
 /**
- * Dailo — დღიური სტატისტიკის მიღება (conversations / leads / comments)
+ * Dailo - დღიური სტატისტიკის მიღება (conversations / leads / comments)
  *
  * URL:     https://crm.monolith.ge/rest/public/addStats.php
  * Method:  POST, Content-Type: application/json
@@ -10,11 +10,11 @@
  *   https://crm.monolith.ge/custom/setup/dailoStatsLists.php
  *
  * მონაცემი ორ სიაში ჯდება:
- *   DAILO_STATS_DAILY   — 1 ჩანაწერი = 1 დღე (totals + comments)
- *   DAILO_STATS_CHANNEL — 1 ჩანაწერი = დღე + არხი
+ *   DAILO_STATS_DAILY   - 1 ჩანაწერი = 1 დღე (totals + comments)
+ *   DAILO_STATS_CHANNEL - 1 ჩანაწერი = დღე + არხი
  *
  * ერთი და იმავე თარიღის ხელახლა გამოგზავნა არსებულ ჩანაწერს აახლებს და არ
- * ამრავლებს (გასაღები — XML_ID), რომ რეპორტში ორმაგად არ დაითვალოს.
+ * ამრავლებს (გასაღები - XML_ID), რომ რეპორტში ორმაგად არ დაითვალოს.
  * მიიღება როგორც ერთი დღე {...}, ისე დღეების მასივი [{...},{...}] (backfill-ისთვის).
  */
 
@@ -77,7 +77,7 @@ if (statsGetRequestToken() !== STATS_API_TOKEN) {
     header('Content-Type: application/json; charset=utf-8');
     http_response_code(401);
     echo json_encode(
-        ['status' => 401, 'message' => 'Unauthorized — Bearer token is required'],
+        ['status' => 401, 'message' => 'Unauthorized - Bearer token is required'],
         JSON_UNESCAPED_UNICODE
     );
     exit;
@@ -94,7 +94,7 @@ const STATS_CHANNEL_IBLOCK_CODE = 'DAILO_STATS_CHANNEL';
 const STATS_AUTHOR_ID           = 1;
 const STATS_XML_PREFIX          = 'dailo-stats-';
 
-/** არხის სახელის ნორმალიზაცია — რომ Messenger/fb/fb-messenger ერთ რიგში მოხვდეს. */
+/** არხის სახელის ნორმალიზაცია - რომ Messenger/fb/fb-messenger ერთ რიგში მოხვდეს. */
 $STATS_CHANNEL_MAP = [
     'messenger'    => 'Messenger',
     'fb'           => 'Messenger',
@@ -179,7 +179,7 @@ function statsNormalizeChannel($name)
 
     $key = preg_replace('/[\s_]+/', '-', strtolower($name));
 
-    // უცნობი არხი უცვლელად ინახება — ახალი წყარო არ უნდა დაიკარგოს.
+    // უცნობი არხი უცვლელად ინახება - ახალი წყარო არ უნდა დაიკარგოს.
     return $STATS_CHANNEL_MAP[$key] ?? $name;
 }
 
@@ -219,7 +219,7 @@ function statsFindByXmlId($iblockId, $xmlId)
     return $row ? (int)$row['ID'] : 0;
 }
 
-/** არსებობს — აახლებს, არ არსებობს — ქმნის. აბრუნებს ['id' => int, 'created' => bool]. */
+/** არსებობს - აახლებს, არ არსებობს - ქმნის. აბრუნებს ['id' => int, 'created' => bool]. */
 function statsUpsert($iblockId, $xmlId, $name, array $properties)
 {
     $el = new CIBlockElement();
@@ -252,7 +252,7 @@ function statsUpsert($iblockId, $xmlId, $name, array $properties)
     return ['id' => (int)$newId, 'created' => true];
 }
 
-/** ამ თარიღის არხების ჩანაწერები, რომლებიც ახალ payload-ში აღარ არის — იშლება. */
+/** ამ თარიღის არხების ჩანაწერები, რომლებიც ახალ payload-ში აღარ არის - იშლება. */
 function statsRemoveStaleChannels($iblockId, $date, array $keepXmlIds)
 {
     $removed = 0;
@@ -303,7 +303,7 @@ function statsProcessDay(array $day, $dailyIblockId, $channelIblockId)
     $comments = isset($day['comments']) && is_array($day['comments']) ? $day['comments'] : [];
     $channels = isset($day['channels']) && is_array($day['channels']) ? $day['channels'] : [];
 
-    // არხების რიგები — ერთი და იგივე არხი ორჯერ რომ მოვიდეს, ჯამდება.
+    // არხების რიგები - ერთი და იგივე არხი ორჯერ რომ მოვიდეს, ჯამდება.
     $channelRows = [];
     foreach ($channels as $row) {
         if (!is_array($row)) {
@@ -330,7 +330,7 @@ function statsProcessDay(array $day, $dailyIblockId, $channelIblockId)
         $channelLeads += $row['leads'];
     }
 
-    // totals-ს ვენდობით; თუ არ მოვიდა — არხებიდან ვაჯამებთ.
+    // totals-ს ვენდობით; თუ არ მოვიდა - არხებიდან ვაჯამებთ.
     $conversations = statsPickInt($totals, ['conversations', 'chats', 'dialogs']);
     if ($conversations === null) {
         $conversations = statsPickInt($day, ['conversations']) ?? $channelConversations;
@@ -380,7 +380,7 @@ function statsProcessDay(array $day, $dailyIblockId, $channelIblockId)
         $saved = statsUpsert(
             $channelIblockId,
             $xmlId,
-            $date . ' — ' . $name,
+            $date . ' - ' . $name,
             [
                 'STAT_DATE'     => $date,
                 'CHANNEL'       => $name,
@@ -402,7 +402,7 @@ function statsProcessDay(array $day, $dailyIblockId, $channelIblockId)
         }
     }
 
-    // ზედმეტი არხების წაშლა მხოლოდ მაშინ, როცა payload-ში არხები საერთოდ მოვიდა —
+    // ზედმეტი არხების წაშლა მხოლოდ მაშინ, როცა payload-ში არხები საერთოდ მოვიდა -
     // არხების გარეშე გამოგზავნილმა კორექციამ არსებული ჭრილი არ უნდა წაშალოს.
     $channelsRemoved = $channelRows
         ? statsRemoveStaleChannels($channelIblockId, $date, $keepXmlIds)
@@ -440,7 +440,7 @@ $channelIblockId = statsIblockId(STATS_CHANNEL_IBLOCK_CODE);
 if ($dailyIblockId <= 0 || $channelIblockId <= 0) {
     statsRespond([
         'status'  => 500,
-        'message' => 'Stats lists are not created yet — run /custom/setup/dailoStatsLists.php',
+        'message' => 'Stats lists are not created yet - run /custom/setup/dailoStatsLists.php',
     ], 500);
 }
 
@@ -468,7 +468,7 @@ $errors  = [];
 
 foreach ($days as $day) {
     if (!is_array($day)) {
-        $errors[] = 'Invalid day entry — object expected';
+        $errors[] = 'Invalid day entry - object expected';
         continue;
     }
 

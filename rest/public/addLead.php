@@ -319,7 +319,7 @@ function leadLogApiCall(array $input, array $response, $createdDealId = null)
     $el = new CIBlockElement();
     $el->Add([
         'IBLOCK_ID'         => DAILO_LOG_IBLOCK_ID,
-        'NAME'              => 'Dailo API — ' . date('d/m/Y H:i:s'),
+        'NAME'              => 'Dailo API - ' . date('d/m/Y H:i:s'),
         'ACTIVE'            => 'Y',
         'PROPERTY_VALUES'   => [
             'JSON'          => $jsonValue,
@@ -541,7 +541,7 @@ $dealTitle = trim($firstName . ' ' . $lastName);
 if ($dealTitle === '') {
     $dealTitle = $phone;
 }
-$dealTitle = 'Dailo Lead — ' . $dealTitle;
+$dealTitle = 'Dailo Lead - ' . $dealTitle;
 
 $dealFields = array_merge($dealValues, [
     'TITLE'          => $dealTitle,

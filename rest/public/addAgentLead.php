@@ -17,7 +17,7 @@ const AGENT_LEAD_STAGE_ID       = "UC_0WHVSO";
 const AGENT_LEAD_ASSIGNED_BY_ID = 1;
 const AGENT_LEAD_WORKFLOW_ID    = 86;
 const AGENT_LEAD_SOURCE_ID      = "UC_HN9W32";
-const AGENT_LEAD_TITLE_PREFIX   = "აგენტის ფორმა — ";
+const AGENT_LEAD_TITLE_PREFIX   = "აგენტის ფორმა - ";
 // აგენტის მიერ დაფიქსირებული ნომერი ამდენი თვის შემდეგ თავისუფლდება
 const AGENT_LEAD_FIXATION_MONTHS = 3;
 const AGENT_LEAD_F_AGENCY_AGENT  = "UF_CRM_1790340288"; // string: სააგენტო/აგენტი ფორმიდან
@@ -142,7 +142,7 @@ function agentLeadFindContactIdsByPhone($phone)
         return [];
     }
 
-    // ციფრებს შორის ნებისმიერი სიმბოლო — „558 20 46 71“ ფორმატით შენახული ნომრებიც რომ მოიძებნოს
+    // ციფრებს შორის ნებისმიერი სიმბოლო - „558 20 46 71“ ფორმატით შენახული ნომრებიც რომ მოიძებნოს
     $pattern = '%' . implode('%', str_split($search)) . '%';
     $res = $DB->Query(
         "SELECT ELEMENT_ID, VALUE FROM b_crm_field_multi
@@ -209,7 +209,7 @@ function agentLeadFindDealsByPhone($phone)
     return array_values($deals);
 }
 
-/** ნომერს იკავებს მხოლოდ მიმდინარე (in progress) დილი; აგენტის დილი — დაფიქსირებიდან AGENT_LEAD_FIXATION_MONTHS თვემდე. */
+/** ნომერს იკავებს მხოლოდ მიმდინარე (in progress) დილი; აგენტის დილი - დაფიქსირებიდან AGENT_LEAD_FIXATION_MONTHS თვემდე. */
 function agentLeadDealHoldsPhone(array $deal, $fixationExpiredBefore)
 {
     if (strtoupper((string)$deal['STAGE_SEMANTIC_ID']) !== 'P') {
@@ -335,7 +335,7 @@ $agent          = agentLeadPick($input, ['agent', 'agent_name', 'agentName']);
 $agencyComment  = agentLeadPick($input, ['agency_comment', 'agencyComment', 'comment']);
 $phones         = agentLeadCollectPhones($input);
 
-// ფორმის მხრიდან ნომრის წინასწარი შემოწმება — დილი არ იქმნება
+// ფორმის მხრიდან ნომრის წინასწარი შემოწმება - დილი არ იქმნება
 if (!empty($input['check_only'])) {
     agentLeadRespond(['status' => 200, 'busyPhones' => agentLeadBusyPhones($phones)]);
 }
@@ -358,7 +358,7 @@ if ($agency === '' && $agent === '') {
     agentLeadRespond(['status' => 400, 'message' => 'მიუთითეთ სააგენტო ან აგენტი'], 400);
 }
 
-// მიმდინარე დილზე მიბმული ნომერი მხოლოდ ინფორმაციაა — დილი მაინც იქმნება.
+// მიმდინარე დილზე მიბმული ნომერი მხოლოდ ინფორმაციაა - დილი მაინც იქმნება.
 // ახალი დილის შექმნამდე ვამოწმებთ, თორემ თავად ის დაიკავებდა ნომერს.
 $busyPhones = agentLeadBusyPhones($phones);
 
@@ -480,7 +480,7 @@ $dealFields = [
     'ASSIGNED_BY_ID' => AGENT_LEAD_ASSIGNED_BY_ID,
     'OPENED'         => 'Y',
     'COMMENTS'       => $commentsHtml !== '' ? $commentsHtml : $comments,
-    // ფორმაში ჩაწერილი სააგენტო/აგენტი — ორივე თუ მიუთითეს, „სააგენტო / აგენტი“
+    // ფორმაში ჩაწერილი სააგენტო/აგენტი - ორივე თუ მიუთითეს, „სააგენტო / აგენტი“
     AGENT_LEAD_F_AGENCY_AGENT => implode(' / ', array_filter([$agency, $agent], 'strlen')),
 ];
 
@@ -502,7 +502,7 @@ if (!is_numeric($dealId) || $dealId <= 0) {
     ], 500);
 }
 
-// ტაიმლაინის კომენტარი — UI-ში ეს ჩანს, არა მხოლოდ COMMENTS ველი
+// ტაიმლაინის კომენტარი - UI-ში ეს ჩანს, არა მხოლოდ COMMENTS ველი
 $timelineCommentId = agentLeadAddTimelineComment(
     (int)$dealId,
     $comments,

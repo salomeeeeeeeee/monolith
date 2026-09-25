@@ -1,23 +1,23 @@
 <?php
 /**
- * Dailo სტატისტიკის სიების შექმნა — იდემპოტენტური სკრიპტი.
+ * Dailo სტატისტიკის სიების შექმნა - იდემპოტენტური სკრიპტი.
  *
  * URL:       https://crm.monolith.ge/custom/setup/dailoStatsLists.php
- * Rebuild:   ?rebuild=1   — ცარიელ სიებს წაშლის და თავიდან შექმნის
+ * Rebuild:   ?rebuild=1   - ცარიელ სიებს წაშლის და თავიდან შექმნის
  *
  * ქმნის ორ სიას:
- *   DAILO_STATS_DAILY   — 1 ჩანაწერი = 1 დღე
- *   DAILO_STATS_CHANNEL — 1 ჩანაწერი = დღე + არხი
+ *   DAILO_STATS_DAILY   - 1 ჩანაწერი = 1 დღე
+ *   DAILO_STATS_CHANNEL - 1 ჩანაწერი = დღე + არხი
  *
  * ველები იქმნება Lists მოდულის API-ით (CList::AddField), და არა პირდაპირ
  * CIBlockProperty::Add-ით: Lists-ს ველების საკუთარი რეგისტრი აქვს და "ნედლი"
  * თვისება ბაზაში დევს, ინტერფეისში კი არ ჩანს.
  *
  * iblock-ის პარამეტრები (ტიპი, საიტი, უფლებები, VERSION, BIZPROC...) არსებული
- * მომუშავე სიიდან — "Dailo API log" (iblock 26) — კოპირდება, რომ ახალი სიები
+ * მომუშავე სიიდან - "Dailo API log" (iblock 26) - კოპირდება, რომ ახალი სიები
  * ზუსტად ისევე მოიქცნენ.
  *
- * თარიღი განზრახ სტრიქონია YYYY-MM-DD ფორმატში — ასე სორტირება და პერიოდის
+ * თარიღი განზრახ სტრიქონია YYYY-MM-DD ფორმატში - ასე სორტირება და პერიოდის
  * ფილტრი ლექსიკოგრაფიულადვე მუშაობს, თარიღის ფორმატის გარდაქმნების გარეშე.
  */
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/header.php');
@@ -37,30 +37,30 @@ if (!is_object($USER) || !$USER->IsAdmin()) {
     die();
 }
 
-define('STATS_TEMPLATE_IBLOCK_ID', 26); // Dailo API log — პარამეტრების წყარო
+define('STATS_TEMPLATE_IBLOCK_ID', 26); // Dailo API log - პარამეტრების წყარო
 
 $rebuild = isset($_GET['rebuild']) && $_GET['rebuild'] === '1';
 
 $LISTS = [
     [
         'CODE'  => 'DAILO_STATS_DAILY',
-        'NAME'  => 'Dailo — დღიური სტატისტიკა',
+        'NAME'  => 'Dailo - დღიური სტატისტიკა',
         'PROPS' => [
             ['CODE' => 'STAT_DATE',         'NAME' => 'თარიღი (YYYY-MM-DD)',         'TYPE' => 'S'],
             ['CODE' => 'PERIOD_FROM',       'NAME' => 'პერიოდი დან',                 'TYPE' => 'S'],
             ['CODE' => 'PERIOD_TO',         'NAME' => 'პერიოდი მდე',                 'TYPE' => 'S'],
             ['CODE' => 'CONVERSATIONS',     'NAME' => 'საუბრები',                    'TYPE' => 'N'],
             ['CODE' => 'LEADS',             'NAME' => 'ლიდები',                      'TYPE' => 'N'],
-            ['CODE' => 'COMMENTS_TOTAL',    'NAME' => 'კომენტარები — სულ',           'TYPE' => 'N'],
-            ['CODE' => 'COMMENTS_ANSWERED', 'NAME' => 'კომენტარები — პასუხგაცემული', 'TYPE' => 'N'],
-            ['CODE' => 'COMMENTS_HIDDEN',   'NAME' => 'კომენტარები — დამალული',      'TYPE' => 'N'],
+            ['CODE' => 'COMMENTS_TOTAL',    'NAME' => 'კომენტარები - სულ',           'TYPE' => 'N'],
+            ['CODE' => 'COMMENTS_ANSWERED', 'NAME' => 'კომენტარები - პასუხგაცემული', 'TYPE' => 'N'],
+            ['CODE' => 'COMMENTS_HIDDEN',   'NAME' => 'კომენტარები - დამალული',      'TYPE' => 'N'],
             ['CODE' => 'RECEIVED_AT',       'NAME' => 'მიღების დრო',                 'TYPE' => 'S'],
             ['CODE' => 'RAW_JSON',          'NAME' => 'JSON (როგორც მოვიდა)',        'TYPE' => 'S', 'ROWS' => 5],
         ],
     ],
     [
         'CODE'  => 'DAILO_STATS_CHANNEL',
-        'NAME'  => 'Dailo — სტატისტიკა არხების მიხედვით',
+        'NAME'  => 'Dailo - სტატისტიკა არხების მიხედვით',
         'PROPS' => [
             ['CODE' => 'STAT_DATE',     'NAME' => 'თარიღი (YYYY-MM-DD)', 'TYPE' => 'S'],
             ['CODE' => 'CHANNEL',       'NAME' => 'არხი',                'TYPE' => 'S'],
@@ -199,7 +199,7 @@ function statsSetupFieldValues(array $property, $sort)
     return $fields;
 }
 
-/** ველის დამატება Lists-ის API-ით; თუ მოდული მიუწვდომელია — პირდაპირ თვისებად. */
+/** ველის დამატება Lists-ის API-ით; თუ მოდული მიუწვდომელია - პირდაპირ თვისებად. */
 function statsSetupAddField($obList, $iblockId, array $property, $sort, &$error)
 {
     $fields = statsSetupFieldValues($property, $sort);
@@ -249,7 +249,7 @@ foreach ($LISTS as $definition) {
 
     $iblockId = statsSetupFindIblock($definition['CODE']);
 
-    // rebuild — მხოლოდ ცარიელ სიას ვშლით, მონაცემიანს არასდროს
+    // rebuild - მხოლოდ ცარიელ სიას ვშლით, მონაცემიანს არასდროს
     if ($rebuild && $iblockId > 0) {
         if (statsSetupElementCount($iblockId) > 0) {
             $entry['ERRORS'][] = 'rebuild გამოტოვებულია: სიაში ჩანაწერებია';
@@ -293,10 +293,10 @@ foreach ($LISTS as $definition) {
             continue;
         }
 
-        // ბაზაში დევს, მაგრამ Lists-ს არ უნახავს — ცარიელ სიაში ვშლით და თავიდან ვამატებთ
+        // ბაზაში დევს, მაგრამ Lists-ს არ უნახავს - ცარიელ სიაში ვშლით და თავიდან ვამატებთ
         if (isset($propertyMap[$code])) {
             if ($elementCount > 0) {
-                $entry['ERRORS'][] = $code . ' — ნედლი თვისება რჩება (სიაში ჩანაწერებია)';
+                $entry['ERRORS'][] = $code . ' - ნედლი თვისება რჩება (სიაში ჩანაწერებია)';
                 $sort += 100;
                 continue;
             }
@@ -307,7 +307,7 @@ foreach ($LISTS as $definition) {
         if (statsSetupAddField($obList, $iblockId, $property, $sort, $error)) {
             $entry['FIELDS_ADDED'][] = $code;
         } else {
-            $entry['ERRORS'][] = $code . ' — ' . $error;
+            $entry['ERRORS'][] = $code . ' - ' . $error;
         }
 
         $sort += 100;
@@ -345,7 +345,7 @@ if (is_readable($endpointFile) && preg_match("/STATS_API_TOKEN\s*=\s*'([^']+)'/"
 
 <div class="stats-setup">
     <p>
-        <b>lists მოდული:</b> <?= $listsModule ? 'ჩატვირთულია' : '<span class="err">არ ჩაიტვირთა — ველები Lists-ში არ გამოჩნდება</span>' ?>
+        <b>lists მოდული:</b> <?= $listsModule ? 'ჩატვირთულია' : '<span class="err">არ ჩაიტვირთა - ველები Lists-ში არ გამოჩნდება</span>' ?>
         · <a href="?rebuild=1" onclick="return confirm('ცარიელი სიები წაიშლება და თავიდან შეიქმნება. გავაგრძელო?')">თავიდან აგება</a>
     </p>
 
@@ -368,17 +368,17 @@ if (is_readable($endpointFile) && preg_match("/STATS_API_TOKEN\s*=\s*'([^']+)'/"
         </tr>
         <tr>
             <th>დამატებული ველები</th>
-            <td><?= $entry['FIELDS_ADDED'] ? htmlspecialcharsbx(implode(', ', $entry['FIELDS_ADDED'])) : '—' ?></td>
+            <td><?= $entry['FIELDS_ADDED'] ? htmlspecialcharsbx(implode(', ', $entry['FIELDS_ADDED'])) : '-' ?></td>
         </tr>
         <tr>
             <th>უკვე დარეგისტრირებული</th>
-            <td><?= $entry['FIELDS_KEPT'] ? htmlspecialcharsbx(implode(', ', $entry['FIELDS_KEPT'])) : '—' ?></td>
+            <td><?= $entry['FIELDS_KEPT'] ? htmlspecialcharsbx(implode(', ', $entry['FIELDS_KEPT'])) : '-' ?></td>
         </tr>
         <tr><th>ჩანაწერები</th><td><?= (int)$entry['ELEMENTS'] ?></td></tr>
         <tr>
             <th>Lists ხედავს</th>
             <td class="<?= count($entry['LIST_FIELDS']) > 1 ? 'ok' : 'err' ?>">
-                <?= $entry['LIST_FIELDS'] ? htmlspecialcharsbx(implode(', ', $entry['LIST_FIELDS'])) : '—' ?>
+                <?= $entry['LIST_FIELDS'] ? htmlspecialcharsbx(implode(', ', $entry['LIST_FIELDS'])) : '-' ?>
             </td>
         </tr>
         <?php if (!empty($entry['ERRORS'])): ?>

@@ -4,9 +4,9 @@
  *
  * URL: https://crm.monolith.ge/custom/setup/dailoStatsListsDiag.php
  *
- * ადარებს ახლად შექმნილ სიებს (28, 29) უკვე მომუშავე სიას (26) — თვისებების
- * სვეტებსა და თვით iblock-ის ველებს — და აჩვენებს, რას ხედავს Lists მოდული.
- * მხოლოდ კითხულობს; ერთადერთი ჩარევა — ქეშის გასუფთავება (?clearcache=1).
+ * ადარებს ახლად შექმნილ სიებს (28, 29) უკვე მომუშავე სიას (26) - თვისებების
+ * სვეტებსა და თვით iblock-ის ველებს - და აჩვენებს, რას ხედავს Lists მოდული.
+ * მხოლოდ კითხულობს; ერთადერთი ჩარევა - ქეშის გასუფთავება (?clearcache=1).
  */
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/header.php');
 
@@ -17,7 +17,7 @@ $listsModule = CModule::IncludeModule('lists');
 
 global $USER, $APPLICATION;
 
-$APPLICATION->SetTitle('Dailo სტატისტიკის სიები — დიაგნოსტიკა');
+$APPLICATION->SetTitle('Dailo სტატისტიკის სიები - დიაგნოსტიკა');
 
 if (!is_object($USER) || !$USER->IsAdmin()) {
     echo '<p style="color:#c0392b">ეს გვერდი მხოლოდ ადმინისტრატორისთვისაა.</p>';
@@ -26,9 +26,9 @@ if (!is_object($USER) || !$USER->IsAdmin()) {
 }
 
 $IBLOCKS = [
-    26 => 'ეტალონი — Dailo API log (მუშა სია)',
-    28 => 'ახალი — Dailo დღიური სტატისტიკა',
-    29 => 'ახალი — Dailo სტატისტიკა არხებით',
+    26 => 'ეტალონი - Dailo API log (მუშა სია)',
+    28 => 'ახალი - Dailo დღიური სტატისტიკა',
+    29 => 'ახალი - Dailo სტატისტიკა არხებით',
 ];
 
 $clearCache = isset($_GET['clearcache']) && $_GET['clearcache'] === '1';
@@ -124,7 +124,7 @@ sort($propKeys);
         <?php foreach ($IBLOCKS as $iblockId => $label): ?>
             <?php $fields = diagListsFields($iblockId); ?>
             <tr>
-                <td><?= $iblockId ?> — <?= htmlspecialcharsbx($label) ?></td>
+                <td><?= $iblockId ?> - <?= htmlspecialcharsbx($label) ?></td>
                 <td><?= $fields === null ? 'CList კლასი მიუწვდომელია' : htmlspecialcharsbx(implode(', ', $fields)) ?></td>
             </tr>
         <?php endforeach; ?>
@@ -153,7 +153,7 @@ sort($propKeys);
         <?php endforeach; ?>
     </table>
 
-    <h2>3. თვისებების სვეტები — პირველი თვისება თითოეული სიიდან</h2>
+    <h2>3. თვისებების სვეტები - პირველი თვისება თითოეული სიიდან</h2>
     <table>
         <tr>
             <th>სვეტი</th>
@@ -178,7 +178,7 @@ sort($propKeys);
 
     <h2>4. თვისებების სია</h2>
     <?php foreach ($IBLOCKS as $iblockId => $label): ?>
-        <p><b><?= $iblockId ?> — <?= htmlspecialcharsbx($label) ?></b> (<?= count($propertyRows[$iblockId]) ?> ცალი)</p>
+        <p><b><?= $iblockId ?> - <?= htmlspecialcharsbx($label) ?></b> (<?= count($propertyRows[$iblockId]) ?> ცალი)</p>
         <table>
             <tr><th>ID</th><th>CODE</th><th>NAME</th><th>TYPE</th><th>ACTIVE</th><th>SORT</th><th>MULTIPLE</th><th>USER_TYPE</th></tr>
             <?php foreach ($propertyRows[$iblockId] as $row): ?>

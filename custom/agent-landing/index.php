@@ -8,11 +8,11 @@ $apiUrl  = '/rest/public/addAgentLead.php';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>მონოლით ჯგუფი — აგენტის ფორმა</title>
+  <title>მონოლით ჯგუფი - აგენტის ფორმა</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;500;600;700&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
-  <!-- ქვეყნების დროშები — იგივე sprite, რასაც ბიტრიქსის ტელეფონის ველი იყენებს -->
+  <!-- ქვეყნების დროშები - იგივე sprite, რასაც ბიტრიქსის ტელეფონის ველი იყენებს -->
   <link href="/bitrix/js/main/phonenumber/css/phonenumber.css" rel="stylesheet">
   <style>
     :root {
@@ -464,7 +464,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
     (function () {
       const API_URL = <?= json_encode($apiUrl, JSON_UNESCAPED_UNICODE) ?>;
 
-      // ISO + ქვეყნის კოდი — ბიტრიქსის /bitrix/js/main/phonenumber/metadata.json-დან
+      // ISO + ქვეყნის კოდი - ბიტრიქსის /bitrix/js/main/phonenumber/metadata.json-დან
       const COUNTRY_DATA = `
         AC247 AD376 AE971 AF93 AG1 AI1 AL355 AM374 AO244 AR54 AS1 AT43 AU61 AW297 AX358 AZ994
         BA387 BB1 BD880 BE32 BF226 BG359 BH973 BI257 BJ229 BL590 BM1 BN673 BO591 BQ599 BR55 BS1
@@ -510,7 +510,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
       const agencyInput = document.getElementById('agency');
       const agentInput = document.getElementById('agent');
 
-      // წინა ვერსია სააგენტოს/აგენტის ჩანაწერებს ბრაუზერში იმახსოვრებდა — ვშლით
+      // წინა ვერსია სააგენტოს/აგენტის ჩანაწერებს ბრაუზერში იმახსოვრებდა - ვშლით
       try {
         localStorage.removeItem('monolith_agent_landing_meta_v1');
       } catch (e) {}
@@ -680,7 +680,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
       countrySearch.addEventListener('input', renderCountries);
       countrySearch.addEventListener('keydown', function (event) {
         if (event.key !== 'Enter') return;
-        // Enter-მა ფორმა არ გააგზავნოს — ირჩევს პირველ ნაპოვნ ქვეყანას
+        // Enter-მა ფორმა არ გააგზავნოს - ირჩევს პირველ ნაპოვნ ქვეყანას
         event.preventDefault();
         const first = countryList.querySelector('.country-item');
         if (first) chooseCountry(first.dataset.iso);
@@ -755,7 +755,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         hint.setAttribute('aria-live', 'polite');
 
         input.addEventListener('input', function () {
-          // მხოლოდ ციფრები — აკრეფისას და ჩასმისას (paste) სხვა სიმბოლოები იშლება
+          // მხოლოდ ციფრები - აკრეფისას და ჩასმისას (paste) სხვა სიმბოლოები იშლება
           const digits = onlyDigits(input.value);
           if (digits !== input.value) {
             const caret = onlyDigits(input.value.slice(0, input.selectionStart || 0)).length;
@@ -800,7 +800,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         return digits ? '+' + rowCountry(row).code + digits : '';
       }
 
-      // სერვერის agentLeadPhoneSearchPart-ის ანალოგი — ბოლო 9 ციფრი
+      // სერვერის agentLeadPhoneSearchPart-ის ანალოგი - ბოლო 9 ციფრი
       function phoneKey(value) {
         const digits = onlyDigits(value);
         return digits.length > 9 ? digits.slice(-9) : digits;
@@ -812,7 +812,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         hint.textContent = message;
       }
 
-      // ნაპოვნი ნომერი მხოლოდ ინფორმაციაა — დილი მაინც იქმნება
+      // ნაპოვნი ნომერი მხოლოდ ინფორმაციაა - დილი მაინც იქმნება
       function markPhone(row, busy) {
         setPhoneState(
           row,
