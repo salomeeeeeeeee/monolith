@@ -161,6 +161,24 @@ $apiUrl  = '/rest/public/addAgentLead.php';
       animation: fade-in 0.25s ease both;
     }
 
+    .phone-row.busy input {
+      border-color: rgba(155, 44, 44, 0.45);
+      background: rgba(155, 44, 44, 0.04);
+    }
+
+    .phone-hint {
+      grid-column: 1 / -1;
+      margin-top: -2px;
+      font-size: 0.84rem;
+      font-weight: 500;
+      display: none;
+    }
+
+    .phone-hint.show { display: block; animation: fade-in 0.2s ease both; }
+    .phone-hint.wait { color: var(--muted); }
+    .phone-hint.ok { color: var(--ok); }
+    .phone-hint.err { color: var(--danger); }
+
     .btn-ghost,
     .btn-add,
     .btn-submit {
@@ -353,10 +371,11 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         const input = document.createElement('input');
         input.type = 'tel';
         input.name = 'phones[]';
-        input.placeholder = 'მაგ. 5XX XX XX XX';
+        input.placeholder = 'მაგ. 5XXXXXXXX';
         input.autocomplete = 'tel';
+        input.inputMode = 'numeric';
         input.required = true;
-        input.value = value;
+        input.value = onlyDigits(value);
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
@@ -370,11 +389,94 @@ $apiUrl  = '/rest/public/addAgentLead.php';
           syncRemoveButtons();
         });
 
+        const hint = document.createElement('div');
+        hint.className = 'phone-hint';
+        hint.setAttribute('aria-live', 'polite');
+
+        input.addEventListener('input', function () {
+          // მხოლოდ ციფრები — აკრეფისას და ჩასმისას (paste) სხვა სიმბოლოები იშლება
+          const digits = onlyDigits(input.value);
+          if (digits !== input.value) {
+            const caret = onlyDigits(input.value.slice(0, input.selectionStart || 0)).length;
+            input.value = digits;
+            input.setSelectionRange(caret, caret);
+          }
+          row.dataset.checked = '';
+          setPhoneState(row, '', '');
+        });
+        input.addEventListener('blur', function () {
+          checkPhone(row);
+        });
+
         row.appendChild(input);
         row.appendChild(removeBtn);
+        row.appendChild(hint);
         phonesList.appendChild(row);
         syncRemoveButtons();
         return input;
+      }
+
+      function onlyDigits(value) {
+        return String(value || '').replace(/\D+/g, '');
+      }
+
+      // სერვერის agentLeadPhoneSearchPart-ის ანალოგი — ბოლო 9 ციფრი
+      function phoneKey(value) {
+        const digits = onlyDigits(value);
+        return digits.length > 9 ? digits.slice(-9) : digits;
+      }
+
+      function setPhoneState(row, type, message) {
+        const hint = row.querySelector('.phone-hint');
+        row.classList.toggle('busy', type === 'err');
+        hint.className = 'phone-hint' + (type ? ' show ' + type : '');
+        hint.textContent = message;
+      }
+
+      function markPhone(row, busy) {
+        setPhoneState(
+          row,
+          busy ? 'err' : 'ok',
+          busy ? 'ნომერი უკვე ფიქსირდება სისტემაში' : 'ნომერი თავისუფალია'
+        );
+      }
+
+      async function checkPhone(row) {
+        const input = row.querySelector('input');
+        const key = phoneKey(input.value);
+        if (key.length < 9) {
+          setPhoneState(row, '', '');
+          return;
+        }
+        if (row.dataset.checked === key) return;
+        row.dataset.checked = key;
+        setPhoneState(row, 'wait', 'ნომერი მოწმდება...');
+
+        try {
+          const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            body: JSON.stringify({ check_only: true, phones: [input.value.trim()] })
+          });
+          const data = await response.json();
+          if (phoneKey(input.value) !== key) return;
+          if (!response.ok || data.status !== 200) throw new Error();
+          markPhone(row, (data.busyPhones || []).indexOf(key) !== -1);
+        } catch (e) {
+          if (phoneKey(input.value) !== key) return;
+          row.dataset.checked = '';
+          setPhoneState(row, '', '');
+        }
+      }
+
+      function markBusyPhones(busyPhones) {
+        phonesList.querySelectorAll('.phone-row').forEach(function (row) {
+          const key = phoneKey(row.querySelector('input').value);
+          if (busyPhones.indexOf(key) !== -1) {
+            row.dataset.checked = key;
+            markPhone(row, true);
+          }
+        });
       }
 
       function syncRemoveButtons() {
@@ -471,6 +573,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
           const data = await response.json().catch(function () { return {}; });
 
           if (!response.ok || data.status !== 200) {
+            if (Array.isArray(data.busyPhones)) markBusyPhones(data.busyPhones);
             throw new Error(data.message || 'შეცდომა დილის შექმნისას');
           }
 

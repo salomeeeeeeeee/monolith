@@ -18,6 +18,8 @@ const AGENT_LEAD_ASSIGNED_BY_ID = 1;
 const AGENT_LEAD_WORKFLOW_ID    = 86;
 const AGENT_LEAD_SOURCE_ID      = "UC_HN9W32";
 const AGENT_LEAD_TITLE_PREFIX   = "აგენტის ფორმა — ";
+// აგენტის მიერ დაფიქსირებული ნომერი ამდენი თვის შემდეგ თავისუფლდება
+const AGENT_LEAD_FIXATION_MONTHS = 3;
 
 function agentLeadRespond(array $payload, $httpCode = 200)
 {
@@ -130,29 +132,109 @@ function agentLeadCollectPhones($input)
     return $phones;
 }
 
-function agentLeadFindContactByPhone($phone)
+function agentLeadFindContactIdsByPhone($phone)
 {
+    global $DB;
+
     $search = agentLeadPhoneSearchPart($phone);
     if ($search === '') {
-        return 0;
+        return [];
     }
 
-    $res = \CCrmFieldMulti::GetList(
-        [],
-        [
-            'ENTITY_ID' => 'CONTACT',
-            'TYPE_ID'   => 'PHONE',
-            '%VALUE'    => $search,
-        ]
+    // ციფრებს შორის ნებისმიერი სიმბოლო — „558 20 46 71“ ფორმატით შენახული ნომრებიც რომ მოიძებნოს
+    $pattern = '%' . implode('%', str_split($search)) . '%';
+    $res = $DB->Query(
+        "SELECT ELEMENT_ID, VALUE FROM b_crm_field_multi
+         WHERE ENTITY_ID = 'CONTACT' AND TYPE_ID = 'PHONE' AND VALUE LIKE '" . $DB->ForSql($pattern) . "'
+         ORDER BY ELEMENT_ID"
     );
 
+    $ids = [];
     while ($row = $res->Fetch()) {
-        if (!empty($row['ELEMENT_ID'])) {
-            return (int)$row['ELEMENT_ID'];
+        // ერთ ველში რამდენიმე ნომერიც წერია („5XXXXXXXX/5XXXXXXXX“)
+        foreach (preg_split('/[\/,;]+/', (string)$row['VALUE']) as $part) {
+            if (agentLeadPhoneSearchPart($part) === $search) {
+                $ids[(int)$row['ELEMENT_ID']] = true;
+                break;
+            }
         }
     }
 
-    return 0;
+    return array_keys($ids);
+}
+
+function agentLeadFindContactByPhone($phone)
+{
+    $ids = agentLeadFindContactIdsByPhone($phone);
+    return $ids ? $ids[0] : 0;
+}
+
+function agentLeadFindDealsByPhone($phone)
+{
+    $contactIds = agentLeadFindContactIdsByPhone($phone);
+    if (empty($contactIds)) {
+        return [];
+    }
+
+    $filters = [['CONTACT_ID' => $contactIds]];
+    if (class_exists('\Bitrix\Crm\Binding\DealContactTable')) {
+        $dealIds = [];
+        $res = \Bitrix\Crm\Binding\DealContactTable::getList([
+            'select' => ['DEAL_ID'],
+            'filter' => ['@CONTACT_ID' => $contactIds],
+        ]);
+        while ($row = $res->fetch()) {
+            $dealIds[] = (int)$row['DEAL_ID'];
+        }
+        if (!empty($dealIds)) {
+            $filters[] = ['ID' => array_values(array_unique($dealIds))];
+        }
+    }
+
+    $deals = [];
+    foreach ($filters as $filter) {
+        $res = CCrmDeal::GetListEx(
+            [],
+            $filter + ['CHECK_PERMISSIONS' => 'N'],
+            false,
+            false,
+            ['ID', 'STAGE_SEMANTIC_ID', 'SOURCE_ID', 'DATE_CREATE']
+        );
+        while ($row = $res->Fetch()) {
+            $deals[(int)$row['ID']] = $row;
+        }
+    }
+
+    return array_values($deals);
+}
+
+/** ნომერს იკავებს მხოლოდ მიმდინარე (in progress) დილი; აგენტის დილი — დაფიქსირებიდან AGENT_LEAD_FIXATION_MONTHS თვემდე. */
+function agentLeadDealHoldsPhone(array $deal, $fixationExpiredBefore)
+{
+    if (strtoupper((string)$deal['STAGE_SEMANTIC_ID']) !== 'P') {
+        return false;
+    }
+    if ((string)$deal['SOURCE_ID'] === AGENT_LEAD_SOURCE_ID
+        && MakeTimeStamp((string)$deal['DATE_CREATE']) < $fixationExpiredBefore) {
+        return false;
+    }
+    return true;
+}
+
+/** ნომრები (ბოლო 9 ციფრი), რომლებიც უკვე ფიქსირდება სისტემაში. */
+function agentLeadBusyPhones(array $phones)
+{
+    $fixationExpiredBefore = strtotime('-' . AGENT_LEAD_FIXATION_MONTHS . ' months');
+    $busy = [];
+    foreach ($phones as $phone) {
+        foreach (agentLeadFindDealsByPhone($phone) as $deal) {
+            if (agentLeadDealHoldsPhone($deal, $fixationExpiredBefore)) {
+                $busy[] = agentLeadPhoneSearchPart($phone);
+                break;
+            }
+        }
+    }
+    return array_values(array_unique($busy));
 }
 
 function agentLeadGetPhones($contactId)
@@ -252,6 +334,11 @@ $agent          = agentLeadPick($input, ['agent', 'agent_name', 'agentName']);
 $agencyComment  = agentLeadPick($input, ['agency_comment', 'agencyComment', 'comment']);
 $phones         = agentLeadCollectPhones($input);
 
+// ფორმის მხრიდან ნომრის წინასწარი შემოწმება — დილი არ იქმნება
+if (!empty($input['check_only'])) {
+    agentLeadRespond(['status' => 200, 'busyPhones' => agentLeadBusyPhones($phones)]);
+}
+
 if ($clientName !== '' && ($firstName === '' && $lastName === '')) {
     $parts = preg_split('/\s+/u', $clientName, 2);
     $firstName = trim((string)($parts[0] ?? ''));
@@ -264,6 +351,16 @@ if ($firstName === '' && $lastName === '' && $clientName === '') {
 
 if (empty($phones)) {
     agentLeadRespond(['status' => 400, 'message' => 'მიუთითეთ მინიმუმ ერთი ტელეფონის ნომერი'], 400);
+}
+
+// 1 რიგში: მიმდინარე დილზე მიბმული ნომრით ახალი დილი არ იქმნება
+$busyPhones = agentLeadBusyPhones($phones);
+if (!empty($busyPhones)) {
+    agentLeadRespond([
+        'status'     => 409,
+        'message'    => (count($busyPhones) > 1 ? 'ნომრები ' : 'ნომერი ') . implode(', ', $busyPhones) . ' უკვე ფიქსირდება სისტემაში',
+        'busyPhones' => $busyPhones,
+    ], 409);
 }
 
 if ($agency === '' || $agent === '') {
