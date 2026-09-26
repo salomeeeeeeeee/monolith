@@ -2481,11 +2481,12 @@ async function exportToExcel() {
 
         const skipExport=new Set([...SKIP_CODES,"~ID","~NAME","~IBLOCK_ID","~IBLOCK_SECTION_ID","MORE_PHOTO","PREVIEW_PICTURE","DETAIL_PICTURE","~DETAIL_PICTURE","image","image2","image3","image4","image5","binis_gegmareba","render_3D","sartulis2D","binisNaxazi2D","erteulis_gegma","erteuli_render","sartulis_gegma","sartulis_render","project_pics","company_logo","threedrender","floorplan","mtavari_foto"]);
 
-        // ── Status must always be exported (it's in SKIP_CODES for the popup/filters only) ──
-        skipExport.delete("_P64GYD");
+              // ── Status and block must always be exported (they're in SKIP_CODES for the popup/filters only) ──
+              skipExport.delete("_P64GYD");
+        skipExport.delete(F_BLOCK);
 
-        const priorityKeys = ["ID","_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA","PRICE","PRICE_GEL", F_KVM_USD];
-
+        const priorityKeys = ["ID","_P64GYD","Number","__X1GCRZ","_3BU0JH", F_BLOCK,"FLOOR","TOTAL_AREA","PRICE","PRICE_GEL", F_KVM_USD];
+        
         const dataKeys = new Set();
         apts.forEach(a => Object.keys(a).forEach(k => dataKeys.add(k)));
 
@@ -2506,6 +2507,7 @@ async function exportToExcel() {
 
         const getName=code=>{
             if (code === "_P64GYD") return "სტატუსი";
+            if (code === F_BLOCK)   return "ბლოკი";
             return propertyMap[code]?.name||code;
         };
 
