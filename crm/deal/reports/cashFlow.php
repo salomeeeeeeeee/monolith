@@ -29,7 +29,7 @@ if (!empty($fromDate) && !empty($toDate)) {
 
 // All cashflow-stage deals: project options come from them, the report from the filtered subset.
 $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_CASHFLOW_STAGES], [
-    'ID', 'TITLE', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_CONTRACT_DATE,
+    'ID', 'TITLE', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_CONTRACT_DATE, D_BLOCK, D_TYPE, D_BEDROOMS,
 ]);
 $deals = array_filter($allDeals, static function ($deal) use ($project) {
     return reportValueMatches($deal[D_PROJECT] ?? '', $project);
@@ -176,6 +176,49 @@ switch ($period) {
         break;
 }
 
+// Rows by property type, grouped like the other deal reports (ბინა also split by bedrooms).
+$productsByDeal = [];
+foreach (reportGetProductsForDeals(array_keys($dealsForExcel)) as $row) {
+    $ownerDealId = reportExtractDealId($row['OWNER_DEAL'] ?? '');
+    if ($ownerDealId !== '') {
+        $productsByDeal[$ownerDealId] = $row;
+    }
+}
+
+$typeRows = [];
+foreach ($dealsForExcel as $dealId => &$dealRow) {
+    $prodType = trim((string)reportScalarProp($dealRow[D_TYPE] ?? ''));
+    if (($dealRow[D_BLOCK] ?? '') === 'P') {
+        $prodType = 'გარე ავტოსადგომი';
+    } elseif ($prodType === 'ავტოსადგომი') {
+        $prodType = 'შიდა ავტოსადგომი';
+    } elseif ($prodType === '') {
+        $prodType = 'სხვა';
+    }
+    $dealRow['_type'] = $prodType;
+
+    $rowNames = [$prodType];
+    if ($prodType === 'ბინა') {
+        $bedrooms = (string)($dealRow[D_BEDROOMS] ?? '');
+        if ($bedrooms === '') {
+            $bedrooms = (string)($productsByDeal[$dealId][F_BEDROOMS] ?? '');
+        }
+        $subType = 'ბინა (' . $bedrooms . ' საძ.)';
+        if (in_array($subType, REPORT_APARTMENT_SUBTYPES, true)) {
+            $rowNames[] = $subType;
+        }
+    }
+
+    foreach ($rowNames as $rowName) {
+        foreach ($dealRow['gadaxdebi_and_daricxvebi_by_dates'] as $key => $values) {
+            $typeRows[$rowName][$key]['daricxva'] = ($typeRows[$rowName][$key]['daricxva'] ?? 0) + ($values['daricxva'] ?? 0);
+            $typeRows[$rowName][$key]['gadaxda'] = ($typeRows[$rowName][$key]['gadaxda'] ?? 0) + ($values['gadaxda'] ?? 0);
+        }
+    }
+}
+unset($dealRow);
+$typeRows = reportSortProductTypes($typeRows);
+
 $projects = reportGetUniqueValues($allDeals, D_PROJECT);
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
@@ -207,10 +250,12 @@ reportRenderCashflowFilterForm($period, $fromDate, $toDate, $project, $projects)
         '05' => 'მაისი', '06' => 'ივნისი', '07' => 'ივლისი', '08' => 'აგვისტო',
         '09' => 'სექტემბერი', '10' => 'ოქტომბერი', '11' => 'ნოემბერი', '12' => 'დეკემბერი',
     ];
+    $t = reportGetProductLabels('ge');
     reportBlockOpen('', 'report-table--matrix');
     ?>
         <thead>
             <tr>
+                <th rowspan="2" class="col-type"><?= $t['col_type'] ?></th>
                 <?php foreach ($allDates as $date):
                     $displayDate = $date;
                     if ($period === 'month') {
@@ -234,7 +279,19 @@ reportRenderCashflowFilterForm($period, $fromDate, $toDate, $project, $projects)
             </tr>
         </thead>
         <tbody>
-            <tr>
+            <?php foreach ($typeRows as $prodType => $values):
+                $isSubRow = in_array($prodType, REPORT_APARTMENT_SUBTYPES, true);
+            ?>
+            <tr <?= $isSubRow ? 'class="sub-row"' : '' ?>>
+                <td class="col-type"><?= reportSubTypeCell($prodType, $t, $isSubRow) ?></td>
+                <?php foreach ($allDates as $date): ?>
+                    <td>$<?= number_format($values[$date]['daricxva'] ?? 0, 2, '.', ',') ?></td>
+                    <td>$<?= number_format($values[$date]['gadaxda'] ?? 0, 2, '.', ',') ?></td>
+                <?php endforeach; ?>
+            </tr>
+            <?php endforeach; ?>
+            <tr class="total-row">
+                <td class="col-type"><?= $t['col_total'] ?></td>
                 <?php foreach ($allDates as $date): ?>
                     <td>$<?= number_format($grouped_daricxvebi[$date] ?? 0, 2, '.', ',') ?></td>
                     <td>$<?= number_format($grouped_gadaxdebi[$date] ?? 0, 2, '.', ',') ?></td>
@@ -261,6 +318,7 @@ function exportTableToExcel() {
         const row = {
             'კლიენტი': deal.CONTACT_FULL_NAME || '',
             'ხელშეკრულება': deal.TITLE || '',
+            'ქონების ტიპი': deal._type || '',
             'გაფორმების თარიღი': deal['<?= D_CONTRACT_DATE ?>'] || '',
             'კონტრ. ღირებულება ($)': deal.OPPORTUNITY || 0,
             'გადაიხადა ($)': deal.payment || 0,

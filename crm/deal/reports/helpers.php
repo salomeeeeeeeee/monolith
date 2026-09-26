@@ -1983,6 +1983,18 @@ function reportCommonStyles()
             text-align: center !important;
         }
 
+        /* Type column of a wide matrix stays in view while scrolling sideways. */
+        .report-table .col-type {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            text-align: left !important;
+            white-space: nowrap;
+            box-shadow: inset -1px 0 0 var(--rp-border);
+        }
+
+        .report-table thead .col-type { z-index: 3; }
+
         .report-empty {
             text-align: center;
             padding: 28px !important;
