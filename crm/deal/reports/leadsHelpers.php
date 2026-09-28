@@ -433,19 +433,29 @@ function leadsLostFromStage(array $c, array $path, array $stages)
 
 // ── მონაცემების ჩატვირთვა ───────────────────────────────────────────────
 
+/**
+ * GetListEx და არა ძველი CCrmDeal::GetList: ძველი GetList-ის ველების რუკაში SOURCE_ID,
+ * STAGE_SEMANTIC_ID და CATEGORY_ID არ არის, select-იდან ჩუმად აგდებს და ყველა ლიდი „უცნობ“ წყაროში ხვდება.
+ */
 function leadsLoadDeals($from, $to)
 {
     $filter = [
         '>=DATE_CREATE' => ConvertTimeStamp(strtotime($from . ' 00:00:00'), 'FULL'),
         '<=DATE_CREATE' => ConvertTimeStamp(strtotime($to . ' 23:59:59'), 'FULL'),
         'CATEGORY_ID' => LEADS_CATEGORY_ID,
+        'CHECK_PERMISSIONS' => 'N',
     ];
     $select = [
-        'ID', 'TITLE', 'DATE_CREATE', 'STAGE_ID', 'STAGE_SEMANTIC_ID',
+        'ID', 'TITLE', 'DATE_CREATE', 'STAGE_ID', 'STAGE_SEMANTIC_ID', 'CATEGORY_ID',
         'ASSIGNED_BY_ID', 'CREATED_BY_ID', 'CONTACT_ID', 'SOURCE_ID', 'OPPORTUNITY',
         D_PROJECT, D_TYPE, D_LOSS_REASON_SALES, D_LOSS_REASON_DETAIL, D_LOSS_REASON_CC,
     ];
-    return reportGetDealsByFilter($filter, $select, ['DATE_CREATE' => 'ASC', 'ID' => 'ASC']);
+    $deals = [];
+    $res = CCrmDeal::GetListEx(['DATE_CREATE' => 'ASC', 'ID' => 'ASC'], $filter, false, false, $select);
+    while ($deal = $res->Fetch()) {
+        $deals[(int)$deal['ID']] = $deal;
+    }
+    return $deals;
 }
 
 /** @param array $projects selected projects; empty = all */
