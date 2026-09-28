@@ -655,14 +655,18 @@ ob_end_clean();
 }
 
 #backBtn {
-    padding:5px 14px; margin-right:6px;
-    border:1px solid var(--border2); border-radius:var(--radius);
-    background:var(--bg3); color:var(--text2);
-    font-size:11px; font-weight:600; font-family:var(--body);
+    padding:6px 16px; margin-right:8px;
+    border:1px solid var(--accent); border-radius:var(--radius);
+    background:var(--accent); color:#fff;
+    font-size:12px; font-weight:700; font-family:var(--body);
     cursor:pointer; transition:all .2s;
+    box-shadow:0 2px 8px var(--accent-glow);
 }
-#backBtn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
-
+#backBtn:hover {
+    background:var(--accent2); border-color:var(--accent2);
+    box-shadow:0 4px 14px var(--accent-glow);
+    transform:translateY(-1px);
+}
 #block-labels div {
     background: var(--accent-dim);
     border: 1px solid rgba(59,91,219,.2);
@@ -737,7 +741,7 @@ ob_end_clean();
     <!-- MAIN AREA -->
     <div style="flex-grow:1;min-width:0;max-width:94%;display:flex;flex-direction:column;gap:10px;">
         <div id="legendBar">
-        <button id="backBtn" type="button" style="display:none;">← უკან</button>
+        <button id="backBtn" type="button" style="display:none;">← მთავარი გვერდი</button>
     <div class="legend-item status-active-frame">
             <div class="legend-item status-active-frame"><span class="legend-color status-active"></span> თავისუფალი <span class="legend-count" id="count-active">0</span></div>
             <div class="legend-item status-reserved-frame"><span class="legend-color status-reserved"></span> დაჯავშნილი <span class="legend-count" id="count-reserved">0</span></div>
@@ -956,7 +960,7 @@ if (!openedOnDeal) {
         if (sameOrigin && history.length > 1) {
             history.back();
         } else {
-            location.href = "/crm/deal/";
+            location.href = "/crm/deal/mainpage.php";
         }
     });
 }
