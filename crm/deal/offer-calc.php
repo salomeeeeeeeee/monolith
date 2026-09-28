@@ -324,8 +324,27 @@ if (count($z)) $zfoto = CFile::GetPath($z[0]["PHOTO"]);
 
     .floorplan img, .threeDRender img, .sartulinew img,
     .mtavari_foto img, .xedi_1 img, .xedi_2 img, .xedi_3 img {
-        width: 100%; height: auto;
+        width: 50%; height: auto;
     }
+
+    .mtavari_foto,
+.sartulinew,
+.floorplan {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    text-align: center;
+}
+
+.mtavari_foto img,
+.sartulinew img,
+.floorplan img {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+}
 
     /* ── PDF ღილაკი ── */
     .pdf-export-btn {

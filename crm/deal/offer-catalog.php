@@ -538,7 +538,7 @@ if (count($bade)) {
     }
 
     .floorplan img {
-        width: 100%;
+        width: 50%;
         height: auto;
     }
 
@@ -553,7 +553,7 @@ if (count($bade)) {
     }
 
     .mtavari_foto img {
-        width: 100%;
+        width: 50%;
         height: auto;
     }
 
@@ -605,6 +605,26 @@ if (count($bade)) {
             display: none !important;
         }
     }
+
+    .mtavari_foto,
+.sartulinew,
+.floorplan {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    text-align: center;
+}
+
+.mtavari_foto img,
+.sartulinew img,
+.floorplan img {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+}
+
 </style>
 
 <!-- PDF Export Button -->

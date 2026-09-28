@@ -243,7 +243,28 @@ if (count($z)) $zfoto = CFile::GetPath($z[0]["PHOTO"]);
     .summary-pill span { color: #95c084; font-weight: bold; margin-left: 6px; }
 
     .floorplan img, .threeDRender img, .sartulinew img,
-    .mtavari_foto img, .xedi_1 img, .xedi_2 img, .xedi_3 img { width: 100%; height: auto; }
+    .mtavari_foto img, .xedi_1 img, .xedi_2 img, .xedi_3 img { width: 50%; height: auto; }
+
+
+/* Center main photo, floor and floor plan */
+.mtavari_foto,
+.sartulinew,
+.floorplan {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    text-align: center;
+}
+
+.mtavari_foto img,
+.sartulinew img,
+.floorplan img {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+}
 
     /* ── PDF Button ── */
     .pdf-export-btn {
