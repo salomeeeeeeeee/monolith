@@ -14,6 +14,9 @@ define('F_BEDROOMS', '__KYRP1L');
 define('F_KVM_PRICE', '__6ZWTER');
 define('F_UNIT_NO', '__6KWOWZ');
 define('F_FLOOR', '_FTRIDL');
+define('F_CADASTRAL', '__51MODL');
+define('F_INNER_AREA', '__US58ND');
+define('F_PROJECT_CODE', 'PROJECT_CODE');
 
 define('D_PROJECT', 'UF_CRM_1779277729207');
 define('D_BLOCK', 'UF_CRM_1779277644355');
@@ -24,12 +27,25 @@ define('D_BARTER', 'UF_CRM_1774878761');
 define('D_KVM_PRICE', 'UF_CRM_1779277671391');
 define('D_BARTER_YES', '420');
 define('D_BARTER_NO', '421');
+define('D_CADASTRAL', 'UF_CRM_1782206163787');
+define('D_INNER_AREA', 'UF_CRM_1779277919090');
+define('D_PHASE', 'UF_CRM_1764317005');
+define('D_OLD_BUYER', 'UF_CRM_1787819849026'); // მყიდველი ძველი ბაზისთვის (deals without a contact)
+
+define('C_PERSONAL_ID', 'UF_CRM_1781244744534');
+
+// List 30 "ბუღალტერიის აიდი": Deal => BuxalteriisId.
+define('REPORT_BUX_IBLOCK', 30);
+// PLAN_TYPE of the first and last rows of a payment schedule (list 22); installments are 1..N.
+define('REPORT_PLAN_FIRST', 'პირველადი შენატანი');
+define('REPORT_PLAN_LAST', 'ბოლო შენატანი');
 
 define('REPORT_WON_STAGE', 'WON');
 define('REPORT_CASHFLOW_STAGES', ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON']);
 define('REPORT_RESERVED_STATUS', 'დაჯავშნილი');
 define('REPORT_RESERVATION_STAGES', ['PREPAYMENT_INVOICE', 'FINAL_INVOICE']);
-define('D_RESERVATION_DATE', 'UF_CRM_1779278567041');
+define('D_RESERVATION_DATE', 'UF_CRM_1779278567041'); // დარეზერვებულია თარიღამდე
+define('D_RESERVATION_START', 'UF_CRM_1779278590201'); // დარეზერვების თარიღი
 
 define('D_LOSS_REASON_SALES', 'UF_CRM_1775227151');
 define('D_LOSS_REASON_DETAIL', 'UF_CRM_1775227164');

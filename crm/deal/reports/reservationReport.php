@@ -36,6 +36,7 @@ $t = array_merge($t, [
     'xls_price_sqm' => $lang === 'eng' ? 'Price per sqm ($)' : 'ფასი კვ.მ-ზე ($)',
     'xls_price' => $lang === 'eng' ? 'Total Price ($)' : 'ჯამური ღირებულება ($)',
     'xls_resp' => $lang === 'eng' ? 'Responsible' : 'პასუხისმგებელი',
+    'xls_reserved_on' => $lang === 'eng' ? 'Reservation Date' : 'დაჯავშნის თარიღი',
     'xls_reserved_until' => $lang === 'eng' ? 'Reserved Until' : 'დაჯავშნილია თარიღამდე',
     'xls_stage' => $lang === 'eng' ? 'Reservation Type' : 'რეზერვაციის ტიპი',
 ]);
@@ -57,6 +58,7 @@ $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_RESERVATION_STAGES], [
     D_BLOCK,
     D_TYPE,
     D_BEDROOMS,
+    D_RESERVATION_START,
     D_RESERVATION_DATE,
 ]);
 $deals = array_filter($allDeals, static function ($deal) use ($filterProject, $filterBlock, $filterResponsible) {
@@ -242,6 +244,7 @@ const prodTypeMap = <?= json_encode($t['prod_types'], JSON_UNESCAPED_UNICODE) ?>
 const typeField = <?= json_encode(D_TYPE) ?>;
 const projectField = <?= json_encode(D_PROJECT) ?>;
 const blockField = <?= json_encode(D_BLOCK) ?>;
+const startField = <?= json_encode(D_RESERVATION_START) ?>;
 const dateField = <?= json_encode(D_RESERVATION_DATE) ?>;
 
 function translateType(name) { return prodTypeMap[name] || name; }
@@ -288,6 +291,7 @@ function exportToExcel() {
         { key: 'KVM_PRICE', label: t.xls_price_sqm },
         { key: 'AMOUNT', label: t.xls_price },
         { key: 'RESPONSIBLE_NAME', label: t.xls_resp },
+        { key: startField, label: t.xls_reserved_on },
         { key: dateField, label: t.xls_reserved_until },
         { key: 'STAGE_LABEL', label: t.xls_stage },
     ];

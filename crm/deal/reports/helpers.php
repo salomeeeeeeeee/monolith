@@ -169,6 +169,39 @@ function reportBatchContactNames(array $ids)
     return $result;
 }
 
+/** Contact ID => ['NAME', 'PERSONAL_ID', 'PHONE' (first one)]. */
+function reportBatchContactDetails(array $ids)
+{
+    $details = [];
+    $ids = array_values(array_filter(array_map('intval', $ids)));
+    foreach (array_chunk($ids, 500) as $chunk) {
+        $res = CCrmContact::GetList(
+            [],
+            ['ID' => $chunk, 'CHECK_PERMISSIONS' => 'N'],
+            ['ID', 'NAME', 'LAST_NAME', C_PERSONAL_ID]
+        );
+        while ($row = $res->Fetch()) {
+            $details[(int)$row['ID']] = [
+                'NAME' => trim(($row['NAME'] ?? '') . ' ' . ($row['LAST_NAME'] ?? '')),
+                'PERSONAL_ID' => trim((string)($row[C_PERSONAL_ID] ?? '')),
+                'PHONE' => '',
+            ];
+        }
+
+        $res = CCrmFieldMulti::GetList(
+            ['ID' => 'ASC'],
+            ['ENTITY_ID' => 'CONTACT', 'ELEMENT_ID' => $chunk, 'TYPE_ID' => 'PHONE']
+        );
+        while ($row = $res->Fetch()) {
+            $id = (int)$row['ELEMENT_ID'];
+            if (isset($details[$id]) && $details[$id]['PHONE'] === '') {
+                $details[$id]['PHONE'] = trim((string)$row['VALUE']);
+            }
+        }
+    }
+    return $details;
+}
+
 function reportBatchBasePrices(array $productIds)
 {
     $prices = [];
@@ -235,6 +268,9 @@ function reportProductPropertyCodes()
         F_KVM_PRICE,
         F_UNIT_NO,
         F_FLOOR,
+        F_CADASTRAL,
+        F_INNER_AREA,
+        F_PROJECT_CODE,
         'OWNER_DEAL',
         'ownerDeal',
         'OWNER_CONTACT',
@@ -260,7 +296,7 @@ function reportMapProductFetchRow(array $fields, array $props = [])
         'NAME' => $fields['~NAME'] ?? ($fields['NAME'] ?? ''),
     ];
 
-    // Prefer GetProperties() — CRM bind fields (ownerDeal) are often empty via PROPERTY_* GetNext.
+    // Prefer GetProperties() - CRM bind fields (ownerDeal) are often empty via PROPERTY_* GetNext.
     if (!empty($props)) {
         foreach (reportProductPropertyCodes() as $code) {
             if (!isset($props[$code])) {
@@ -322,7 +358,8 @@ function reportGetProducts($arFilter = [])
     ], $arFilter);
 
     // v2: load CRM-bind props via GetProperties (ownerDeal was empty with PROPERTY_* GetNext)
-    $cacheKey = 'products_v2_' . md5(serialize($filter));
+    // v4: + cadastral code, inner area, project code
+    $cacheKey = 'products_v4_' . md5(serialize($filter));
     if (isset($runtime[$cacheKey])) {
         return $runtime[$cacheKey];
     }
@@ -474,6 +511,7 @@ function reportEnrichReservationMeta(array $products)
 /**
  * Attach bedroom count, barter and deal-side pricing from linked OWNER_DEAL onto product rows.
  * Adds DEAL_PRICE (deal amount, OPPORTUNITY) and DEAL_KVM_PRICE (deal price per sqm).
+ * DEAL_RESPONSIBLE_NAME falls back to the deal's responsible: most products carry none.
  */
 function reportEnrichDealBedrooms(array $products)
 {
@@ -486,16 +524,19 @@ function reportEnrichDealBedrooms(array $products)
     }
 
     $dealMeta = [];
+    $userIds = [];
     if (!empty($dealIds)) {
         $res = CCrmDeal::GetList(
             ['ID' => 'ASC'],
             ['ID' => array_keys($dealIds), 'CHECK_PERMISSIONS' => 'N'],
-            ['ID', 'OPPORTUNITY', D_BEDROOMS, D_BARTER, D_KVM_PRICE]
+            ['ID', 'OPPORTUNITY', 'ASSIGNED_BY_ID', D_BEDROOMS, D_BARTER, D_KVM_PRICE]
         );
         while ($row = $res->Fetch()) {
             $dealMeta[(string)$row['ID']] = $row;
+            $userIds[(int)$row['ASSIGNED_BY_ID']] = true;
         }
     }
+    $userNames = reportBatchUserNames(array_keys($userIds));
 
     foreach ($products as $id => $product) {
         $dealId = reportExtractProductOwnerDealId($product);
@@ -504,6 +545,194 @@ function reportEnrichDealBedrooms(array $products)
         $products[$id][D_BARTER] = $meta ? (string)($meta[D_BARTER] ?? '') : '';
         $products[$id]['DEAL_PRICE'] = $meta ? reportParseAmount($meta['OPPORTUNITY'] ?? '') : 0;
         $products[$id]['DEAL_KVM_PRICE'] = $meta ? reportParseAmount($meta[D_KVM_PRICE] ?? '') : 0;
+        if (($product['DEAL_RESPONSIBLE_NAME'] ?? '') === '' && $meta) {
+            $products[$id]['DEAL_RESPONSIBLE_NAME'] = $userNames[(int)$meta['ASSIGNED_BY_ID']] ?? '';
+        }
+    }
+
+    return $products;
+}
+
+/**
+ * First payment, last payment and installment rows of one deal's schedule (list 22), by date.
+ * Rows carry PLAN_TYPE "პირველადი შენატანი" / 1..N / "ბოლო შენატანი". Older imports carry
+ * no type at all: then the earliest row is the first payment and the latest one the last.
+ *
+ * @param array $rows ['type' => PLAN_TYPE, 'date' => ?DateTime, 'amount' => float]
+ * @return array [first row or null, last row or null, installment rows]
+ */
+function reportSplitSchedule(array $rows)
+{
+    usort($rows, static function ($a, $b) {
+        $ta = $a['date'] ? $a['date']->getTimestamp() : PHP_INT_MAX;
+        $tb = $b['date'] ? $b['date']->getTimestamp() : PHP_INT_MAX;
+        return $ta <=> $tb;
+    });
+
+    $first = null;
+    $last = null;
+    $installments = [];
+    $typed = false;
+    foreach ($rows as $row) {
+        if ($row['type'] === REPORT_PLAN_FIRST) {
+            $first = $first ?: $row;
+        } elseif ($row['type'] === REPORT_PLAN_LAST) {
+            $last = $row;
+        } else {
+            $installments[] = $row;
+        }
+        $typed = $typed || $row['type'] !== '';
+    }
+
+    if (!$typed && $installments) {
+        $first = array_shift($installments);
+        $last = array_pop($installments);
+    }
+
+    return [$first, $last, $installments];
+}
+
+/**
+ * Contract and payment columns of the sales report Excel: accounting ID (list 30), buyer,
+ * contract date and status, first/last payment and installment period (list 22),
+ * planned vs paid (list 23) and debt. Expects rows from reportEnrichDealBedrooms().
+ * Amounts are USD; percentages are of the contract value (DEAL_PRICE).
+ */
+function reportEnrichSoldExport(array $products, $lang = 'ge')
+{
+    $dealIds = [];
+    foreach ($products as $product) {
+        $dealId = reportExtractProductOwnerDealId($product);
+        if ($dealId !== '') {
+            $dealIds[$dealId] = true;
+        }
+    }
+    $dealIds = array_keys($dealIds);
+
+    $deals = [];
+    if (!empty($dealIds)) {
+        $res = CCrmDeal::GetList(
+            ['ID' => 'ASC'],
+            ['ID' => $dealIds, 'CHECK_PERMISSIONS' => 'N'],
+            ['ID', 'STAGE_ID', 'CONTACT_ID', D_CONTRACT_DATE, D_PHASE, D_CADASTRAL, D_INNER_AREA, D_OLD_BUYER]
+        );
+        while ($row = $res->Fetch()) {
+            $deals[(string)$row['ID']] = $row;
+        }
+    }
+
+    // Buyer: the deal's contact, else the product's owner contact, else the old-base name on the deal.
+    $contactOf = [];
+    foreach ($products as $id => $product) {
+        $dealId = reportExtractProductOwnerDealId($product);
+        $contactId = (int)($deals[$dealId]['CONTACT_ID'] ?? 0);
+        if ($contactId <= 0) {
+            $ownerContact = ($product['OWNER_PERSONAL_CONTACT'] ?? '') ?: ($product['OWNER_CONTACT'] ?? '');
+            $contactId = (int)reportExtractDealId($ownerContact);
+        }
+        $contactOf[$id] = $contactId;
+    }
+    $contacts = reportBatchContactDetails(array_unique(array_values($contactOf)));
+
+    $buxIds = [];
+    foreach (reportLoadAllIblockPropertyRows(REPORT_BUX_IBLOCK) as $row) {
+        $dealId = reportExtractDealId($row['Deal'] ?? '');
+        if ($dealId !== '' && !isset($buxIds[$dealId])) {
+            $buxIds[$dealId] = $row['BuxalteriisId'] ?? '';
+        }
+    }
+
+    $schedules = [];
+    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds) as $row) {
+        $schedules[$row['_DEAL_ID']][] = [
+            'type' => trim((string)($row['PLAN_TYPE'] ?? '')),
+            'date' => reportParseDate($row['TARIGI'] ?? ''),
+            'amount' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
+        ];
+    }
+    $payments = [];
+    foreach (reportLoadIblockRowsForDeals(REPORT_PAYMENT_IBLOCK, $dealIds) as $row) {
+        $payments[$row['_DEAL_ID']][] = [
+            'date' => reportParseDate($row['date'] ?? ($row['TARIGI'] ?? '')),
+            'amount' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
+        ];
+    }
+
+    $monthEnd = (new DateTime('today'))->modify('last day of this month');
+    $prevMonthEnd = (new DateTime('today'))->modify('last day of previous month');
+    $statusLabels = $lang === 'eng'
+        ? ['WON' => 'Active', 'LOSE' => 'Cancelled']
+        : ['WON' => 'აქტიური', 'LOSE' => 'გაუქმებული'];
+    $stageNames = CCrmStatus::GetStatusList('DEAL_STAGE');
+    $formatDate = static function ($row) {
+        return ($row && $row['date']) ? $row['date']->format('d/m/Y') : '';
+    };
+
+    foreach ($products as $id => $product) {
+        $dealId = reportExtractProductOwnerDealId($product);
+        $deal = $deals[$dealId] ?? [];
+        $contact = $contacts[$contactOf[$id]] ?? [];
+        $contract = (float)($product['DEAL_PRICE'] ?? 0);
+        $percent = static function ($amount) use ($contract) {
+            return $contract > 0 ? round($amount / $contract * 100, 2) : '';
+        };
+
+        $planToMonth = $planToPrev = 0;
+        foreach ($schedules[$dealId] ?? [] as $row) {
+            if ($row['date'] && $row['date'] <= $monthEnd) {
+                $planToMonth += $row['amount'];
+            }
+            if ($row['date'] && $row['date'] <= $prevMonthEnd) {
+                $planToPrev += $row['amount'];
+            }
+        }
+        $paidToMonth = $paidToPrev = $paidTotal = 0;
+        foreach ($payments[$dealId] ?? [] as $row) {
+            $paidTotal += $row['amount'];
+            if ($row['date'] && $row['date'] <= $monthEnd) {
+                $paidToMonth += $row['amount'];
+            }
+            if ($row['date'] && $row['date'] <= $prevMonthEnd) {
+                $paidToPrev += $row['amount'];
+            }
+        }
+
+        list($first, $last, $installments) = reportSplitSchedule($schedules[$dealId] ?? []);
+        $installmentDates = array_values(array_filter(array_map($formatDate, $installments)));
+
+        $stage = (string)($deal['STAGE_ID'] ?? '');
+        $cadastral = trim((string)($product[F_CADASTRAL] ?? ''));
+        $innerArea = trim((string)($product[F_INNER_AREA] ?? ''));
+
+        $products[$id] = array_merge($product, [
+            'BUX_ID' => $buxIds[$dealId] ?? '',
+            'PROJECT_CODE' => trim((string)($product[F_PROJECT_CODE] ?? '')),
+            'CONTRACT_DATE' => (string)($deal[D_CONTRACT_DATE] ?? ''),
+            'BUYER' => ($contact['NAME'] ?? '') !== ''
+                ? $contact['NAME']
+                : trim((string)($deal[D_OLD_BUYER] ?? '')),
+            'BUYER_ID' => $contact['PERSONAL_ID'] ?? '',
+            'BUYER_PHONE' => $contact['PHONE'] ?? '',
+            'CONTRACT_STATUS' => $statusLabels[$stage] ?? ($stageNames[$stage] ?? $stage),
+            'CADASTRAL' => $cadastral !== '' ? $cadastral : trim((string)($deal[D_CADASTRAL] ?? '')),
+            'PHASE' => trim((string)($deal[D_PHASE] ?? '')),
+            'INNER_AREA' => $innerArea !== '' ? $innerArea : trim((string)($deal[D_INNER_AREA] ?? '')),
+            'FIRST_PAY_DATE' => $formatDate($first),
+            'FIRST_PAY_AMOUNT' => $first ? $first['amount'] : '',
+            'FIRST_PAY_PCT' => $first ? $percent($first['amount']) : '',
+            'PLAN_TO_MONTH' => round($planToMonth, 2),
+            'PAID_TO_MONTH' => round($paidToMonth, 2),
+            'DEBT' => round($planToMonth - $paidToMonth, 2),
+            'DEBT_PREV' => round($planToPrev - $paidToPrev, 2),
+            'PAID_PCT' => $percent($paidTotal),
+            'REMAINING' => $contract > 0 ? round($contract - $paidTotal, 2) : '',
+            'LAST_PAY_DATE' => $formatDate($last),
+            'LAST_PAY_AMOUNT' => $last ? $last['amount'] : '',
+            'LAST_PAY_PCT' => $last ? $percent($last['amount']) : '',
+            'INSTALLMENTS' => $installmentDates
+                ? $installmentDates[0] . ' - ' . $installmentDates[count($installmentDates) - 1]
+                : '',
+        ]);
     }
 
     return $products;
@@ -684,7 +913,7 @@ function reportLoadAllIblockPropertyRows($iblockId, array $sort = ['ID' => 'ASC'
         return [];
     }
 
-    // Always load by ID — Bitrix property-sort + pagination skips/duplicates rows.
+    // Always load by ID - Bitrix property-sort + pagination skips/duplicates rows.
     $cacheKey = 'iblock_rows_v3_' . $iblockId;
     if (isset($runtime[$cacheKey])) {
         return $runtime[$cacheKey];
@@ -1222,6 +1451,19 @@ function reportRenderCashflowFilterForm($period, $fromDate, $toDate, $project, $
         </form>
     </section>
     <?php
+}
+
+/** Answers the request with JSON instead of the page (drops everything buffered so far). */
+function reportSendJson($data)
+{
+    global $APPLICATION;
+    $APPLICATION->RestartBuffer();
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    die();
 }
 
 function reportPageBegin($title, $subtitle = '', $lang = 'ge')
