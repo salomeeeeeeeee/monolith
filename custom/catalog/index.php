@@ -654,6 +654,15 @@ ob_end_clean();
     margin-bottom: 4px;
 }
 
+#backBtn {
+    padding:5px 14px; margin-right:6px;
+    border:1px solid var(--border2); border-radius:var(--radius);
+    background:var(--bg3); color:var(--text2);
+    font-size:11px; font-weight:600; font-family:var(--body);
+    cursor:pointer; transition:all .2s;
+}
+#backBtn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
+
 #block-labels div {
     background: var(--accent-dim);
     border: 1px solid rgba(59,91,219,.2);
@@ -728,6 +737,8 @@ ob_end_clean();
     <!-- MAIN AREA -->
     <div style="flex-grow:1;min-width:0;max-width:94%;display:flex;flex-direction:column;gap:10px;">
         <div id="legendBar">
+        <button id="backBtn" type="button" style="display:none;">← უკან</button>
+    <div class="legend-item status-active-frame">
             <div class="legend-item status-active-frame"><span class="legend-color status-active"></span> თავისუფალი <span class="legend-count" id="count-active">0</span></div>
             <div class="legend-item status-reserved-frame"><span class="legend-color status-reserved"></span> დაჯავშნილი <span class="legend-count" id="count-reserved">0</span></div>
             <div class="legend-item status-sold-frame"><span class="legend-color status-sold"></span> გაყიდული <span class="legend-count" id="count-sold">0</span></div>
@@ -926,6 +937,30 @@ if (openedOnDeal) {
         products.forEach(apt => pb.appendChild(makeDealTile(apt)));
     }
 }
+
+// ── Back button (only when opened without a deal) ──
+if (!openedOnDeal) {
+    const backBtn = document.getElementById("backBtn");
+    backBtn.style.display = "";
+    backBtn.addEventListener("click", () => {
+        // If opened inside a Bitrix slider, close it
+        try {
+            if (window.top !== window && window.top.BX?.SidePanel?.Instance?.getTopSlider()) {
+                window.top.BX.SidePanel.Instance.getTopSlider().close();
+                return;
+            }
+        } catch (e) {}
+
+        // Go back if we came from a page on this portal, otherwise use the fallback
+        const sameOrigin = document.referrer && new URL(document.referrer).origin === location.origin;
+        if (sameOrigin && history.length > 1) {
+            history.back();
+        } else {
+            location.href = "/crm/deal/";
+        }
+    });
+}
+
 
 function makeDealTile(apt) {
     const tile = document.createElement("div");
