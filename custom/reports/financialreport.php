@@ -374,7 +374,7 @@ function fmtMoney($n, $cur) {
 
     <div class="fr-head">
         <div>
-            <div class="fr-head__label">Financial card</div>
+            <div class="fr-head__label">ფინანსური ბარათი</div>
             <a class="fr-head__title" href="<?php echo $href; ?>" target="_blank"><?php echo htmlspecialchars($dealData["TITLE"] ?? ""); ?></a>
         </div>
         <button class="fr-btn" onclick="exportTableToExcel()">
