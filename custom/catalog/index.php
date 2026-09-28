@@ -742,7 +742,6 @@ ob_end_clean();
     <div style="flex-grow:1;min-width:0;max-width:94%;display:flex;flex-direction:column;gap:10px;">
         <div id="legendBar">
         <button id="backBtn" type="button" style="display:none;">← მთავარი გვერდი</button>
-    <div class="legend-item status-active-frame">
             <div class="legend-item status-active-frame"><span class="legend-color status-active"></span> თავისუფალი <span class="legend-count" id="count-active">0</span></div>
             <div class="legend-item status-reserved-frame"><span class="legend-color status-reserved"></span> დაჯავშნილი <span class="legend-count" id="count-reserved">0</span></div>
             <div class="legend-item status-sold-frame"><span class="legend-color status-sold"></span> გაყიდული <span class="legend-count" id="count-sold">0</span></div>
@@ -761,7 +760,7 @@ ob_end_clean();
         <div id="apsDisplayWrapper">
         <div id="apsOuter" style="display:flex;">
     <div id="floors"></div>
-    <div id="apsDisplay">იტვირთება...</div>
+    <div id="apsDisplay"></div>
 </div>
         </div>
         <div id="gareAvtosadgomebi"></div>
@@ -1029,7 +1028,7 @@ projectSelect.addEventListener("change", function() {
     if (_fetchController) _fetchController.abort();
     _fetchController = new AbortController();
 
-    document.getElementById("apsDisplay").innerHTML = "იტვირთება...";
+    document.getElementById("apsDisplay").innerHTML = "";
 
     fetch(`/rest/local/api/projects/get.php?projId=${projId}`, { signal: _fetchController.signal })
         .then(r => r.json())
@@ -2430,9 +2429,27 @@ document.getElementById("saveBtn")?.addEventListener("click", () => {
                     .map(el => Number(el.dataset.id))
                     .filter(Boolean);
 
+    // ── 1. A flat is selected in the popup but "დამატება" wasn't pressed ──
+    const popupOpen   = document.getElementById("apartmentPopup").classList.contains("active");
+    const selectedId  = document.getElementById("popupTitle").dataset.id;
+    const selectedInBox = selectedId && !!document.querySelector(`#productsBox .apt[data-id="${selectedId}"]`);
+    if (popupOpen && selectedId && !selectedInBox && !isDeletingOnly) {
+        alert("არჩეული ბინა არ არის დამატებული. გთხოვთ დააჭიროთ ღილაკს „დამატება“.");
+        return;
+    }
+
+    // ── 2. Nothing added at all (box empty or unchanged) ──
+    const initialIds = productsIds.map(Number).sort().join(",");
+    const currentIds = [...ids].sort().join(",");
+    if (!isDeletingOnly && (ids.length === 0 || currentIds === initialIds)) {
+        alert("ბინა არ არის დამატებული.");
+        return;
+    }
+
     sb.disabled = true; sb.textContent = "..."; sb.style.opacity = ".6";
 
     fetch(`/rest/local/api/projects/saveApartment.php?deal_id=${dealID}&productIds=${ids.join(",")}`)
+
         .then(r => r.json())
         .then(data => {
             console.log("saveApartment response:", data, "isDeletingOnly:", isDeletingOnly);
