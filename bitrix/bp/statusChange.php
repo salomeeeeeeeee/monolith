@@ -29,6 +29,42 @@ if (!function_exists('dealIdsMatch')) {
     }
 }
 
+if (!function_exists('productOwnedByDeal')) {
+    /**
+     * პროდუქტის მფლობელი დილი — მხარს უჭერს ორივე property კოდს
+     * (ownerDeal და OWNER_DEAL), რადგან allocation/კატალოგი სხვადასხვას წერდა.
+     */
+    function productOwnedByDeal($element, $dealID)
+    {
+        return dealIdsMatch($element["ownerDeal"] ?? "", $dealID)
+            || dealIdsMatch($element["OWNER_DEAL"] ?? "", $dealID);
+    }
+}
+
+if (!function_exists('setProductOwnerFields')) {
+    function setProductOwnerFields($element, $dealID, $contactId = "", $responsibleId = "")
+    {
+        $element["ownerDeal"]              = $dealID;
+        $element["OWNER_DEAL"]             = $dealID;
+        $element["ownerContact"]           = $contactId;
+        $element["OWNER_PERSONAL_CONTACT"] = $contactId;
+        $element["DEAL_RESPONSIBLE"]       = $responsibleId;
+        return $element;
+    }
+}
+
+if (!function_exists('clearProductOwnerFields')) {
+    function clearProductOwnerFields($element)
+    {
+        $element["ownerDeal"]              = "";
+        $element["OWNER_DEAL"]             = "";
+        $element["ownerContact"]           = "";
+        $element["OWNER_PERSONAL_CONTACT"] = "";
+        $element["DEAL_RESPONSIBLE"]       = "";
+        return $element;
+    }
+}
+
 if (!function_exists('getCIBlockElementByID')) {
     /**
      * Returns a single flat property array for the given element ID,
@@ -178,7 +214,7 @@ if (!function_exists('new_stage')) {
                 $element["QUEUE"] .= "|$dealID";
             }
  
-            if (dealIdsMatch($element["ownerDeal"], $dealID)) {
+            if (productOwnedByDeal($element, $dealID)) {
                 $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
                 sendNotificationToQueue($element["QUEUE"], $notification);
                 sendNotificationToResponsible($dealID, $notification);
@@ -186,10 +222,8 @@ if (!function_exists('new_stage')) {
                 // Remove this deal from the queue since it's being released
                 $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
  
-                $element["_P64GYD"]                  = "თავისუფალი";
-                $element["DEAL_RESPONSIBLE"]        = "";
-                $element["ownerDeal"]              = "";
-                $element["ownerContact"]  = "";
+                $element["_P64GYD"] = "თავისუფალი";
+                $element = clearProductOwnerFields($element);
             } 
  
             $elementsForUpdate[$product["PRODUCT_ID"]] = $element;
@@ -262,12 +296,13 @@ if (!function_exists('queueStage')) {
                 continue;
             }
 
-            $debugLines[] = "ProdID " . $element["ID"] . " BEFORE: _P64GYD=" . $element["_P64GYD"] . " ownerDeal=" . $element["ownerDeal"] . " QUEUE=" . $element["QUEUE"];
+            $debugLines[] = "ProdID " . $element["ID"] . " BEFORE: _P64GYD=" . $element["_P64GYD"]
+                . " ownerDeal=" . ($element["ownerDeal"] ?? "")
+                . " OWNER_DEAL=" . ($element["OWNER_DEAL"] ?? "")
+                . " QUEUE=" . $element["QUEUE"];
 
-            if (dealIdsMatch($element["ownerDeal"], $dealID)) {
-                $element["ownerDeal"]              = "";
-                $element["DEAL_RESPONSIBLE"]        = "";
-                $element["ownerContact"]  = "";
+            if (productOwnedByDeal($element, $dealID)) {
+                $element = clearProductOwnerFields($element);
             }
 
             if (!alreadyInQueue($element["QUEUE"], $dealID)) {
@@ -307,7 +342,7 @@ if (!function_exists('sold')) {
             $element = getCIBlockElementByID($product["PRODUCT_ID"]);
             if (!$element) continue;
  
-            if (dealIdsMatch($element["ownerDeal"], $dealID)) {
+            if (productOwnedByDeal($element, $dealID)) {
                 if ($element["_P64GYD"] != "გაყიდული") $sendNotification = true;
                 $element = preparationProductForSale($element, $deal);
             } elseif ($element["_P64GYD"] == "თავისუფალი" || ($element["_P64GYD"] == "ჯავშნის რიგში" && firstInQueue($element["QUEUE"], $dealID))) {
@@ -347,15 +382,13 @@ if (!function_exists('junk')) {
  
             $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
  
-            if (dealIdsMatch($element["ownerDeal"], $dealID)) {
+            if (productOwnedByDeal($element, $dealID)) {
                 $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
                 sendNotificationToQueue($element["QUEUE"], $notification);
                 sendNotificationToResponsible($dealID, $notification);
  
-                $element["_P64GYD"]                  = $element["QUEUE"] ? "ჯავშნის რიგში" : "თავისუფალი";
-                $element["DEAL_RESPONSIBLE"]        = "";
-                $element["ownerDeal"]              = "";
-                $element["ownerContact"]  = "";
+                $element["_P64GYD"] = $element["QUEUE"] ? "ჯავშნის რიგში" : "თავისუფალი";
+                $element = clearProductOwnerFields($element);
                 $needNotification = true;
  
                 deleteProdFromDeal($dealID);
@@ -406,11 +439,14 @@ if (!function_exists('preparationProductForSale')) {
     function preparationProductForSale($element, $deal)
     {
         $dealID = $deal["ID"];
-        $element["_P64GYD"]                  = "გაყიდული";
-        $element["ownerDeal"]              = $dealID;
-        $element["DEAL_RESPONSIBLE"]        = $deal["ASSIGNED_BY_ID"];
-        $element["ownerContact"]  = $deal["CONTACT_ID"];
-        $element["QUEUE"]                   = str_replace("|$dealID", "", $element["QUEUE"]);
+        $element["_P64GYD"] = "გაყიდული";
+        $element = setProductOwnerFields(
+            $element,
+            $dealID,
+            $deal["CONTACT_ID"] ?? "",
+            $deal["ASSIGNED_BY_ID"] ?? ""
+        );
+        $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
         return $element;
     }
 }
@@ -419,10 +455,13 @@ if (!function_exists('preparationProductForReservation')) {
     function preparationProductForReservation($element, $deal)
     {
         $dealID = $deal["ID"];
-        $element["_P64GYD"]                  = "დაჯავშნილი";
-        $element["ownerDeal"]              = $dealID;
-        $element["DEAL_RESPONSIBLE"]        = $deal["ASSIGNED_BY_ID"];
-        $element["ownerContact"]  = $deal["CONTACT_ID"];
+        $element["_P64GYD"] = "დაჯავშნილი";
+        $element = setProductOwnerFields(
+            $element,
+            $dealID,
+            $deal["CONTACT_ID"] ?? "",
+            $deal["ASSIGNED_BY_ID"] ?? ""
+        );
         return $element;
     }
 }

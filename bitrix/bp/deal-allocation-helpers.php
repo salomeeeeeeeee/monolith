@@ -99,10 +99,14 @@ if (!function_exists('allocation_assignProductToDeal')) {
 
         $dealID = intval($deal["ID"]);
 
+        // ორივე property კოდი — statusChange იყენებს ownerDeal/ownerContact-ს,
+        // კატალოგი/რეპორტები — OWNER_DEAL / OWNER_PERSONAL_CONTACT-ს.
         $element["_P64GYD"]                 = "დაჯავშნილი";
         $element["OWNER_DEAL"]             = $dealID;
+        $element["ownerDeal"]              = $dealID;
         $element["DEAL_RESPONSIBLE"]       = $deal["ASSIGNED_BY_ID"];
         $element["OWNER_PERSONAL_CONTACT"] = $deal["CONTACT_ID"];
+        $element["ownerContact"]           = $deal["CONTACT_ID"];
         $element["QUEUE"]                  = str_replace("|" . $dealID, "", (string)($element["QUEUE"] ?? ""));
 
         $el = new CIBlockElement;
