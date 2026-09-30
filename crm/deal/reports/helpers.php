@@ -1466,7 +1466,8 @@ function reportSendJson($data)
     die();
 }
 
-function reportPageBegin($title, $subtitle = '', $lang = 'ge')
+/** $heroActions: მზა HTML hero-ს მარჯვენა მხარისთვის (მაგ. მთავარ გვერდზე დაბრუნების ღილაკი). */
+function reportPageBegin($title, $subtitle = '', $lang = 'ge', $heroActions = '')
 {
     ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1482,6 +1483,9 @@ function reportPageBegin($title, $subtitle = '', $lang = 'ge')
                     <p class="report-hero__subtitle"><?= htmlspecialchars($subtitle) ?></p>
                 <?php endif; ?>
             </div>
+            <?php if ($heroActions !== ''): ?>
+                <div class="report-hero__actions"><?= $heroActions ?></div>
+            <?php endif; ?>
         </header>
         <main class="report-main">
     <?php
@@ -1804,6 +1808,14 @@ function reportCommonStyles()
             font-weight: 400;
             text-transform: none;
             letter-spacing: 0;
+        }
+
+        .report-hero__actions {
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+            display: flex;
+            gap: 8px;
         }
 
         .report-main { display: grid; gap: 10px; }

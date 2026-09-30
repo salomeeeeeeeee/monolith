@@ -228,11 +228,18 @@ $exports = [
 
 $projectSuffix = $project ? ' · ' . implode(', ', $project) : '';
 
+// მთავარ გვერდზე დაბრუნება; რეპორტების ჰაბის iframe-ში იმალება (ჰაბს თავისი ღილაკი აქვს)
+$homeButton = '<a class="lr-home" id="lrHome" href="/crm/deal/mainpage.php">'
+    . '<svg class="lr-home__icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    . '<path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path></svg>'
+    . '<span>მთავარი გვერდი</span></a>';
+
 ob_end_clean();
 reportPageBegin(
     'ლიდების რეპორტი',
     'ლიდები Create date-ით: წყაროები, შედეგები, მენეჯერები, მარკეტინგი, ზარები და სოციალური არხების (Dailo) სტატისტიკა.',
-    $lang
+    $lang,
+    $homeButton
 );
 ?>
 
@@ -906,6 +913,11 @@ lrSectionOpen('ზარები', '', '', 'შემოსული ზარ�
 </div>
 
 <style>
+    .lr-home { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 2px; background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-decoration: none; white-space: nowrap; transition: background 0.15s ease, border-color 0.15s ease; }
+    .lr-home:hover, .lr-home:focus { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.6); color: #fff; text-decoration: none; }
+    .lr-home[hidden] { display: none; }
+    .lr-home__icon { width: 14px; height: 14px; flex-shrink: 0; }
+
     .lr-section { overflow: hidden; }
     .lr-section__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px 0; flex-wrap: wrap; }
     .lr-section__title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1038,6 +1050,10 @@ lrSectionOpen('ზარები', '', '', 'შემოსული ზარ�
         ['rows' => $rows, 'buckets' => $buckets, 'exports' => $exports],
         JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_PARTIAL_OUTPUT_ON_ERROR
     ) ?>;
+    if (window.self !== window.top) {
+        document.getElementById('lrHome').hidden = true;
+    }
+
     const HEAD = ['ID', 'Create date', 'ეტაპი', 'წყარო', 'კლიენტი', 'ლიდი დაარეგისტრირა', 'კონტაქტზე პასუხისმგებელი', 'პასუხისმგებელი', 'ლოსთის მიზეზი', 'ლოსთის მიზეზი დეტალურად', 'უინტერესობის მიზეზი'];
 
     const modal = document.getElementById('lrModal');
