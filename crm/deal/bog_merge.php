@@ -1,0 +1,758 @@
+<?php
+/**
+ * საქართველოს ბანკი — ამონაწერების მიბმა გადახდებთან (bog_merge.php)
+ * Statements: BOG_STATEMENTS · Payments: 23 · Stages: bankBogMergeStages()
+ */
+require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/header.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/crm/deal/bank_integration/helpers.php';
+
+$APPLICATION->SetTitle('BOG — გადახდებთან მიბმა');
+bankBogEnsureModules();
+
+$statementIblockId = bankBogStatementIblockId();
+
+$saveResult = null;
+if ($statementIblockId > 0 && !empty($_POST)) {
+    $saveResult = bankBogProcessMergePost($_POST);
+}
+
+list($listModel, $errorDeals, $skippedStatements) = $statementIblockId > 0
+    ? bankBogBuildMergeModels()
+    : [[], [], []];
+if (!is_array($skippedStatements)) {
+    $skippedStatements = [];
+}
+
+ob_end_clean();
+?><!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BOG — გადახდებთან მიბმა</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #00335b;
+            --muted: #6b7a8a;
+            --line: #dde2e8;
+            --primary: #00335b;
+            --primary-deep: #002445;
+            --accent: #72c4b1;
+            --surface: #fff;
+            --bg: #f4f5f7;
+            --ok: #1a8f3c;
+            --err: #c0392b;
+            --green: #e8f7f3;
+            --yellow: #fff7e0;
+            --red: #fef3f2;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; min-height: 100%;
+            font-family: "Montserrat", "Segoe UI", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+        }
+        .topbar {
+            position: sticky; top: 0; z-index: 50;
+            background: linear-gradient(135deg, #002445 0%, #00335b 55%, #0a4a75 100%);
+            color: #fff;
+            padding: 14px 20px;
+            display: flex; align-items: flex-start; justify-content: space-between;
+            gap: 16px; flex-wrap: wrap;
+            box-shadow: 0 10px 28px rgba(0, 51, 91, 0.12);
+        }
+        .brand { display: flex; align-items: flex-start; gap: 12px; }
+        .brand-mark {
+            width: 42px; height: 42px; border-radius: 4px; flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            display: grid; place-items: center;
+            font-weight: 700; font-size: 12px;
+        }
+        .brand h1 {
+            margin: 0; font-size: 18px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.02em;
+        }
+        .brand p { margin: 3px 0 0; color: rgba(255, 255, 255, 0.78); font-size: 12px; max-width: 760px; }
+        .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn {
+            appearance: none; border: 0; border-radius: 2px; height: 38px;
+            padding: 0 16px; font: inherit; font-weight: 700; cursor: pointer;
+            font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+            text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: var(--accent); color: #0d3f36; }
+        .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.1); color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .wrap { width: min(1480px, calc(100% - 28px)); margin: 18px auto 60px; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+        .stat {
+            background: var(--surface); border: 1px solid var(--line);
+            border-radius: 4px; padding: 14px 16px;
+            box-shadow: 0 10px 28px rgba(0, 51, 91, 0.05);
+        }
+        .stat span {
+            display: block; font-size: 11px; color: var(--muted); line-height: 1.35;
+            text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+        }
+        .stat strong { font-size: 24px; font-weight: 700; }
+        .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+        .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: end; }
+        .toolbar .field { display: flex; flex-direction: column; gap: 4px; }
+        .toolbar label {
+            font-size: 11px; font-weight: 700; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 0.06em;
+        }
+        .search, .date-input, .toolbar select {
+            height: 40px; border-radius: 4px; border: 1px solid var(--line);
+            padding: 0 12px; font: inherit; background: #fff; color: var(--ink);
+        }
+        .search { flex: 1; min-width: 200px; }
+        .section-title {
+            font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+            margin: 22px 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        }
+        .section-title .sub { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: none; letter-spacing: 0; }
+        .pill {
+            display: inline-flex; align-items: center; height: 22px;
+            padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+            background: var(--primary); color: #fff;
+        }
+        .table-card {
+            background: var(--surface); border: 1px solid var(--line);
+            border-radius: 4px; overflow: auto;
+            max-height: calc(100vh - 240px);
+            box-shadow: 0 10px 28px rgba(0, 51, 91, 0.06);
+        }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1180px; font-size: 13px; }
+        thead th {
+            text-align: left; padding: 12px 10px;
+            background: #e8eef4; color: var(--primary);
+            border-bottom: 1px solid var(--line);
+            font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+            position: sticky; top: 0; z-index: 6;
+        }
+        td { padding: 10px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
+        tr.filtertr.tone-green { background: var(--green); }
+        tr.filtertr.tone-yellow { background: var(--yellow); }
+        tr.filtertr.tone-red { background: var(--red); }
+        tr.hidden-row { display: none; }
+        input.form-control {
+            width: 100%; min-width: 72px; height: 36px; border-radius: 4px;
+            border: 1px solid var(--line); padding: 0 8px; font: inherit; background: #fff; color: var(--ink);
+        }
+        input.form-control.deal-inactive { border-color: #e08b86; background: #fff6f5; }
+        .alloc-list { display: flex; flex-direction: column; gap: 8px; min-width: 320px; }
+        .alloc-row { display: grid; grid-template-columns: minmax(140px, 1.4fr) 110px 34px; gap: 8px; align-items: start; }
+        .deal-meta { font-size: 11px; color: var(--muted); line-height: 1.35; margin-top: 4px; }
+        .amount { font-variant-numeric: tabular-nums; font-weight: 700; }
+        .mini-btn {
+            height: 28px; padding: 0 8px; border-radius: 4px;
+            border: 1px solid var(--line); background: #fff; color: var(--ink);
+            font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+        }
+        .alloc-del {
+            height: 36px; width: 34px; border-radius: 4px;
+            border: 1px solid #e8bcb8; background: #fef3f2; color: var(--err);
+            font-size: 18px; line-height: 1; cursor: pointer; font-weight: 700;
+        }
+        .flash { margin-bottom: 14px; border-radius: 4px; padding: 12px 14px; font-weight: 600; font-size: 13px; }
+        .flash.ok { background: #e8f7ef; color: var(--ok); border: 1px solid #b7e4c7; }
+        .flash.err { background: #fef3f2; color: var(--err); border: 1px solid #f5c2c0; }
+        .banner {
+            display: none; background: #fef3f2; color: var(--err);
+            border: 1px solid #f5c2c0; border-left: 5px solid var(--err);
+            font-weight: 700; padding: 12px 14px; margin-bottom: 12px;
+            border-radius: 4px; position: sticky; top: 84px; z-index: 40;
+        }
+        .deal-stage-error { color: var(--err); font-size: 12px; font-weight: 600; margin-top: 4px; display: inline-block; }
+        .sum-ok { outline: 2px solid rgba(114, 196, 177, 0.6); }
+        .sum-bad { outline: 2px solid rgba(192, 57, 43, 0.35); }
+        .skipped-panel {
+            margin-top: 28px; border: 1px solid var(--line);
+            border-radius: 4px; background: var(--surface); overflow: hidden;
+        }
+        .skipped-toggle {
+            width: 100%; appearance: none; border: 0; background: #e8eef4;
+            padding: 14px 16px; display: flex; align-items: center;
+            justify-content: space-between; gap: 12px; cursor: pointer;
+            font: inherit; font-weight: 700; text-align: left; color: var(--primary);
+        }
+        .skipped-toggle:hover { background: #dde7ef; }
+        .skipped-toggle .chev { transition: transform .2s ease; font-size: 18px; color: var(--muted); }
+        .skipped-panel.open .skipped-toggle .chev { transform: rotate(180deg); }
+        .skipped-body { display: none; border-top: 1px solid var(--line); }
+        .skipped-panel.open .skipped-body { display: block; }
+        .skipped-filters {
+            display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px;
+            border-bottom: 1px solid var(--line); background: #fafbfc;
+        }
+        .reason-badge {
+            display: inline-block; padding: 4px 8px; border-radius: 4px;
+            background: #fff7e0; color: #7a5a00;
+            font-size: 12px; font-weight: 700; line-height: 1.35;
+        }
+        .setup-note {
+            background: var(--surface); border: 1px solid var(--line);
+            border-radius: 4px; padding: 20px; box-shadow: 0 10px 28px rgba(0, 51, 91, 0.06);
+        }
+        @media (max-width: 900px) { .stats { grid-template-columns: 1fr 1fr; } }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <div class="brand">
+        <div class="brand-mark">BOG</div>
+        <div>
+            <h1>გადახდებთან მიბმა</h1>
+            <p>დილები იძებნება სტეიჯებზე: <?= htmlspecialchars(implode(' · ', bankBogMergeStageLabels())) ?> — ამ დილის კონტაქტის პირადი/პასპორტის ნომრის ან კომპანიის საიდ. კოდის მიხედვით.</p>
+            <p>კურსი მოდის NBG-დან ამონაწერის თარიღის მიხედვით. "დარჩენილი" ნიშნავს დარჩენილ დავალიანებას $-ში დღემდე (გადახდის გრაფიკის თანხების ჯამს (დღემდე) − უკვე არსებული გადახდების ჯამი).</p>
+        </div>
+    </div>
+    <div class="top-actions">
+        <a class="btn btn-ghost" href="/crm/deal/bog_import.php">← ამონაწერის იმპორტი</a>
+        <button class="btn btn-primary" type="submit" form="myForm" id="main_button" disabled>შენახვა</button>
+    </div>
+</div>
+
+<div class="wrap">
+    <?php
+    if ($statementIblockId <= 0) {
+        echo '<div class="setup-note">'
+            . '<p>ამონაწერების სია ჯერ არ არის შექმნილი.</p>'
+            . '<p><a href="/crm/deal/bank_integration/setup.php">სიების მომზადება →</a></p>'
+            . '</div></div></body></html>';
+        exit;
+    }
+    ?>
+
+    <?php if ($saveResult): ?>
+        <?php if (!empty($saveResult['saved'])): ?>
+            <div class="flash ok">შენახულია <?= (int)$saveResult['saved'] ?> გადახდა</div>
+        <?php endif; ?>
+        <?php if (!empty($saveResult['errors'])): ?>
+            <div class="flash err">შეცდომები: <?= htmlspecialchars(json_encode($saveResult['errors'], JSON_UNESCAPED_UNICODE)) ?></div>
+        <?php endif; ?>
+    <?php endif; ?>
+
+    <div id="dealValidationBanner" class="banner"></div>
+
+    <div class="stats">
+        <div class="stat">
+            <span>ამონაწერის მიხედვით მოიძებნა დილები</span>
+            <strong id="statMatched">0</strong>
+        </div>
+        <div class="stat">
+            <span>ამონაწერის შესაბამისი დილები ვერ მოიძებნა</span>
+            <strong id="statErrors">0</strong>
+        </div>
+        <div class="stat"><span>ჯამი $</span><strong id="statUsd">0</strong></div>
+        <div class="stat"><span>ჯამი ₾</span><strong id="statGel">0</strong></div>
+    </div>
+
+    <div class="legend">
+        <span><i style="background:#72c4b1"></i>1 დილი</span>
+        <span><i style="background:#f5d78e"></i>1-ზე მეტი დილი</span>
+        <span><i style="background:#f5c2c0"></i>დილი ვერ მოიძებნა</span>
+    </div>
+
+    <div class="toolbar">
+        <input class="search" id="searchBox" type="search" placeholder="ძებნა: სახელი, INN, beneficiary, deal ID…">
+        <div class="field">
+            <label for="dateFrom">თარიღი დან</label>
+            <input class="date-input" type="date" id="dateFrom">
+        </div>
+        <div class="field">
+            <label for="dateTo">თარიღი მდე</label>
+            <input class="date-input" type="date" id="dateTo">
+        </div>
+        <div class="field">
+            <label for="currencyFilter">ვალუტა</label>
+            <select id="currencyFilter">
+                <option value="">ყველა</option>
+                <option value="GEL">GEL</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="section-title">
+        ამონაწერის მიხედვით მოიძებნა დილები
+        <span class="pill" id="pillMatched">0</span>
+        <span class="sub">მწვანე = 1 დილი · ყვითელი = რამდენიმე</span>
+    </div>
+    <form action="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>" method="post" id="myForm">
+        <div class="table-card">
+            <table>
+                <thead>
+                <tr>
+                    <th>კლიენტი</th>
+                    <th>თარიღი</th>
+                    <th>დანიშნულება</th>
+                    <th>მიმღები</th>
+                    <th>ვალუტა</th>
+                    <th>თანხა ₾</th>
+                    <th>თანხა $</th>
+                    <th title="NBG კურსი ამონაწერის EntryDate-ის მიხედვით">კურსი</th>
+                    <th>დილი / თანხა $</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody id="tbody_data"></tbody>
+            </table>
+        </div>
+    </form>
+
+    <div class="section-title">
+        ამონაწერის შესაბამისი დილები ვერ მოიძებნა
+        <span class="pill" id="pillErrors">0</span>
+        <span class="sub">ხელით მიბმა</span>
+    </div>
+    <form action="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>" method="post" id="myForm_er">
+        <div class="table-card">
+            <table>
+                <thead>
+                <tr>
+                    <th>კლიენტი</th>
+                    <th>INN</th>
+                    <th>თარიღი</th>
+                    <th>დანიშნულება</th>
+                    <th>მიმღები</th>
+                    <th>ვალუტა</th>
+                    <th>კურსი</th>
+                    <th>თანხა ₾</th>
+                    <th>თანხა $</th>
+                    <th>დილი / თანხა $</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody id="tbody_data_errors"></tbody>
+            </table>
+        </div>
+        <div style="margin-top:12px;">
+            <button class="btn btn-primary" type="submit" id="errors_button" disabled>შენახვა (ხელით მიბმა)</button>
+        </div>
+    </form>
+
+    <div class="skipped-panel" id="skippedPanel">
+        <button type="button" class="skipped-toggle" id="skippedToggle" aria-expanded="false">
+            <span>
+                გამოტოვებული ამონაწერები
+                <span class="pill" id="pillSkipped">0</span>
+                <span class="sub" style="font-weight:500;color:var(--muted);margin-left:8px;">რატომ არ ჩანს ზემოთ</span>
+            </span>
+            <span class="chev">▾</span>
+        </button>
+        <div class="skipped-body">
+            <div class="skipped-filters">
+                <select id="skippedReasonFilter" class="search" style="flex:0;min-width:260px;height:38px;">
+                    <option value="">ყველა მიზეზი</option>
+                </select>
+                <input class="search" id="skippedSearch" type="search" placeholder="ძებნა გამოტოვებულებში…" style="height:38px;">
+            </div>
+            <div class="table-card" style="border:0;border-radius:0;box-shadow:none;">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>კლიენტი</th>
+                        <th>INN</th>
+                        <th>თარიღი</th>
+                        <th>დანიშნულება</th>
+                        <th>მიმღები</th>
+                        <th>ვალუტა</th>
+                        <th>თანხა ₾</th>
+                        <th>თანხა $</th>
+                        <th>მიზეზი</th>
+                    </tr>
+                    </thead>
+                    <tbody id="tbody_skipped"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const data = <?= json_encode($listModel, JSON_UNESCAPED_UNICODE) ?>;
+const errors = <?= json_encode($errorDeals, JSON_UNESCAPED_UNICODE) ?>;
+const skipped = <?= json_encode($skippedStatements, JSON_UNESCAPED_UNICODE) ?>;
+const DEAL_VALIDATION_API = '/crm/deal/bank_integration/validate_deal.php';
+const ACTIVE_STAGE_LABELS = <?= json_encode(bankBogMergeStageLabels(), JSON_UNESCAPED_UNICODE) ?>;
+const dealValidationCache = new Map();
+const dealValidationTimers = new Map();
+let mainFormTotalsMatch = false;
+let errorFormTotalsMatch = false;
+let indexDeals = 0;
+let indexErrors = 0;
+
+function money(n) {
+    return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+}
+
+function updateSaveButtonsState() {
+    const mainButton = document.getElementById('main_button');
+    const errorsButton = document.getElementById('errors_button');
+    if (mainButton) {
+        mainButton.disabled = !mainFormTotalsMatch || document.querySelectorAll('#myForm input[name^="DEAL_"].deal-inactive').length > 0;
+    }
+    if (errorsButton) {
+        errorsButton.disabled = !errorFormTotalsMatch || document.querySelectorAll('#myForm_er input[name^="DEAL_"].deal-inactive').length > 0;
+    }
+}
+
+function updateDealValidationBanner() {
+    const banner = document.getElementById('dealValidationBanner');
+    const invalid = document.querySelectorAll('input[name^="DEAL_"].deal-inactive');
+    if (invalid.length) {
+        const ids = [...new Set([...invalid].map(i => i.value.trim()).filter(Boolean))];
+        banner.style.display = 'block';
+        banner.textContent = `${ids.length}: არააქტიური (არ არის სტეიჯებზე: ${ACTIVE_STAGE_LABELS.join(', ')}) ან არასწორი დილის აიდი.`;
+    } else {
+        banner.style.display = 'none';
+        banner.textContent = '';
+    }
+    updateSaveButtonsState();
+}
+
+function clearDealValidationState(input) {
+    const wrapper = input.closest('.alloc-deal') || input.parentElement;
+    wrapper.querySelectorAll('.deal-stage-error').forEach(el => el.remove());
+    input.classList.remove('deal-inactive');
+}
+
+function setDealValidationError(wrapper, message) {
+    wrapper.querySelectorAll('.deal-stage-error').forEach(el => el.remove());
+    const span = document.createElement('span');
+    span.className = 'deal-stage-error';
+    span.textContent = message;
+    wrapper.appendChild(span);
+}
+
+async function validateDealInput(input) {
+    const dealId = input.value.trim();
+    const wrapper = input.closest('.alloc-deal') || input.parentElement;
+    if (!dealId) {
+        clearDealValidationState(input);
+        updateDealValidationBanner();
+        return;
+    }
+    if (dealValidationCache.has(dealId)) {
+        const cached = dealValidationCache.get(dealId);
+        clearDealValidationState(input);
+        if (!cached.exists || !cached.active) {
+            input.classList.add('deal-inactive');
+            setDealValidationError(wrapper, cached.exists ? `სტეიჯი: ${cached.stage_id || '?'}` : 'დილი ვერ მოიძებნა');
+        }
+        updateDealValidationBanner();
+        return;
+    }
+    try {
+        const res = await fetch(`${DEAL_VALIDATION_API}?deal_id=${encodeURIComponent(dealId)}`);
+        const json = await res.json();
+        dealValidationCache.set(dealId, json);
+        clearDealValidationState(input);
+        if (!json.exists || !json.active) {
+            input.classList.add('deal-inactive');
+            setDealValidationError(wrapper, json.exists ? `სტეიჯი: ${json.stage_id || '?'}` : 'დილი ვერ მოიძებნა');
+        }
+    } catch (e) {}
+    updateDealValidationBanner();
+}
+
+function scheduleDealValidation(input) {
+    const key = input.name;
+    if (dealValidationTimers.has(key)) clearTimeout(dealValidationTimers.get(key));
+    dealValidationTimers.set(key, setTimeout(() => validateDealInput(input), 350));
+}
+
+function bindDealInput(input) {
+    input.addEventListener('input', () => scheduleDealValidation(input));
+    input.addEventListener('blur', () => validateDealInput(input));
+    if (input.value.trim()) validateDealInput(input);
+}
+
+/** მხოლოდ შევსებული რიგები უნდა ემთხვეოდეს; ცარიელი რიგები არ ბლოკავს შენახვას */
+function checkRowTotals(formId) {
+    const form = document.getElementById(formId);
+    const rows = form.querySelectorAll('tr.filtertr:not(.hidden-row)');
+    let hasValid = false;
+    let hasInvalidFilled = false;
+
+    rows.forEach(row => {
+        const expected = Number(row.dataset.expectedUsd || 0);
+        const values = [...row.querySelectorAll('input[name^="VALUE_"]')].map(i => Number(i.value || 0));
+        const sum = values.reduce((a, b) => a + b, 0);
+        const filled = values.some(v => v > 0);
+        const ok = filled && Math.abs(sum - expected) < 0.02;
+        row.classList.toggle('sum-ok', ok);
+        row.classList.toggle('sum-bad', filled && !ok);
+        if (ok) hasValid = true;
+        if (filled && !ok) hasInvalidFilled = true;
+    });
+
+    const result = hasValid && !hasInvalidFilled;
+    if (formId === 'myForm') mainFormTotalsMatch = result;
+    if (formId === 'myForm_er') errorFormTotalsMatch = result;
+    updateSaveButtonsState();
+}
+
+function buildAllocRow(idx, paymentId, dealId, metaHtml, value) {
+    return `<div class="alloc-row" data-idx="${idx}">
+        <div class="alloc-deal">
+            <input class="form-control" name="DEAL_${idx}" value="${esc(dealId)}" placeholder="Deal ID">
+            <input type="hidden" name="PAYMENT_${idx}" value="${esc(paymentId)}">
+            ${metaHtml || ''}
+        </div>
+        <div class="alloc-value">
+            <input class="form-control" name="VALUE_${idx}" type="number" step="0.01" value="${value}">
+        </div>
+        <button type="button" class="alloc-del" title="წაშლა" onclick="removeAllocRow(this)">×</button>
+    </div>`;
+}
+
+function removeAllocRow(btn) {
+    const row = btn.closest('tr');
+    const form = row.closest('form');
+    const formId = form.id;
+    const allocRow = btn.closest('.alloc-row');
+    const list = row.querySelector('.alloc-list');
+    if (list.querySelectorAll('.alloc-row').length <= 1) {
+        // ბოლო ხაზი — ცარიელდება, არ იშლება მთლიანად
+        const deal = allocRow.querySelector('input[name^="DEAL_"]');
+        const val = allocRow.querySelector('input[name^="VALUE_"]');
+        deal.value = '';
+        val.value = '0';
+        clearDealValidationState(deal);
+        const meta = allocRow.querySelector('.deal-meta');
+        if (meta) meta.remove();
+    } else {
+        allocRow.remove();
+    }
+    checkRowTotals(formId);
+    updateDealValidationBanner();
+}
+
+function addDealField(btn, formId) {
+    const row = btn.closest('tr');
+    const list = row.querySelector('.alloc-list');
+    const idx = formId === 'myForm' ? indexDeals++ : indexErrors++;
+    const paymentId = row.querySelector('input[name^="PAYMENT_"]').value;
+    list.insertAdjacentHTML('beforeend', buildAllocRow(idx, paymentId, '', '', 0));
+    const newRow = list.lastElementChild;
+    bindDealInput(newRow.querySelector('input[name^="DEAL_"]'));
+    newRow.querySelector('input[name^="VALUE_"]').addEventListener('input', () => checkRowTotals(formId));
+    checkRowTotals(formId);
+}
+
+function renderMatched() {
+    const tbody = document.getElementById('tbody_data');
+    tbody.innerHTML = '';
+    indexDeals = 0;
+    (data || []).forEach((row) => {
+        const deals = row.MERGE_DEALS || [];
+        const tone = deals.length > 1 ? 'tone-yellow' : 'tone-green';
+        const allocParts = [];
+        if (deals.length) {
+            deals.forEach((d) => {
+                const idx = indexDeals++;
+                const prefill = deals.length === 1 ? Number(row.BANK_AMOUNT_USD || 0) : 0;
+                const meta = `<div class="deal-meta" title="დარჩენილი დავალიანება: გრაფიკი − გადახდები (დღემდე)">#${esc(d.ID)} · ${esc(d.PROJECT || '—')} · ${esc(d.BLOCK || '')} ${esc(d.UNIT || '')}<br>დარჩენილი: <b>${money(d.LEFT_TO_PAY)}</b></div>`;
+                allocParts.push(buildAllocRow(idx, row.list_id, d.ID, meta, prefill));
+            });
+        } else {
+            const idx = indexDeals++;
+            allocParts.push(buildAllocRow(idx, row.list_id, '', '', 0));
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = `filtertr ${tone}`;
+        tr.dataset.expectedUsd = String(row.BANK_AMOUNT_USD || 0);
+        tr.dataset.date = String(row.DATE || '');
+        tr.dataset.search = [
+            row.CLIENT_NAME, row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY,
+            ...(deals.map(d => d.ID + ' ' + (d.NAME || '')))
+        ].join(' ').toLowerCase();
+        tr.dataset.currency = (row.CURRENCY || '').toUpperCase();
+        tr.innerHTML = `
+            <td><b>${esc(row.CLIENT_NAME || row.NAME)}</b><div class="deal-meta">${esc(row.STATUS || '')} · ${esc(row.INN || '')}</div></td>
+            <td>${esc(row.DATE)}</td>
+            <td>${esc(row.NOMINATION)}</td>
+            <td>${esc(row.BENEFICIARY)}</td>
+            <td>${esc(row.CURRENCY)}</td>
+            <td class="amount">${money(row.BANK_AMOUNT_GEL)}</td>
+            <td class="amount">${money(row.BANK_AMOUNT_USD)}</td>
+            <td title="NBG USD კურსი ამონაწერის თარიღზე (${esc(row.DATE)})">${esc(row.NBG_RATE)}</td>
+            <td><div class="alloc-list">${allocParts.join('')}</div></td>
+            <td><button type="button" class="mini-btn" onclick="addDealField(this,'myForm')">+ დილი</button></td>
+        `;
+        tbody.appendChild(tr);
+        tr.querySelectorAll('input[name^="DEAL_"]').forEach(bindDealInput);
+        tr.querySelectorAll('input[name^="VALUE_"]').forEach(inp => {
+            inp.addEventListener('input', () => checkRowTotals('myForm'));
+        });
+    });
+    checkRowTotals('myForm');
+}
+
+function renderErrors() {
+    const tbody = document.getElementById('tbody_data_errors');
+    tbody.innerHTML = '';
+    indexErrors = 100000;
+    (errors || []).forEach((row) => {
+        const idx = indexErrors++;
+        const usd = Number(row.AMOUNT_USD || row.BANK_AMOUNT_USD || 0);
+        const tr = document.createElement('tr');
+        tr.className = 'filtertr tone-red';
+        tr.dataset.expectedUsd = String(usd);
+        tr.dataset.date = String(row.DATE || '');
+        tr.dataset.search = [row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY].join(' ').toLowerCase();
+        tr.dataset.currency = (row.CURRENCY || '').toUpperCase();
+        tr.innerHTML = `
+            <td><b>${esc(row.NAME)}</b></td>
+            <td>${esc(row.INN)}</td>
+            <td>${esc(row.DATE)}</td>
+            <td>${esc(row.NOMINATION)}</td>
+            <td>${esc(row.BENEFICIARY)}</td>
+            <td>${esc(row.CURRENCY)}</td>
+            <td title="NBG USD კურსი ამონაწერის თარიღზე">${esc(row.NBG_RATE)}</td>
+            <td class="amount">${money(row.AMOUNT_GEL || row.BANK_AMOUNT_GEL)}</td>
+            <td class="amount">${money(usd)}</td>
+            <td><div class="alloc-list">${buildAllocRow(idx, row.PAYMENT || row.list_id, '', '', usd)}</div></td>
+            <td><button type="button" class="mini-btn" onclick="addDealField(this,'myForm_er')">+ დილი</button></td>
+        `;
+        tbody.appendChild(tr);
+        tr.querySelectorAll('input[name^="DEAL_"]').forEach(bindDealInput);
+        tr.querySelectorAll('input[name^="VALUE_"]').forEach(inp => {
+            inp.addEventListener('input', () => checkRowTotals('myForm_er'));
+        });
+    });
+    checkRowTotals('myForm_er');
+}
+
+function refreshStats() {
+    document.getElementById('statMatched').textContent = (data || []).length;
+    document.getElementById('statErrors').textContent = (errors || []).length;
+    document.getElementById('pillMatched').textContent = (data || []).length;
+    document.getElementById('pillErrors').textContent = (errors || []).length;
+    document.getElementById('pillSkipped').textContent = (skipped || []).length;
+    let usd = 0, gel = 0;
+    [...(data || []), ...(errors || [])].forEach(r => {
+        usd += Number(r.BANK_AMOUNT_USD || r.AMOUNT_USD || 0);
+        gel += Number(r.BANK_AMOUNT_GEL || r.AMOUNT_GEL || 0);
+    });
+    document.getElementById('statUsd').textContent = money(usd);
+    document.getElementById('statGel').textContent = money(gel);
+}
+
+function renderSkipped() {
+    const tbody = document.getElementById('tbody_skipped');
+    const reasonSelect = document.getElementById('skippedReasonFilter');
+    const reasons = new Map();
+    (skipped || []).forEach(r => {
+        const code = r.REASON_CODE || 'other';
+        const label = r.REASON || code;
+        if (!reasons.has(code)) reasons.set(code, label);
+    });
+    const current = reasonSelect.value;
+    reasonSelect.innerHTML = '<option value="">ყველა მიზეზი</option>';
+    [...reasons.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ka')).forEach(([code, label]) => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = label;
+        reasonSelect.appendChild(opt);
+    });
+    reasonSelect.value = current;
+
+    tbody.innerHTML = '';
+    if (!(skipped || []).length) {
+        tbody.innerHTML = '<tr><td colspan="10" style="padding:18px;color:var(--muted);">გამოტოვებული ამონაწერი არ არის</td></tr>';
+        return;
+    }
+    (skipped || []).forEach(row => {
+        const tr = document.createElement('tr');
+        tr.className = 'skipped-row';
+        tr.dataset.reason = row.REASON_CODE || '';
+        tr.dataset.search = [row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.REASON, row.list_id].join(' ').toLowerCase();
+        tr.innerHTML = `
+            <td>${esc(row.list_id)}</td>
+            <td><b>${esc(row.NAME)}</b></td>
+            <td>${esc(row.INN)}</td>
+            <td>${esc(row.DATE)}</td>
+            <td>${esc(row.NOMINATION)}</td>
+            <td>${esc(row.BENEFICIARY)}</td>
+            <td>${esc(row.CURRENCY)}</td>
+            <td class="amount">${money(row.AMOUNT_GEL)}</td>
+            <td class="amount">${money(row.AMOUNT_USD)}</td>
+            <td><span class="reason-badge">${esc(row.REASON)}</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function applySkippedFilters() {
+    const q = (document.getElementById('skippedSearch').value || '').trim().toLowerCase();
+    const reason = document.getElementById('skippedReasonFilter').value || '';
+    document.querySelectorAll('#tbody_skipped tr.skipped-row').forEach(tr => {
+        const okR = !reason || tr.dataset.reason === reason;
+        const okQ = !q || (tr.dataset.search || '').includes(q);
+        tr.style.display = (okR && okQ) ? '' : 'none';
+    });
+}
+
+function applyFilters() {
+    const q = (document.getElementById('searchBox').value || '').trim().toLowerCase();
+    const cur = (document.getElementById('currencyFilter').value || '').toUpperCase();
+    const from = document.getElementById('dateFrom').value || '';
+    const to = document.getElementById('dateTo').value || '';
+
+    document.querySelectorAll('tr.filtertr').forEach(tr => {
+        const hay = tr.dataset.search || '';
+        const rowCur = tr.dataset.currency || '';
+        const rowDate = tr.dataset.date || '';
+        const okQ = !q || hay.includes(q);
+        const okC = !cur || rowCur === cur;
+        let okD = true;
+        if (from && rowDate && rowDate < from) okD = false;
+        if (to && rowDate && rowDate > to) okD = false;
+        tr.classList.toggle('hidden-row', !(okQ && okC && okD));
+    });
+    checkRowTotals('myForm');
+    checkRowTotals('myForm_er');
+}
+
+renderMatched();
+renderErrors();
+renderSkipped();
+refreshStats();
+document.getElementById('searchBox').addEventListener('input', applyFilters);
+document.getElementById('currencyFilter').addEventListener('change', applyFilters);
+document.getElementById('dateFrom').addEventListener('change', applyFilters);
+document.getElementById('dateTo').addEventListener('change', applyFilters);
+
+document.getElementById('skippedToggle').addEventListener('click', function () {
+    const panel = document.getElementById('skippedPanel');
+    const open = panel.classList.toggle('open');
+    this.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+document.getElementById('skippedReasonFilter').addEventListener('change', applySkippedFilters);
+document.getElementById('skippedSearch').addEventListener('input', applySkippedFilters);
+</script>
+</body>
+</html>
+<?php
+exit;
