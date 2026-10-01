@@ -277,4 +277,114 @@ if(pathname[1] == "crm"){
             }
         //
 
+    // 24 სთ-ში რეზერვაციის ვადა ეწურება
+    function isDealListOrKanbanPage() {
+        const path = location.pathname.split('/').filter(Boolean);
+        if (path[0] !== "crm" || path[1] !== "deal") return false;
+
+        let rest = path.slice(2);
+        if (rest[0] === "kanban" || rest[0] === "list") rest = rest.slice(1);
+
+        return rest.length === 0 || (rest.length === 2 && rest[0] === "category" && rest[1] === "0");
+    }
+
+    function escapeExpiringReservationHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
+    function toggleExpiringReservationsList() {
+        const list = document.getElementById("expiringReservationsList");
+        const arrow = document.getElementById("expiringReservationsArrow");
+        if (!list || !arrow) return;
+
+        const isHidden = list.style.display === "none" || list.style.display === "";
+        list.style.display = isHidden ? "block" : "none";
+        arrow.textContent = isHidden ? "▲" : "▼";
+    }
+
+    function buildExpiringReservationRow(deal) {
+        const origin = location.origin;
+        const dealLink = `<a href="${origin}/crm/deal/details/${deal.ID}/" target="_blank">${deal.ID}</a>`;
+
+        let clientCell = "-";
+        if (deal.CLIENT_ID && deal.CLIENT_NAME) {
+            const clientPath = deal.CLIENT_TYPE === "company"
+                ? `${origin}/crm/company/details/${deal.CLIENT_ID}/`
+                : `${origin}/crm/contact/details/${deal.CLIENT_ID}/`;
+            clientCell = `<a href="${clientPath}" target="_blank">${escapeExpiringReservationHtml(deal.CLIENT_NAME)}</a>`;
+        }
+
+        const deadline = deal.DEADLINE ? escapeExpiringReservationHtml(deal.DEADLINE) : "-";
+
+        return `
+            <div style="display:grid; grid-template-columns: 90px 1fr 90px; gap:12px; padding:8px 0; border-bottom:1px solid #e2e8f0; font-size:13px;">
+                <div>${dealLink}</div>
+                <div>${clientCell}</div>
+                <div>${deadline}</div>
+            </div>
+        `;
+    }
+
+    function mountExpiringReservationsWidget(deals) {
+        if (document.getElementById("expiringReservationsWidget")) return true;
+
+        const filterDiv = document.querySelector(".ui-toolbar-filter-box");
+        if (!filterDiv) return false;
+
+        const rowsHtml = deals.length
+            ? deals.map(buildExpiringReservationRow).join("")
+            : `<div style="padding:12px 0; color:#64748b; font-size:13px;">არ მოიძებნა</div>`;
+
+        const countBadge = deals.length
+            ? `<span style="display:inline-block; min-width:20px; padding:0 6px; margin-left:6px; border-radius:999px; background:#2563eb; color:#fff; font-size:12px; line-height:20px; text-align:center;">${deals.length}</span>`
+            : "";
+
+        const widget = document.createElement("div");
+        widget.id = "expiringReservationsWidget";
+        widget.style.cssText = "margin:0 1rem; background:rgba(255,255,255,.85); padding:8px 12px; border-radius:8px; min-width:280px;";
+        widget.innerHTML = `
+            <div style="font-size:13px; font-weight:600; color:#1d4ed8; text-align:center;">
+                24 სთ-ში რეზერვაციის ვადა ეწურება${countBadge}
+            </div>
+            <div style="display:flex; justify-content:center; margin-top:4px;">
+                <button type="button" id="expiringReservationsArrow" onclick="toggleExpiringReservationsList()" style="background:none; border:none; cursor:pointer; font-size:18px; line-height:1; color:#1d4ed8;">▼</button>
+            </div>
+            <div id="expiringReservationsList" style="display:none; margin-top:8px; max-height:260px; overflow:auto;">
+                <div style="display:grid; grid-template-columns: 90px 1fr 90px; gap:12px; padding-bottom:6px; border-bottom:1px solid #cbd5e1; font-size:12px; font-weight:700; color:#475569;">
+                    <div>დილი</div>
+                    <div>კლიენტი</div>
+                    <div>ვადა</div>
+                </div>
+                ${rowsHtml}
+            </div>
+        `;
+
+        filterDiv.appendChild(widget);
+        return true;
+    }
+
+    if (isDealListOrKanbanPage()) {
+        fetch(`${location.origin}/rest/local/api/deal/getExpiringReservations.php`)
+            .then((response) => response.json())
+            .then((data) => {
+                const deals = Array.isArray(data.deals) ? data.deals : [];
+                if (mountExpiringReservationsWidget(deals)) return;
+
+                let attempts = 0;
+                const mountTimer = setInterval(() => {
+                    attempts++;
+                    if (mountExpiringReservationsWidget(deals) || attempts >= 20) {
+                        clearInterval(mountTimer);
+                    }
+                }, 500);
+            })
+            .catch((error) => {
+                console.log(error);
+            });
+    }
+
 </script>
