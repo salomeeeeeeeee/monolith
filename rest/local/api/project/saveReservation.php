@@ -31,6 +31,15 @@ function getContactInfo($contactId) {
     return $arContact;
 }
 
+// დილს ოდესმე ჰქონდა დადასტურებული რეზერვაცია (FINAL_INVOICE) - ხელახლა მხოლოდ არასტანდარტული ჯავშანი
+function dealHadConfirmedReservation($dealID) {
+    return (bool)\Bitrix\Crm\History\Entity\DealStageHistoryTable::getList([
+        "select" => ["ID"],
+        "filter" => ["=OWNER_ID" => (int)$dealID, "=STAGE_ID" => "FINAL_INVOICE"],
+        "limit"  => 1,
+    ])->fetch();
+}
+
 /** Absolute public URL with encoded filename (spaces, (), etc.) */
 function buildPassportFileLink($fileId) {
     $path = CFile::GetPath($fileId);
@@ -50,6 +59,14 @@ $dealId          = $_POST['deal_id']     ?? '';
 $comment         = $_POST['comment']     ?? '';
 $prodNum         = $_POST['prodNum']     ?? '';
 $passportFileId  = $_POST['passport'] ?? null;
+
+// სტანდარტული (უფასო) ჯავშანი დადასტურებული რეზერვაციის შემდეგ აღარ შეიძლება
+if ($userSelect == '41' && $dealId && dealHadConfirmedReservation($dealId)) {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => 403, "message" => "სტანდარტული რეზერვაცია ამ დილზე აღარ არის ხელმისაწვდომი"], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 $filePath        = $passportFileId ? $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath($passportFileId) : null;
 
 $firstName  = trim($_POST['firstName']   ?? '');

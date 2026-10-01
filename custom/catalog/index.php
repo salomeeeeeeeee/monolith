@@ -113,6 +113,15 @@ $products[] = $item;
     return $products;
 }
 
+// დილს ოდესმე ჰქონდა დადასტურებული რეზერვაცია (FINAL_INVOICE) - ხელახლა მხოლოდ არასტანდარტული ჯავშანი
+function dealHadConfirmedReservation($dealID) {
+    return (bool)\Bitrix\Crm\History\Entity\DealStageHistoryTable::getList([
+        "select" => ["ID"],
+        "filter" => ["=OWNER_ID" => (int)$dealID, "=STAGE_ID" => "FINAL_INVOICE"],
+        "limit"  => 1,
+    ])->fetch();
+}
+
 function getProjects() {
     $res = CIBlockSection::GetList(
         ["SORT" => "ASC"],
@@ -131,6 +140,7 @@ $dealID      = $_GET["dealid"] ?? null;
 $deal        = $dealID ? getDealByFilter(["ID" => $dealID]) : [];
 $products    = $dealID ? getDealProds($dealID) : [];
 $productsIds = array_column($products, 'ID');
+$hadConfirmedReservation = $dealID ? dealHadConfirmedReservation($dealID) : false;
 
 $projects = getProjects();
 usort($projects, fn($a,$b) => strnatcasecmp($a['NAME'], $b['NAME']));
@@ -482,12 +492,14 @@ ob_end_clean();
             color:var(--text3); position:absolute; top:-9px; left:10px;
             background:var(--bg2); padding:0 4px;
         }
-        #saveBtn {
+        #saveBtn, #reserveAgainBtn {
             height:32px; padding:0 16px; border:none; border-radius:var(--radius);
             background:var(--accent); color:#fff; font-size:11px; font-weight:700;
             font-family:var(--body); cursor:pointer; transition:all .2s; margin-left:8px;
         }
         #saveBtn:hover { background:var(--accent2); box-shadow:0 4px 14px var(--accent-glow); transform:translateY(-1px); }
+        #reserveAgainBtn { background:#7db84a; white-space:nowrap; }
+        #reserveAgainBtn:hover { background:#6aa13c; transform:translateY(-1px); }
 
         #apartmentPopup {
             width: 0; min-width: 0; flex-shrink: 0;
@@ -755,6 +767,7 @@ ob_end_clean();
         <div id="productsBoxWrapper" style="display:none;position:relative;align-items:center;gap:0;">
             <div id="productsBox"></div>
             <button id="saveBtn">შენახვა</button>
+            <button id="reserveAgainBtn" type="button" style="display:none;">დაჯავშნა</button>
         </div>
 
         <div id="apsDisplayWrapper">
@@ -813,6 +826,7 @@ let productsIds = <?php echo json_encode($productsIds ?? []); ?>;
 productsIds = productsIds.map(id => String(id));
 let nbg         = <?php echo json_encode($nbg); ?>;
 let projects    = <?php echo json_encode($projects); ?>;
+let hadConfirmedReservation = <?php echo json_encode($hadConfirmedReservation); ?>;
 
 // ── Field code constants (mirror PHP defines) ──
 const F_BLOCK      = '_L24CUB';
@@ -938,7 +952,19 @@ if (openedOnDeal) {
     if (Array.isArray(products) && products.length > 0) {
         const pb = document.getElementById("productsBox");
         products.forEach(apt => pb.appendChild(makeDealTile(apt)));
+
+        // მიბმული ბინები თავისუფალია: ჯავშნის ფორმა ბინის მოხსნა-მიბმის გარეშე
+        if (inAllowedStages && products.every(apt => apt["_P64GYD"] === "თავისუფალი")) {
+            const rb = document.getElementById("reserveAgainBtn");
+            rb.style.display = "";
+            rb.addEventListener("click", () => showReservationPopup());
+        }
     }
+}
+
+// დილზე შენახული ბინები შეიცვალა - ჯავშანი ჯერ შენახვით
+function hideReserveAgainBtn() {
+    document.getElementById("reserveAgainBtn").style.display = "none";
 }
 
 // ── Back button (only when opened without a deal) ──
@@ -978,6 +1004,7 @@ function makeDealTile(apt) {
         rm.onclick = () => {
             if (document.getElementById("saveBtn").style.display === "none" && allowedStages.includes(stage_id))
                 document.getElementById("saveBtn").style.display = "";
+            hideReserveAgainBtn();
             tile.remove();
             const el = document.querySelector(`#apsDisplay .apt[data-id="${apt["ID"]}"]`);
             if (el && !productsIds.includes(apt["ID"])) el.classList.remove("dimmed");
@@ -2397,6 +2424,7 @@ function deleteSelectedApartment() {
     const sb    = document.getElementById("saveBtn");
     const tile  = document.querySelector(`#productsBox .apt[data-id="${aptId}"]`);
     if (tile) tile.remove();
+    hideReserveAgainBtn();
     const el = document.querySelector(`#apsDisplay .apt[data-id="${aptId}"]`);
     if (el) { el.classList.remove("dimmed"); el.style.outline = ""; el.style.transform = ""; }
     if (inAllowedStages) sb.style.display = "";
@@ -2417,6 +2445,7 @@ function addSelectedApartment() {
     if (!apt) return;
     if (inAllowedStages)
     document.getElementById("saveBtn").style.display = "";
+    hideReserveAgainBtn();
     pb.appendChild(makeDealTile(apt));
     const el = document.querySelector(`#apsDisplay .apt[data-id="${aptId}"]`);
     if (el) el.classList.add("dimmed");
@@ -2658,6 +2687,7 @@ async function exportToExcel() {
           <option value="41">სტანდარტული</option>
           <option value="42">არასტანდარტული</option>
         </select>
+        <div id="resRepeatNote" style="display:none;margin-top:6px;font-size:12px;color:#854f0b;background:#faeeda;border:.5px solid #ef9f27;border-radius:6px;padding:6px 10px;">დილს რეზერვაცია უკვე ჰქონდა - ხელახალი ჯავშანი მხოლოდ დასტურით (არასტანდარტული)</div>
       </div>
 
       <!-- deadline -->
@@ -2741,6 +2771,14 @@ function showReservationPopup() {
     document.getElementById("resPersonWrap").style.display = "none";
 
     if (document.getElementById("resAmount")) document.getElementById("resAmount").value = "";
+
+    // დადასტურებული რეზერვაციის შემდეგ სტანდარტული (უფასო) ჯავშანი აღარ შეიძლება
+    if (hadConfirmedReservation) {
+        document.querySelector('#resUserSelect option[value="41"]')?.remove();
+        document.getElementById("resRepeatNote").style.display = "block";
+        document.getElementById("resUserSelect").value = "42";
+        resToggleFields();
+    }
 
     const overlay = document.getElementById("reservationOverlay");
     overlay.style.display = "flex";
