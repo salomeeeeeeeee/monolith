@@ -236,6 +236,7 @@ foreach ($conditionElements as $element) {
             padding: 11px 28px; font-size: 14px; font-weight: 600; cursor: pointer;
         }
         .btn-save:hover { box-shadow: 0 6px 20px rgba(5,150,105,0.35); }
+        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
 
         /* ── ოფერის ღილაკები ── */
         .btn-offer-ka {
@@ -475,6 +476,8 @@ const CONFIG = {
 
 // Stores the saved dataID returned from saveGraphEndRunWorkflow.php
 let savedDataID = null;
+// შენახვა რამდენიმე წამი გრძელდება; მეორე დაჭერა ამ დროს მეორე გრაფიკს ქმნიდა
+let isSaving = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('header.app__header, header.page__header').forEach(h => h.style.display = 'none');
@@ -892,6 +895,7 @@ function updateSaveButtonText() {
 
 async function saveGraph() {
     if (!CONFIG.dealID) { hide('saveBTN'); return; }
+    if (isSaving) return;
 
     const mode = getValue('paymentMode');
     const typeSelected = mode === 'internal' ? getValue('type_select') : mode;
@@ -946,6 +950,20 @@ async function saveGraph() {
         lastAmount: `${formatNumber(price)} $`,
     };
 
+    isSaving = true;
+    const saveBtn = document.getElementById('saveBTN');
+    const saveBtnText = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'ინახება...';
+    Swal.fire({
+        title: 'ინახება...',
+        text: 'გთხოვთ დაელოდოთ',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => Swal.showLoading(),
+    });
+
     try {
         const res = await fetch('/rest/local/api/calculator/saveGraphEndRunWorkflow.php', {
             method: 'POST',
@@ -967,7 +985,12 @@ async function saveGraph() {
             }
         }
     } catch (e) {
+        Swal.close();
         alert('შენახვა ვერ მოხერხდა');
+    } finally {
+        isSaving = false;
+        saveBtn.disabled = false;
+        saveBtn.textContent = saveBtnText;
     }
 }
 

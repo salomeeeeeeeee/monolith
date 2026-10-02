@@ -68,6 +68,15 @@ $prodPriceUSD = round(floatval($json['PRICE'] ?? 0), 2);
 $kvmPriceUSD = round(floatval($json['kvmPrice'] ?? 0), 2);
 $principal = $prodPriceUSD;
 
+// ერთ დილზე ორი ერთდროული გაშვება (მაგ. ორჯერ დაჭერილი "შენახვა") ერთმანეთის ჩანაწერებს
+// შლიდა და ორივე წერდა - განვადება დუბლირდებოდა. lock-ით მეორე პირველის დასრულებას ელოდება.
+$connection = \Bitrix\Main\Application::getConnection();
+$lockName = 'calc_plan_deal_' . intval($json['dealId']);
+if (!$connection->lock($lockName, 120)) {
+    $result['txt'] = 'ამ დილზე გრაფიკი უკვე ინახება, სცადეთ თავიდან';
+    goto finish;
+}
+
 // წაშალოს არსებული განვადების ჩანაწერები ამ დილზე
 $existing = calcGetCIBlockElementsByFilter([
     'IBLOCK_ID' => 22,
@@ -86,7 +95,6 @@ foreach ($json['data'] as $row) {
 
     $amountGEL = $exchangeRate ? round($amountUSD * $exchangeRate, 2) : 0;
     $principal = round($principal - $amountUSD, 2);
-    $nbgRate = calcGetNbgRate();
 
     $arForAdd = [
         'IBLOCK_ID' => 22,
@@ -108,7 +116,7 @@ foreach ($json['data'] as $row) {
         'floor' => $meta['floor'],
         'ZETIPI' => $meta['ZETIPI'],
         'KONTRAKT_DATE' => $meta['KONTRAKT_DATE'],
-        'NBG' => $nbgRate,
+        'NBG' => $exchangeRate,
         'xelshNum' => $meta['xelshNum'],
         'CONTACT' => $meta['CONTACT'],
     ];
@@ -155,6 +163,9 @@ if ($created > 0) {
 } else {
     $result = ['status' => 400, 'txt' => 'გრაფიკის ჩანაწერები ვერ შეიქმნა'];
 }
+
+// lock კავშირის დახურვისასაც თავისუფლდება, ამიტომ შეცდომისას არ "გაიჭედება"
+$connection->unlock($lockName);
 
 finish:
 if ($notAuthorized) {
