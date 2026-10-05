@@ -171,7 +171,7 @@ class MonolithSiteWebhook
         } elseif ($script === '/rest/local/api/product/status-change.php') {
             $cause['cause'] = 'პროდუქტების მოდული (სტატუსის ხელით შეცვლა)';
         } elseif (strpos($script, '/bitrix/admin/') === 0) {
-            $cause['cause'] = 'ადმინკა (ხელით რედაქტირება)';
+            $cause['cause'] = 'ადმინი (ხელით რედაქტირება)';
         } else {
             $action = is_string($_REQUEST['action'] ?? null) ? $_REQUEST['action'] : '';
             $cause['cause'] = 'გვერდი / API: ' . $script . ($action !== '' ? ' (' . $action . ')' : '');
