@@ -29,6 +29,7 @@ $exportColumns = [
     'BUX_ID' => $lang === 'eng' ? 'Accounting Code' : 'ბუღ. კოდი',
     F_PROJECT => $lang === 'eng' ? 'Project Name' : 'პროექტის დასახელება',
     'PROJECT_CODE' => $lang === 'eng' ? 'Project Code' : 'პროექტის კოდი',
+    'CONTRACT_NO' => $lang === 'eng' ? 'Contract No.' : 'ხელშეკრულების ნომერი',
     'CONTRACT_DATE' => $lang === 'eng' ? 'Contract Date' : 'ხელშ.თარიღი',
     'BUYER' => $lang === 'eng' ? 'Buyer' : 'მყიდველი',
     'BUYER_ID' => $lang === 'eng' ? 'Personal ID / Company Code' : 'პირადი ნომერი/ საიდენტ. კოდი',

@@ -29,7 +29,7 @@ if (!empty($fromDate) && !empty($toDate)) {
 
 // All cashflow-stage deals: project options come from them, the report from the filtered subset.
 $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_CASHFLOW_STAGES], [
-    'ID', 'TITLE', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_CONTRACT_DATE, D_BLOCK, D_TYPE, D_BEDROOMS,
+    'ID', 'TITLE', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_CONTRACT_DATE, D_BLOCK, D_TYPE, D_BEDROOMS, D_CONTRACT_NO,
 ]);
 $deals = array_filter($allDeals, static function ($deal) use ($project) {
     return reportValueMatches($deal[D_PROJECT] ?? '', $project);
@@ -196,6 +196,7 @@ foreach ($dealsForExcel as $dealId => &$dealRow) {
         $prodType = 'სხვა';
     }
     $dealRow['_type'] = $prodType;
+    $dealRow['_contract_no'] = trim((string)($dealRow[D_CONTRACT_NO] ?? '')) ?: ($productsByDeal[$dealId][F_CONTRACT_NO] ?? '');
 
     $rowNames = [$prodType];
     if ($prodType === 'ბინა') {
@@ -318,6 +319,7 @@ function exportTableToExcel() {
         const row = {
             'კლიენტი': deal.CONTACT_FULL_NAME || '',
             'ხელშეკრულება': deal.TITLE || '',
+            'ხელშეკრულების ნომერი': deal._contract_no || '',
             'ქონების ტიპი': deal._type || '',
             'გაფორმების თარიღი': deal['<?= D_CONTRACT_DATE ?>'] || '',
             'კონტრ. ღირებულება ($)': deal.OPPORTUNITY || 0,

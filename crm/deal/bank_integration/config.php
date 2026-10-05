@@ -162,9 +162,9 @@ if (!defined('BANK_D_CONTRACT_DATE')) {
 if (!defined('BANK_D_CURRENCY')) {
     define('BANK_D_CURRENCY', 'UF_CRM_1702019032102');
 }
-/** ხელშეკრულების ნომერი → გადახდის xelshNum */
+/** ხელშეკრულების ნომერი (მონოლითი) → გადახდის xelshNum */
 if (!defined('BANK_D_CONTRACT_NUM')) {
-    define('BANK_D_CONTRACT_NUM', 'UF_CRM_1769416547');
+    define('BANK_D_CONTRACT_NUM', 'UF_CRM_1791205458297');
 }
 
 /** Merge მხოლოდ ამ სტეიჯებზე. */

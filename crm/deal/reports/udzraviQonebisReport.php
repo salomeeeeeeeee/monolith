@@ -279,6 +279,7 @@ function exportToExcel() {
         { key: '<?= F_PROJECT ?>', label: 'Project' },
         { key: '<?= F_BLOCK ?>', label: 'Block' },
         { key: 'NAME', label: 'Unit Name' },
+        { key: '<?= F_CONTRACT_NO ?>', label: 'Contract No.' },
         { key: '<?= F_STATUS ?>', label: 'Status' },
         { key: '<?= F_TYPE ?>', label: 'Product Type' },
         { key: '<?= F_BEDROOMS ?>', label: 'Bedrooms' },

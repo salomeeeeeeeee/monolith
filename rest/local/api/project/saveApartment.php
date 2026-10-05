@@ -79,6 +79,7 @@ if ($deal_id) {
                 "UF_CRM_1779277690404" => "",
                 "UF_CRM_1782206163787" => "",
                 "UF_CRM_1781768590754" => "",
+                "UF_CRM_1791205458297" => "",
                 "PRODUCT_ID"           => "",
             ];
             $Deal   = new CCrmDeal(false);
@@ -100,7 +101,7 @@ if ($deal_id) {
     $KVM_PRICE = $project = $block = $PRODUCT_TYPE = $sadarbazo = "";
     $prodFLOOR = $prodNumber = $prodTOTAL_AREA = $LIVING_SPACE = "";
     $sawyisiGirebuleba = $productIdsForAdd = "";
-    $summerspace = $bedrooms = $bathrooms = $rooms = $cadastralCode = $sector = "";
+    $summerspace = $bedrooms = $bathrooms = $rooms = $cadastralCode = $sector = $contractNo = "";
 
     $rows = [];
     foreach ($productIds as $pid) {
@@ -135,6 +136,7 @@ if ($deal_id) {
         // sector now correctly pulls _3BU0JH (the sector property code used elsewhere in catalog.php/get.php)
         $cadastralCode     = $cadastralCode     ? $cadastralCode     . " /" . $productData["__51MODL"] : $productData["__51MODL"];
         $sector            = $sector            ? $sector            . " /" . $productData["_3BU0JH"]  : $productData["_3BU0JH"];
+        $contractNo        = $contractNo        ? $contractNo        . " /" . $productData["xelshNum"] : $productData["xelshNum"];
 
         $productIdsForAdd  = $productIdsForAdd  ? $productIdsForAdd  . " /" . $productData["ID"]        : $productData["ID"];
     }
@@ -157,6 +159,7 @@ if ($deal_id) {
         "UF_CRM_1779277690404" => $rooms,
         "UF_CRM_1782206163787" => $cadastralCode,
         "UF_CRM_1781768590754" => $sector,
+        "UF_CRM_1791205458297" => $contractNo,   // ხელშეკრულების ნომერი (პროდუქტის xelshNum)
 
         "PRODUCT_ID"           => $productIdsForAdd,
     ];

@@ -30,6 +30,7 @@ $t = array_merge($t, [
     'xls_block' => $lang === 'eng' ? 'Block' : 'ბლოკი',
     'xls_unit' => $lang === 'eng' ? 'Unit Name' : 'დასახელება',
     'xls_unit_no' => $lang === 'eng' ? 'Apartment №' : 'ბინის №',
+    'xls_contract_no' => $lang === 'eng' ? 'Contract No.' : 'ხელშეკრულების ნომერი',
     'xls_type' => $lang === 'eng' ? 'Property Type' : 'ქონების ტიპი',
     'xls_bedrooms' => $lang === 'eng' ? 'Bedrooms' : 'საძინებლები',
     'xls_area' => $lang === 'eng' ? 'Total Area (sqm)' : 'სრული ფართი (კვ.მ)',
@@ -60,6 +61,7 @@ $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_RESERVATION_STAGES], [
     D_BEDROOMS,
     D_RESERVATION_START,
     D_RESERVATION_DATE,
+    D_CONTRACT_NO,
 ]);
 $deals = array_filter($allDeals, static function ($deal) use ($filterProject, $filterBlock, $filterResponsible) {
     return reportValueMatches($deal[D_PROJECT] ?? '', $filterProject)
@@ -101,6 +103,7 @@ foreach ($deals as &$deal) {
     $deal['TOTAL_AREA'] = $product ? (float)($product[F_TOTAL_AREA] ?? 0) : 0;
     $deal['UNIT_NAME'] = $product['NAME'] ?? '';
     $deal['UNIT_NO'] = $product[F_UNIT_NO] ?? '';
+    $deal['CONTRACT_NO'] = trim((string)($deal[D_CONTRACT_NO] ?? '')) ?: ($product[F_CONTRACT_NO] ?? '');
     $deal['BEDROOMS'] = ($deal[D_BEDROOMS] ?? '') !== ''
         ? $deal[D_BEDROOMS]
         : ($product[F_BEDROOMS] ?? '');
@@ -287,6 +290,7 @@ function exportToExcel() {
         { key: blockField, label: t.xls_block },
         { key: 'UNIT_NAME', label: t.xls_unit },
         { key: 'UNIT_NO', label: t.xls_unit_no },
+        { key: 'CONTRACT_NO', label: t.xls_contract_no },
         { key: 'TOTAL_AREA', label: t.xls_area },
         { key: 'KVM_PRICE', label: t.xls_price_sqm },
         { key: 'AMOUNT', label: t.xls_price },

@@ -17,6 +17,7 @@ $t = array_merge($t, [
     'no_data' => $lang === 'eng' ? 'No data available' : 'მონაცემი არ მოიძებნა',
     'xls_deal' => $lang === 'eng' ? 'Deal#' : 'გარიგება#',
     'xls_client' => $lang === 'eng' ? 'Client' : 'კლიენტი',
+    'xls_contract_no' => $lang === 'eng' ? 'Contract No.' : 'ხელშეკრულების ნომერი',
     'xls_type' => $lang === 'eng' ? 'Product Type' : 'პროდუქტის ტიპი',
     'xls_total_price' => $lang === 'eng' ? 'Total Sale Amount ($)' : 'სრული გაყიდვების თანხა ($)',
     'xls_scheduled' => $lang === 'eng' ? 'Total Scheduled ($)' : 'ჯამური დარიცხვა ($)',
@@ -30,7 +31,7 @@ $filterResponsible = reportGetFilterValues('responsible');
 
 // All won deals: filter options come from them, the report from the filtered subset.
 $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_WON_STAGE], [
-    'ID', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_BLOCK, D_TYPE, D_BEDROOMS, 'ASSIGNED_BY_ID',
+    'ID', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_BLOCK, D_TYPE, D_BEDROOMS, 'ASSIGNED_BY_ID', D_CONTRACT_NO,
 ]);
 $deals = array_filter($allDeals, static function ($deal) use ($filterProject, $filterBlock, $filterResponsible) {
     return reportValueMatches($deal[D_PROJECT] ?? '', $filterProject)
@@ -51,9 +52,10 @@ foreach (reportGetProductsForDeals($dealsIds) as $row) {
     }
 }
 
-foreach ($deals as &$deal) {
+foreach ($deals as $dealId => &$deal) {
     $deal['jamuriDaricxvaUpToToday'] = 0;
     $deal['jamuriGadaxdaUpToToday'] = 0;
+    $deal['CONTRACT_NO'] = trim((string)($deal[D_CONTRACT_NO] ?? '')) ?: ($productsByDeal[$dealId][F_CONTRACT_NO] ?? '');
 }
 unset($deal);
 
@@ -244,6 +246,7 @@ function exportToExcel() {
     const fields = [
         { key: 'ID', label: t.xls_deal },
         { key: 'CONTACT_FULL_NAME', label: t.xls_client },
+        { key: 'CONTRACT_NO', label: t.xls_contract_no },
         { key: '<?= D_TYPE ?>', label: t.xls_type },
         { key: 'OPPORTUNITY', label: t.xls_total_price },
         { key: 'jamuriDaricxvaUpToToday', label: t.xls_scheduled },

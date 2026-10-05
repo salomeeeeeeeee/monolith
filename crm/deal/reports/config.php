@@ -17,6 +17,7 @@ define('F_FLOOR', '_FTRIDL');
 define('F_CADASTRAL', '__51MODL');
 define('F_INNER_AREA', '__US58ND');
 define('F_PROJECT_CODE', 'PROJECT_CODE');
+define('F_CONTRACT_NO', 'xelshNum'); // ხელშეკრულების ნომერი (მონოლითი)
 
 define('D_PROJECT', 'UF_CRM_1779277729207');
 define('D_BLOCK', 'UF_CRM_1779277644355');
@@ -31,6 +32,7 @@ define('D_CADASTRAL', 'UF_CRM_1782206163787');
 define('D_INNER_AREA', 'UF_CRM_1779277919090');
 define('D_PHASE', 'UF_CRM_1764317005');
 define('D_OLD_BUYER', 'UF_CRM_1787819849026'); // მყიდველი ძველი ბაზისთვის (deals without a contact)
+define('D_CONTRACT_NO', 'UF_CRM_1791205458297'); // ხელშეკრულების ნომერი, copied from the products' xelshNum
 
 define('C_PERSONAL_ID', 'UF_CRM_1781244744534');
 

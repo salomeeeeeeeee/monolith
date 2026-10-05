@@ -271,6 +271,7 @@ function reportProductPropertyCodes()
         F_CADASTRAL,
         F_INNER_AREA,
         F_PROJECT_CODE,
+        F_CONTRACT_NO,
         'OWNER_DEAL',
         'ownerDeal',
         'OWNER_CONTACT',
@@ -359,7 +360,8 @@ function reportGetProducts($arFilter = [])
 
     // v2: load CRM-bind props via GetProperties (ownerDeal was empty with PROPERTY_* GetNext)
     // v4: + cadastral code, inner area, project code
-    $cacheKey = 'products_v4_' . md5(serialize($filter));
+    // v5: + contract number (xelshNum)
+    $cacheKey = 'products_v5_' . md5(serialize($filter));
     if (isset($runtime[$cacheKey])) {
         return $runtime[$cacheKey];
     }
@@ -594,7 +596,7 @@ function reportSplitSchedule(array $rows)
 
 /**
  * Contract and payment columns of the sales report Excel: accounting ID (list 30), buyer,
- * contract date and status, first/last payment and installment period (list 22),
+ * contract number, date and status, first/last payment and installment period (list 22),
  * planned vs paid (list 23) and debt. Expects rows from reportEnrichDealBedrooms().
  * Amounts are USD; percentages are of the contract value (DEAL_PRICE).
  */
@@ -614,7 +616,7 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
         $res = CCrmDeal::GetList(
             ['ID' => 'ASC'],
             ['ID' => $dealIds, 'CHECK_PERMISSIONS' => 'N'],
-            ['ID', 'STAGE_ID', 'CONTACT_ID', D_CONTRACT_DATE, D_PHASE, D_CADASTRAL, D_INNER_AREA, D_OLD_BUYER]
+            ['ID', 'STAGE_ID', 'CONTACT_ID', D_CONTRACT_DATE, D_PHASE, D_CADASTRAL, D_INNER_AREA, D_OLD_BUYER, D_CONTRACT_NO]
         );
         while ($row = $res->Fetch()) {
             $deals[(string)$row['ID']] = $row;
@@ -703,10 +705,12 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
         $stage = (string)($deal['STAGE_ID'] ?? '');
         $cadastral = trim((string)($product[F_CADASTRAL] ?? ''));
         $innerArea = trim((string)($product[F_INNER_AREA] ?? ''));
+        $contractNo = trim((string)($product[F_CONTRACT_NO] ?? ''));
 
         $products[$id] = array_merge($product, [
             'BUX_ID' => $buxIds[$dealId] ?? '',
             'PROJECT_CODE' => trim((string)($product[F_PROJECT_CODE] ?? '')),
+            'CONTRACT_NO' => $contractNo !== '' ? $contractNo : trim((string)($deal[D_CONTRACT_NO] ?? '')),
             'CONTRACT_DATE' => (string)($deal[D_CONTRACT_DATE] ?? ''),
             'BUYER' => ($contact['NAME'] ?? '') !== ''
                 ? $contact['NAME']
