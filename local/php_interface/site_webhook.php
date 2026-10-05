@@ -101,6 +101,10 @@ class MonolithSiteWebhook
             foreach ($changes as $id => $change) {
                 $response = $skipReason === '' ? self::send($id, $secret) : ['code' => 0, 'body' => $skipReason];
                 self::writeLog($id, $change, $response);
+                // საიტი თუ არ პასუხობს, დანარჩენზე აღარ ველოდებით (თითო 15 წამამდე)
+                if ($skipReason === '' && $response['code'] === 0) {
+                    $skipReason = 'არ გაიგზავნა: საიტმა წინა გამოძახებას არ უპასუხა (აიღებს 10-წუთიანი განახლებით)';
+                }
             }
         } catch (\Throwable $e) {
             self::eventLog($e->getMessage());
@@ -247,7 +251,7 @@ class MonolithSiteWebhook
     /** @return array ['code' => HTTP კოდი ან 0, 'body' => საიტის პასუხი ან შეცდომა] */
     private static function send($productId, $secret)
     {
-        $http = new HttpClient(['socketTimeout' => 3, 'streamTimeout' => 5]);
+        $http = new HttpClient(['socketTimeout' => 3, 'streamTimeout' => 15]);
         $http->setHeader('Content-Type', 'application/json');
         $http->setHeader('X-Webhook-Secret', $secret);
         $body = $http->post(SITE_WEBHOOK_URL, Json::encode(['productId' => $productId]));
