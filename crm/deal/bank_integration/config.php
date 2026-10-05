@@ -21,64 +21,89 @@ if (!defined('BANK_BOG_SCHEDULE_IBLOCK')) {
     define('BANK_BOG_SCHEDULE_IBLOCK', 22);
 }
 
-if (!defined('BANK_BOG_CLIENT_ID')) {
-    define('BANK_BOG_CLIENT_ID', 'e7b04aa7-8de1-42d5-8e72-e050329f915e');
-}
-if (!defined('BANK_BOG_CLIENT_SECRET')) {
-    define('BANK_BOG_CLIENT_SECRET', 'c1221746-9a12-4537-ac26-b2a2f04d87e7');
-}
-/** დროებითი ნომერი — ჩაანაცვლე რეალური ანგარიშის ნომრით (IBAN). */
-if (!defined('BANK_BOG_ACCOUNT')) {
-    define('BANK_BOG_ACCOUNT', '7777777777');
-}
-if (!defined('BANK_BOG_COMPANY_LABEL')) {
-    define('BANK_BOG_COMPANY_LABEL', 'New Depot');
-}
-
 /**
- * ანგარიშები — აქ დაამატე ახალი ნომრები როცა დასჭირდება.
- * client_id / client_secret ცარიელი = ძირითადი BANK_BOG_CLIENT_* გამოიყენება.
+ * კომპანიები. Business Online-ის წვდომა (client ID / secret) კომპანიაზეა გაცემული
+ * და ხედავს ამ კომპანიის ყველა ანგარიშს.
+ *
+ * client_id / client_secret ინახება credentials.php-ში, რომელიც git-ში არ არის
+ * (რეპო საჯაროა). ნიმუში: credentials.example.php
  */
-function bankBogAccounts()
+function bankBogCompanies()
 {
     return [
-        [
-            'number' => BANK_BOG_ACCOUNT,
-            'label' => BANK_BOG_COMPANY_LABEL,
-            'client_id' => '',
-            'client_secret' => '',
-        ],
+        'MONOLITH_GROUP_PLUS' => ['name' => 'შპს მონოლით ჯგუფი პლუსი', 'inn' => '204943357'],
+        'NEW_DEPOT' => ['name' => 'სს ზამბის წართი', 'inn' => '200003085'],
     ];
 }
 
-function bankBogResolveAccount($accountNumber)
+/**
+ * ანგარიშები ვალუტების მიხედვით: ბანკი ამონაწერს ანგარიში+ვალუტაზე აბრუნებს.
+ * გასაღები = IBAN + ვალუტა, როგორც ბანკის ანგარიშების სიაში (GE44BG...780USD).
+ */
+function bankBogAccounts()
 {
-    $accountNumber = trim((string)$accountNumber);
-    foreach (bankBogAccounts() as $acc) {
-        if (($acc['number'] ?? '') === $accountNumber) {
-            return [
-                'number' => $acc['number'],
-                'label' => $acc['label'] ?? $acc['number'],
-                'client_id' => trim((string)($acc['client_id'] ?? '')) ?: BANK_BOG_CLIENT_ID,
-                'client_secret' => trim((string)($acc['client_secret'] ?? '')) ?: BANK_BOG_CLIENT_SECRET,
-            ];
-        }
+    static $accounts = null;
+    if ($accounts !== null) {
+        return $accounts;
     }
-    // fallback — პირველი ანგარიში
-    $first = bankBogAccounts()[0] ?? null;
-    if ($first) {
-        return [
-            'number' => $first['number'],
-            'label' => $first['label'] ?? $first['number'],
-            'client_id' => trim((string)($first['client_id'] ?? '')) ?: BANK_BOG_CLIENT_ID,
-            'client_secret' => trim((string)($first['client_secret'] ?? '')) ?: BANK_BOG_CLIENT_SECRET,
+
+    // [კომპანია, პროექტი, IBAN, ვალუტა, ანგარიშის სახელი]
+    $rows = [
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE74BG0000000539703792', 'EUR', 'გრინი'],
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE17BG0000000539702781', 'USD', 'გრინი'],
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE44BG0000000539702780', 'GEL', 'გრინი'],
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE44BG0000000539702780', 'USD', 'გრინი'],
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE44BG0000000539702780', 'EUR', 'გრინი'],
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE21BG0000000541155187', 'GEL', 'ქონსტრაქშენი'],
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE21BG0000000541155187', 'USD', 'ქონსტრაქშენი'],
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE39BG0000000541154281', 'USD', 'ქონსტრაქშენი'],
+        ['MONOLITH_GROUP_PLUS', 'Green City', 'GE39BG0000000541154281', 'EUR', 'ქონსტრაქშენი'],
+        ['MONOLITH_GROUP_PLUS', 'Dighomi', 'GE93BG0000000580627459', 'GEL', 'დიღომი'],
+        ['MONOLITH_GROUP_PLUS', 'Dighomi', 'GE93BG0000000580627459', 'USD', 'დიღომი'],
+        ['MONOLITH_GROUP_PLUS', 'Dighomi', 'GE93BG0000000580627459', 'EUR', 'დიღომი'],
+        ['MONOLITH_GROUP_PLUS', 'Ethno city', 'GE19BG0000000553216688', 'GEL', 'ფაზა IV'],
+        ['MONOLITH_GROUP_PLUS', 'Ethno city', 'GE19BG0000000553216688', 'USD', 'ეთნო'],
+        ['MONOLITH_GROUP_PLUS', 'Ethno city', 'GE19BG0000000553216688', 'EUR', 'ეთნო'],
+        ['MONOLITH_GROUP_PLUS', 'Ethno city', 'GE93BG0000000580624840', 'USD', 'ფაზა IV'],
+        ['NEW_DEPOT', 'New Depot', 'GE55BG0000000482087201', 'GEL', 'New Depot'],
+        ['NEW_DEPOT', 'New Depot', 'GE82BG0000000482087200', 'GEL', 'New Depot'],
+        ['NEW_DEPOT', 'New Depot', 'GE82BG0000000482087200', 'USD', 'New Depot'],
+    ];
+
+    $accounts = [];
+    foreach ($rows as $row) {
+        list($company, $project, $iban, $currency, $name) = $row;
+        $accounts[$iban . $currency] = [
+            'key' => $iban . $currency,
+            'company' => $company,
+            'project' => $project,
+            'iban' => $iban,
+            'currency' => $currency,
+            'name' => $name,
         ];
     }
+    return $accounts;
+}
+
+function bankBogAccountByKey($key)
+{
+    $accounts = bankBogAccounts();
+    return $accounts[trim((string)$key)] ?? null;
+}
+
+/** [client_id, client_secret] კომპანიისთვის; ცარიელი სტრიქონები, თუ credentials.php-ში არ წერია. */
+function bankBogCredentials($company)
+{
+    static $all = null;
+    if ($all === null) {
+        $file = __DIR__ . '/credentials.php';
+        $loaded = is_file($file) ? include $file : [];
+        $all = is_array($loaded) ? $loaded : [];
+    }
+    $pair = $all[$company] ?? [];
     return [
-        'number' => BANK_BOG_ACCOUNT,
-        'label' => BANK_BOG_COMPANY_LABEL,
-        'client_id' => BANK_BOG_CLIENT_ID,
-        'client_secret' => BANK_BOG_CLIENT_SECRET,
+        trim((string)($pair['client_id'] ?? '')),
+        trim((string)($pair['client_secret'] ?? '')),
     ];
 }
 

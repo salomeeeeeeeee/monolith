@@ -392,14 +392,19 @@ $report[] = array_merge($paymentEntry, [
 <?php endforeach; ?>
 
     <h2>შემდეგი ნაბიჯი</h2>
-    <p>
-        ანგარიში: <b><?= htmlspecialcharsbx(BANK_BOG_ACCOUNT) ?></b> ·
-        <?= htmlspecialcharsbx(BANK_BOG_COMPANY_LABEL) ?>
-        <?php if (BANK_BOG_ACCOUNT === '7777777777'): ?>
-            <br><span class="err">ანგარიშის ნომერი დროებითია — შეცვალე
-            <code>/crm/deal/bank_integration/config.php</code>-ში (BANK_BOG_ACCOUNT).</span>
-        <?php endif; ?>
-    </p>
+    <p>ანგარიში / ვალუტა: <b><?= count(bankBogAccounts()) ?></b></p>
+    <?php foreach (bankBogCompanies() as $code => $company): ?>
+        <?php list($clientId, $clientSecret) = bankBogCredentials($code); ?>
+        <p>
+            <?= htmlspecialcharsbx($company['name']) ?>:
+            <?php if ($clientId !== '' && $clientSecret !== ''): ?>
+                <span class="ok">client ID / secret მითითებულია</span>
+            <?php else: ?>
+                <span class="err">client ID / secret არ არის - ჩაწერე
+                <code>/crm/deal/bank_integration/credentials.php</code>-ში (ნიმუში: credentials.example.php)</span>
+            <?php endif; ?>
+        </p>
+    <?php endforeach; ?>
     <p>
         <a href="/crm/deal/bog_import.php">ამონაწერის იმპორტი →</a> ·
         <a href="/crm/deal/bog_merge.php">გადახდებთან მიბმა →</a>

@@ -250,50 +250,112 @@ if (!function_exists('bankBogHttpRequest')) {
 }
 
 /**
- * NBG USD rate for a Y-m-d date. Returns null on failure.
+ * NBG rate (GEL per 1 unit, USD by default) for a Y-m-d date. Returns null on failure.
  */
 if (!function_exists('bankBogGetNbgRate')) {
-    function bankBogGetNbgRate($dateYmd, &$errorMsg = null)
+    function bankBogGetNbgRate($dateYmd, &$errorMsg = null, $currency = 'USD')
     {
         static $cache = [];
         $dateYmd = trim((string)$dateYmd);
         if ($dateYmd === '') {
             $dateYmd = date('Y-m-d');
         }
-        if (isset($cache[$dateYmd])) {
-            return $cache[$dateYmd];
+        $currency = strtoupper(trim((string)$currency)) ?: 'USD';
+        $cacheKey = $currency . '|' . $dateYmd;
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
         }
 
-        $url = 'https://nbg.gov.ge/gw/api/ct/monetarypolicy/currencies?Currencies=USD&date=' . rawurlencode($dateYmd);
+        $url = 'https://nbg.gov.ge/gw/api/ct/monetarypolicy/currencies?Currencies=' . rawurlencode($currency)
+            . '&date=' . rawurlencode($dateYmd);
         $res = bankBogHttpRequest($url, ['timeout' => 8]);
 
         if ($res['body'] === null) {
-            $errorMsg = "ეროვნული ბანკის კურსი მიუწვდომელია ({$dateYmd}).";
+            $errorMsg = "ეროვნული ბანკის {$currency} კურსი მიუწვდომელია ({$dateYmd}).";
             error_log('NBG rate failed: ' . ($res['error'] ?? ''));
             return null;
         }
         if ($res['code'] && $res['code'] !== 200) {
-            $errorMsg = "ეროვნული ბანკის კურსი მიუწვდომელია ({$dateYmd}). HTTP {$res['code']}.";
+            $errorMsg = "ეროვნული ბანკის {$currency} კურსი მიუწვდომელია ({$dateYmd}). HTTP {$res['code']}.";
             return null;
         }
 
         $decoded = json_decode($res['body']);
         $rate = $decoded[0]->currencies[0]->rate ?? null;
+        $quantity = (int)($decoded[0]->currencies[0]->quantity ?? 1);
         if ($rate === null) {
-            $errorMsg = "ეროვნული ბანკის კურსი ვერ მოიძებნა ({$dateYmd}).";
+            $errorMsg = "ეროვნული ბანკის {$currency} კურსი ვერ მოიძებნა ({$dateYmd}).";
             return null;
         }
 
-        $cache[$dateYmd] = bankBogMoney($rate, 4);
-        return $cache[$dateYmd];
+        $cache[$cacheKey] = bankBogMoney($rate / max(1, $quantity), 4);
+        return $cache[$cacheKey];
+    }
+}
+
+/**
+ * ამონაწერის თანხა ლარში და დოლარში.
+ * $amountBase = ბანკის ლარის ეკვივალენტი (EntryAmountBase); EUR-ს ის ლარში გადაჰყავს,
+ * დოლარი კი ლარიდან NBG USD კურსით გამოითვლება.
+ *
+ * @return array{GEL:float,USD:float}
+ */
+if (!function_exists('bankBogConvertEntryAmount')) {
+    function bankBogConvertEntryAmount($currency, $amount, $amountBase, $nbgUsd, $dateYmd = '')
+    {
+        $currency = strtoupper(trim((string)$currency));
+        $amount = bankBogMoney($amount);
+        $amountBase = bankBogMoney($amountBase);
+        $nbgUsd = floatval($nbgUsd);
+
+        if ($currency === 'GEL') {
+            $gel = $amount;
+        } elseif ($currency === 'USD' && $nbgUsd > 0) {
+            $gel = $amount * $nbgUsd;
+        } elseif ($amountBase != 0.0) {
+            $gel = $amountBase;
+        } else {
+            $rate = bankBogGetNbgRate($dateYmd, $ignored, $currency);
+            $gel = $rate ? $amount * $rate : 0.0;
+        }
+
+        if ($currency === 'USD') {
+            $usd = $amount;
+        } else {
+            $usd = $nbgUsd > 0 ? $gel / $nbgUsd : 0.0;
+        }
+
+        return ['GEL' => bankBogMoney($gel), 'USD' => bankBogMoney($usd)];
+    }
+}
+
+/** API-ის EntryId (JSON-ში float) სტრიქონად, მაგ. 124628323429. */
+if (!function_exists('bankBogEntryIdString')) {
+    function bankBogEntryIdString($value)
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        if (is_float($value) || is_int($value)) {
+            return sprintf('%.0f', $value);
+        }
+        return trim((string)$value);
     }
 }
 
 if (!function_exists('bankBogFetchAccessToken')) {
-    function bankBogFetchAccessToken(&$error = null, $clientId = null, $clientSecret = null)
+    function bankBogFetchAccessToken($company, &$error = null)
     {
-        $clientId = $clientId ?: BANK_BOG_CLIENT_ID;
-        $clientSecret = $clientSecret ?: BANK_BOG_CLIENT_SECRET;
+        static $tokens = [];
+        if (isset($tokens[$company])) {
+            return $tokens[$company];
+        }
+
+        list($clientId, $clientSecret) = bankBogCredentials($company);
+        if ($clientId === '' || $clientSecret === '') {
+            $error = 'client ID / secret არ წერია credentials.php-ში (' . $company . ')';
+            return null;
+        }
         $url = 'https://account.bog.ge/auth/realms/bog/protocol/openid-connect/token';
         $data = http_build_query(['grant_type' => 'client_credentials']);
         $res = bankBogHttpRequest($url, [
@@ -316,7 +378,8 @@ if (!function_exists('bankBogFetchAccessToken')) {
             $error = 'access_token missing';
             return null;
         }
-        return $token;
+        // ტოკენი 30 წუთი მოქმედებს - ერთი იმპორტისთვის საკმარისია
+        return $tokens[$company] = $token;
     }
 }
 
@@ -343,58 +406,51 @@ if (!function_exists('bankBogApiGet')) {
 }
 
 /**
- * Existing DocumentKey / todayactivities_Id sets for fast duplicate skip.
+ * უკვე ჩატვირთული EntryId-ები დუბლიკატების გამოსატოვებლად.
+ * DocumentKey უნიკალური არ არის: ერთ საბუთს (მაგ. ხელფასი) რამდენიმე ჩანაწერი აქვს,
+ * EntryId კი თითო ჩანაწერზე ბანკის მასშტაბით უნიკალურია.
  */
 if (!function_exists('bankBogLoadExistingKeys')) {
     function bankBogLoadExistingKeys()
     {
-        $docKeys = [];
-        $taIds = [];
+        $entryIds = [];
         $iblockId = bankBogStatementIblockId();
         if ($iblockId <= 0) {
-            return [$docKeys, $taIds];
+            return $entryIds;
         }
         $res = CIBlockElement::GetList(
             [],
             ['IBLOCK_ID' => $iblockId, 'CHECK_PERMISSIONS' => 'N'],
             false,
             false,
-            ['ID', 'PROPERTY_DocumentKey', 'PROPERTY_todayactivities_Id']
+            ['ID', 'PROPERTY_EntryId']
         );
         while ($row = $res->Fetch()) {
-            $dk = trim((string)($row['PROPERTY_DOCUMENTKEY_VALUE'] ?? ''));
-            if ($dk !== '') {
-                $docKeys[$dk] = true;
-            }
-            $ta = trim((string)($row['PROPERTY_TODAYACTIVITIES_ID_VALUE'] ?? ''));
-            if ($ta !== '') {
-                $taIds[$ta] = true;
+            $entryId = trim((string)($row['PROPERTY_ENTRYID_VALUE'] ?? ''));
+            if ($entryId !== '') {
+                $entryIds[$entryId] = true;
             }
         }
-        return [$docKeys, $taIds];
+        return $entryIds;
     }
 }
 
 if (!function_exists('bankBogBuildStatementPropsFromRecord')) {
-    function bankBogBuildStatementPropsFromRecord($record, $currency, $nbgRate, $accountNumber = '')
+    function bankBogBuildStatementPropsFromRecord($record, array $account, $nbgRate)
     {
-        $amount = bankBogMoney($record->EntryAmount ?? 0);
-        $amountBase = bankBogMoney($record->EntryAmountBase ?? 0);
-        $props = [];
-
-        if ($currency === 'GEL') {
-            $props['AMOUNT_GEL'] = $amount;
-            if ($nbgRate > 0) {
-                $props['AMOUNT_USD'] = bankBogMoney($amountBase / $nbgRate);
-            }
-        } else {
-            $props['AMOUNT_USD'] = $amount;
-            if ($nbgRate > 0) {
-                $props['AMOUNT_GEL'] = bankBogMoney($amountBase * $nbgRate);
-            } else {
-                $props['AMOUNT_GEL'] = $amountBase;
-            }
-        }
+        $currency = $account['currency'];
+        $entryDate = explode('T', (string)($record->EntryDate ?? ''))[0];
+        $amounts = bankBogConvertEntryAmount(
+            $currency,
+            $record->EntryAmount ?? 0,
+            $record->EntryAmountBase ?? 0,
+            $nbgRate,
+            $entryDate
+        );
+        $props = [
+            'AMOUNT_GEL' => $amounts['GEL'],
+            'AMOUNT_USD' => $amounts['USD'],
+        ];
 
         $props['EntryDate'] = $record->EntryDate ?? '';
         $props['EntryDocumentNumber'] = $record->EntryDocumentNumber ?? '';
@@ -448,16 +504,16 @@ if (!function_exists('bankBogBuildStatementPropsFromRecord')) {
         $props['DocumentCorrespondentBankCode'] = $record->DocumentCorrespondentBankCode ?? '';
         $props['DocumentCorrespondentBankName'] = $record->DocumentCorrespondentBankName ?? '';
         $props['DocumentKey'] = $record->DocumentKey ?? '';
-        $props['EntryId'] = $record->EntryId ?? '';
+        $props['EntryId'] = bankBogEntryIdString($record->EntryId ?? null);
         $props['DocComment'] = $record->DocComment ?? '';
         $props['DocumentPayerInn'] = $record->DocumentPayerInn ?? '';
         $props['DocumentPayerName'] = $record->DocumentPayerName ?? '';
         $props['istodayactivity'] = 'false';
         $props['ACCOUNT_CURRENCY'] = $currency;
-        $props['ACCOUNT_NUMBER'] = $accountNumber;
+        $props['ACCOUNT_NUMBER'] = $account['iban'];
         $props['NBG_RATE'] = $nbgRate;
         $props['SALE_TYPE'] = 'SALE';
-        $props['PROJECT'] = BANK_BOG_COMPANY_LABEL;
+        $props['PROJECT'] = $account['project'];
 
         return $props;
     }
@@ -482,6 +538,9 @@ if (!function_exists('bankBogSkipReasonForRecord')) {
         if ($senderInn !== '' && $senderInn === $benInn) {
             return 'გამგზავნისა და მიმღების INN იდენტურია (შიდა გადარიცხვა)';
         }
+        if ($senderInn !== '' && in_array($senderInn, array_column(bankBogCompanies(), 'inn'), true)) {
+            return 'გადარიცხვა ჩვენი კომპანიიდან (შიდა გადარიცხვა)';
+        }
 
         $amountStr = (string)($record->EntryAmount ?? '');
         if ($amountStr !== '' && $amountStr[0] === '-') {
@@ -498,53 +557,101 @@ if (!function_exists('bankBogSkipReasonForRecord')) {
 }
 
 /**
- * Import statements for date range. Returns stats array.
- * გამოტოვებული ჩანაწერებიც ინახება ამონაწერებში, REASON ველით.
+ * ერთი ანგარიში+ვალუტის ამონაწერის ჩანაწერები.
+ * ბანკი ერთ პასუხში მაქსიმუმ 1000 ჩანაწერს აბრუნებს (Count = სრული რაოდენობა);
+ * დანარჩენი გვერდებად მოდის: statement/{iban}/{ccy}/{Id}/{page}. გვერდების რიგი
+ * პირველ პასუხს ზუსტად არ ემთხვევა, ამიტომ ყველა გვერდი იკითხება და დუბლიკატებს
+ * იმპორტი EntryId-ით ტოვებს.
+ *
+ * @return array|null null = ამონაწერი ვერ მოვიდა; $error შეიძლება შეივსოს ნაწილობრივ მიღებისასაც
  */
-if (!function_exists('bankBogImportStatements')) {
-    function bankBogImportStatements($fromDate, $toDate, $currency, &$errorMsg = null, $accountNumber = null)
+if (!function_exists('bankBogFetchStatementRecords')) {
+    function bankBogFetchStatementRecords(array $account, $fromDate, $toDate, &$error = null)
+    {
+        $token = bankBogFetchAccessToken($account['company'], $authErr);
+        if (!$token) {
+            $error = 'ავტორიზაცია ვერ მოხერხდა: ' . ($authErr ?: 'unknown');
+            return null;
+        }
+
+        $base = 'https://api.businessonline.ge/api/statement/'
+            . rawurlencode($account['iban']) . '/' . rawurlencode($account['currency']) . '/';
+        $payload = bankBogApiGet($base . rawurlencode($fromDate) . '/' . rawurlencode($toDate), $token, $apiErr);
+        if ($payload === null) {
+            $error = 'ამონაწერის მიღება ვერ მოხერხდა: ' . ($apiErr ?: 'unknown');
+            return null;
+        }
+
+        $records = is_array($payload->Records ?? null) ? $payload->Records : [];
+        $total = (int)($payload->Count ?? 0);
+        $statementId = bankBogEntryIdString($payload->Id ?? null);
+
+        if ($statementId !== '' && $total > count($records)) {
+            $pages = (int)ceil($total / 1000);
+            for ($page = 1; $page <= $pages; $page++) {
+                $more = bankBogApiGet($base . rawurlencode($statementId) . '/' . $page, $token, $apiErr);
+                if (!is_array($more)) {
+                    $error = "ამონაწერის გვერდი {$page} ვერ მოვიდა: " . ($apiErr ?: 'unknown');
+                    break;
+                }
+                $records = array_merge($records, $more);
+            }
+        }
+
+        return $records;
+    }
+}
+
+/**
+ * ერთი ანგარიში+ვალუტის იმპორტი. $existingIds (EntryId => true) ივსება ახალი ჩანაწერებით.
+ *
+ * გასავალი (უარყოფითი თანხა) არ ინახება - კლიენტის გადახდა არ არის.
+ * შემოსავალი, რომელიც ფილტრს არ გადის (შიდა გადარიცხვა, ხაზინა...), ინახება REASON ველით.
+ * EntryId-ის გარეშე ჩანაწერი ბანკში ჯერ გატარებული არ არის და შემდეგ იმპორტზე ჩაიტვირთება.
+ */
+if (!function_exists('bankBogImportAccount')) {
+    function bankBogImportAccount(array $account, $fromDate, $toDate, array &$existingIds)
     {
         $stats = [
             'fetched' => 0,
             'created' => 0,
             'skipped_dup' => 0,
             'skipped_filter' => 0,
+            'debit' => 0,
+            'pending' => 0,
             'errors' => [],
         ];
 
+        $records = bankBogFetchStatementRecords($account, $fromDate, $toDate, $fetchErr);
+        if ($fetchErr) {
+            $stats['errors'][] = $fetchErr;
+        }
+        if ($records === null) {
+            return $stats;
+        }
+
         $iblockId = bankBogStatementIblockId();
-        if ($iblockId <= 0) {
-            $errorMsg = 'ამონაწერების სია არ არსებობს — გაუშვი /crm/deal/bank_integration/setup.php';
-            return $stats;
-        }
-
-        $accountInfo = bankBogResolveAccount($accountNumber);
-        $token = bankBogFetchAccessToken($authErr, $accountInfo['client_id'], $accountInfo['client_secret']);
-        if (!$token) {
-            $errorMsg = 'ავტორიზაცია ვერ მოხერხდა: ' . ($authErr ?: 'unknown');
-            return $stats;
-        }
-
-        $account = $accountInfo['number'];
-        $url = "https://api.businessonline.ge/api/statement/{$account}/{$currency}/{$fromDate}/{$toDate}";
-        $payload = bankBogApiGet($url, $token, $apiErr);
-        if ($payload === null) {
-            $errorMsg = 'ამონაწერის მიღება ვერ მოხერხდა: ' . ($apiErr ?: 'unknown');
-            return $stats;
-        }
-
-        $records = $payload->Records ?? [];
-        if (!is_array($records)) {
-            $records = [];
-        }
-        $stats['fetched'] = count($records);
-
-        list($existingKeys,) = bankBogLoadExistingKeys();
+        $seen = [];
 
         foreach ($records as $record) {
-            $docKey = trim((string)($record->DocumentKey ?? ''));
-            if ($docKey !== '' && isset($existingKeys[$docKey])) {
+            $entryId = bankBogEntryIdString($record->EntryId ?? null);
+            if ($entryId === '') {
+                $stats['pending']++;
+                continue;
+            }
+            // გვერდებს შორის გამეორებული ჩანაწერი ერთხელ ითვლება
+            if (isset($seen[$entryId])) {
+                continue;
+            }
+            $seen[$entryId] = true;
+            $stats['fetched']++;
+
+            if (isset($existingIds[$entryId])) {
                 $stats['skipped_dup']++;
+                continue;
+            }
+            if (bankBogMoney($record->EntryAmount ?? 0) < 0) {
+                $stats['debit']++;
                 continue;
             }
 
@@ -554,13 +661,13 @@ if (!function_exists('bankBogImportStatements')) {
             if ($entryDate === '') {
                 $entryDate = date('Y-m-d');
             }
-            $nbg = bankBogGetNbgRate($entryDate, $errorMsg);
+            $nbg = bankBogGetNbgRate($entryDate, $nbgErr);
             if ($nbg === null) {
-                $stats['errors'][] = $errorMsg;
+                $stats['errors'][] = $nbgErr;
                 break;
             }
 
-            $props = bankBogBuildStatementPropsFromRecord($record, $currency, $nbg, $account);
+            $props = bankBogBuildStatementPropsFromRecord($record, $account, $nbg);
             $props['REASON'] = $skipReason;
 
             $name = $skipReason !== '' ? 'ამონაწერი (გამოტოვებული)' : 'ამონაწერი';
@@ -571,9 +678,7 @@ if (!function_exists('bankBogImportStatements')) {
             ], $props);
 
             if (is_numeric($res) && (int)$res > 0) {
-                if ($docKey !== '') {
-                    $existingKeys[$docKey] = true;
-                }
+                $existingIds[$entryId] = true;
                 if ($skipReason !== '') {
                     $stats['skipped_filter']++;
                 } else {
@@ -585,6 +690,32 @@ if (!function_exists('bankBogImportStatements')) {
         }
 
         return $stats;
+    }
+}
+
+/**
+ * ამონაწერების იმპორტი თარიღების შუალედში მითითებული ანგარიშებისთვის.
+ *
+ * @param string[] $accountKeys bankBogAccounts()-ის გასაღებები
+ * @return array key => bankBogImportAccount()-ის სტატისტიკა
+ */
+if (!function_exists('bankBogImportStatements')) {
+    function bankBogImportStatements($fromDate, $toDate, array $accountKeys, &$errorMsg = null)
+    {
+        if (bankBogStatementIblockId() <= 0) {
+            $errorMsg = 'ამონაწერების სია არ არსებობს - გაუშვი /crm/deal/bank_integration/setup.php';
+            return [];
+        }
+
+        $existingIds = bankBogLoadExistingKeys();
+        $results = [];
+        foreach ($accountKeys as $key) {
+            $account = bankBogAccountByKey($key);
+            if ($account) {
+                $results[$account['key']] = bankBogImportAccount($account, $fromDate, $toDate, $existingIds);
+            }
+        }
+        return $results;
     }
 }
 
@@ -876,32 +1007,24 @@ if (!function_exists('bankBogEnsureStatementNbgRate')) {
             }
         }
 
-        $currency = strtoupper(trim((string)($list['ACCOUNT_CURRENCY'] ?? 'GEL')));
-        $amount = bankBogMoney($list['EntryAmount'] ?? 0);
-        $amountBase = bankBogMoney($list['EntryAmountBase'] ?? 0);
+        $missingUsd = empty($list['AMOUNT_USD']) || floatval($list['AMOUNT_USD']) <= 0;
+        $missingGel = empty($list['AMOUNT_GEL']) || floatval($list['AMOUNT_GEL']) <= 0;
 
-        if ($nbg > 0) {
-            if ($currency === 'GEL') {
-                if (empty($list['AMOUNT_USD']) || floatval($list['AMOUNT_USD']) <= 0) {
-                    $usd = $amountBase > 0 ? bankBogMoney($amountBase / $nbg) : bankBogMoney($amount / $nbg);
-                    $list['AMOUNT_USD'] = $usd;
-                    $needsPersist = true;
-                }
-                if (empty($list['AMOUNT_GEL']) || floatval($list['AMOUNT_GEL']) <= 0) {
-                    $list['AMOUNT_GEL'] = $amount;
-                    $needsPersist = true;
-                }
-            } else {
-                if (empty($list['AMOUNT_USD']) || floatval($list['AMOUNT_USD']) <= 0) {
-                    $list['AMOUNT_USD'] = $amount;
-                    $needsPersist = true;
-                }
-                if (empty($list['AMOUNT_GEL']) || floatval($list['AMOUNT_GEL']) <= 0) {
-                    $gel = $amountBase > 0 ? $amountBase : bankBogMoney($amount * $nbg);
-                    $list['AMOUNT_GEL'] = $gel;
-                    $needsPersist = true;
-                }
+        if ($nbg > 0 && ($missingUsd || $missingGel)) {
+            $amounts = bankBogConvertEntryAmount(
+                $list['ACCOUNT_CURRENCY'] ?? 'GEL',
+                $list['EntryAmount'] ?? 0,
+                $list['EntryAmountBase'] ?? 0,
+                $nbg,
+                explode('T', (string)($list['EntryDate'] ?? ''))[0]
+            );
+            if ($missingUsd) {
+                $list['AMOUNT_USD'] = $amounts['USD'];
             }
+            if ($missingGel) {
+                $list['AMOUNT_GEL'] = $amounts['GEL'];
+            }
+            $needsPersist = true;
         }
 
         if ($needsPersist && $elementId > 0 && bankBogStatementIblockId() > 0) {
@@ -925,29 +1048,19 @@ if (!function_exists('bankBogStatementAmounts')) {
     {
         $nbg = bankBogEnsureStatementNbgRate($list);
         $currency = strtoupper(trim((string)($list['ACCOUNT_CURRENCY'] ?? 'GEL')));
-        $gel = 0.0;
-        $usd = 0.0;
+        $gel = bankBogMoney($list['AMOUNT_GEL'] ?? 0);
+        $usd = bankBogMoney($list['AMOUNT_USD'] ?? 0);
 
+        // ანგარიშის ვალუტაში მოსული თანხა ზუსტად ბანკისაა
         if ($currency === 'GEL') {
             $gel = bankBogMoney($list['EntryAmount'] ?? 0);
-            if (!empty($list['AMOUNT_USD'])) {
-                $usd = bankBogMoney($list['AMOUNT_USD']);
-            } elseif ($nbg > 0) {
-                $usd = bankBogMoney($gel / $nbg);
-            }
-        } else {
+        } elseif ($currency === 'USD') {
             $usd = bankBogMoney($list['EntryAmount'] ?? 0);
-            if (!empty($list['AMOUNT_GEL'])) {
-                $gel = bankBogMoney($list['AMOUNT_GEL']);
-            } elseif (!empty($list['EntryAmountBase'])) {
-                $gel = bankBogMoney($list['EntryAmountBase']);
-            } elseif ($nbg > 0) {
-                $gel = bankBogMoney($usd * $nbg);
-            }
         }
 
         return [
             'CURRENCY' => $currency,
+            'AMOUNT' => bankBogMoney($list['EntryAmount'] ?? 0),
             'GEL' => $gel,
             'USD' => $usd,
             'NBG' => $nbg,
@@ -1019,7 +1132,10 @@ if (!function_exists('bankBogBuildMergeModels')) {
                     'DATE' => $date,
                     'NOMINATION' => $list['DocumentNomination'] ?? '',
                     'BENEFICIARY' => $list['BeneficiaryDetails_Name'] ?? '',
+                    'PROJECT' => $list['PROJECT'] ?? '',
+                    'ACCOUNT' => $list['ACCOUNT_NUMBER'] ?? '',
                     'CURRENCY' => $amounts['CURRENCY'],
+                    'AMOUNT' => $amounts['AMOUNT'],
                     'AMOUNT_GEL' => $amounts['GEL'],
                     'AMOUNT_USD' => $amounts['USD'],
                     'COMMENT' => $list['EntryComment'] ?? '',
@@ -1087,8 +1203,11 @@ if (!function_exists('bankBogBuildMergeModels')) {
                 'BANK_AMOUNT_USD' => $amounts['USD'],
                 'NBG_RATE' => $amounts['NBG'],
                 'CURRENCY' => $amounts['CURRENCY'],
+                'AMOUNT' => $amounts['AMOUNT'],
                 'NOMINATION' => $list['DocumentNomination'] ?? '',
                 'BENEFICIARY' => $list['BeneficiaryDetails_Name'] ?? '',
+                'PROJECT' => $list['PROJECT'] ?? '',
+                'ACCOUNT' => $list['ACCOUNT_NUMBER'] ?? '',
                 'DATE' => $date,
                 'list_id' => $list['ID'],
                 'PAYMENT' => $list['ID'],
@@ -1233,8 +1352,8 @@ if (!function_exists('bankBogCreatePaymentFromMerge')) {
             $nbg = floatval($list['NBG_RATE'] ?? 0);
         }
 
-        // Prefer exact GEL from statement when USD matches statement USD
-        if ($amounts['CURRENCY'] === 'GEL' && abs($valueUsd - floatval($amounts['USD'])) < 0.02) {
+        // Prefer exact GEL from statement (GEL / EUR) when USD matches statement USD
+        if ($amounts['CURRENCY'] !== 'USD' && abs($valueUsd - floatval($amounts['USD'])) < 0.02) {
             $tanxaGel = bankBogMoney($amounts['GEL']);
         } elseif ($nbg > 0) {
             $tanxaGel = bankBogMoney($valueUsd * $nbg);

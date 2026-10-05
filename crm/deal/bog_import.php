@@ -9,37 +9,58 @@ $APPLICATION->SetTitle('BOG — ამონაწერის გენერ�
 bankBogEnsureModules();
 
 $flash = null;
-$stats = null;
+$results = null;
 $errorMsg = null;
 $accounts = bankBogAccounts();
-$selectedAccount = $_POST['ACCOUNT'] ?? ($accounts[0]['number'] ?? BANK_BOG_ACCOUNT);
+$selectedAccount = trim((string)($_POST['ACCOUNT'] ?? ''));
 $statementIblockId = bankBogStatementIblockId();
+
+$accountsByProject = [];
+foreach ($accounts as $acc) {
+    $accountsByProject[$acc['project']][] = $acc;
+}
+
+$missingCredentials = [];
+foreach (bankBogCompanies() as $code => $company) {
+    list($clientId, $clientSecret) = bankBogCredentials($code);
+    if ($clientId === '' || $clientSecret === '') {
+        $missingCredentials[] = $company['name'];
+    }
+}
 
 if ($statementIblockId <= 0) {
     $flash = ['type' => 'error', 'text' => 'ამონაწერების სია ჯერ არ არსებობს — გაუშვი setup.php'];
-} elseif (!empty($_POST['from_date']) && !empty($_POST['to_date']) && !empty($_POST['CURRENCY']) && !empty($_POST['ACCOUNT'])) {
+} elseif (!empty($_POST['from_date']) && !empty($_POST['to_date'])) {
+    @set_time_limit(0);
+    ignore_user_abort(true);
+
     $from = preg_replace('/[^0-9\-]/', '', $_POST['from_date']);
     $to = preg_replace('/[^0-9\-]/', '', $_POST['to_date']);
-    $currency = strtoupper(trim((string)$_POST['CURRENCY']));
-    if (!in_array($currency, ['GEL', 'USD', 'EUR'], true)) {
-        $currency = 'GEL';
-    }
-    $selectedAccount = trim((string)$_POST['ACCOUNT']);
+    $keys = ($_POST['MODE'] ?? '') === 'all' ? array_keys($accounts) : [$selectedAccount];
 
-    $stats = bankBogImportStatements($from, $to, $currency, $errorMsg, $selectedAccount);
-    if ($errorMsg && empty($stats['created']) && empty($stats['fetched'])) {
+    $results = bankBogImportStatements($from, $to, $keys, $errorMsg);
+
+    $totals = ['created' => 0, 'skipped_dup' => 0, 'skipped_filter' => 0, 'errors' => 0];
+    foreach ($results as $stats) {
+        $totals['created'] += $stats['created'];
+        $totals['skipped_dup'] += $stats['skipped_dup'];
+        $totals['skipped_filter'] += $stats['skipped_filter'];
+        $totals['errors'] += count($stats['errors']);
+    }
+
+    if ($errorMsg) {
         $flash = ['type' => 'error', 'text' => $errorMsg];
-    } elseif ($errorMsg) {
-        $flash = ['type' => 'warn', 'text' => $errorMsg];
+    } elseif (empty($results)) {
+        $flash = ['type' => 'error', 'text' => 'აირჩიე ანგარიში'];
     } else {
         $flash = [
-            'type' => 'ok',
+            'type' => $totals['errors'] ? 'warn' : 'ok',
             'text' => sprintf(
-                'ახალი %d · დუბლიკატი %d · გამოტოვებული %d · API ჩანაწერი %d',
-                (int)$stats['created'],
-                (int)$stats['skipped_dup'],
-                (int)$stats['skipped_filter'],
-                (int)$stats['fetched']
+                'ახალი %d · დუბლიკატი %d · გამოტოვებული %d%s',
+                $totals['created'],
+                $totals['skipped_dup'],
+                $totals['skipped_filter'],
+                $totals['errors'] ? ' · შეცდომა ' . $totals['errors'] . ' (იხ. ცხრილი)' : ''
             ),
         ];
     }
@@ -148,6 +169,16 @@ ob_end_clean();
         .flash.ok { background: #e8f7ef; color: var(--ok); border: 1px solid #b7e4c7; }
         .flash.warn { background: #fff7e0; color: var(--warn); border: 1px solid #f5d78e; }
         .flash.error { background: #fef3f2; color: var(--err); border: 1px solid #f5c2c0; }
+        .results { margin-top: 14px; padding: 0; overflow-x: auto; }
+        .results table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .results th {
+            text-align: left; padding: 10px 12px; background: #e8eef4;
+            font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+        }
+        .results td { padding: 10px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+        .results .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .results .muted { color: var(--muted); font-size: 12px; margin-top: 2px; }
+        .results .row-error { color: var(--err); font-size: 12px; font-weight: 600; margin-top: 4px; }
         @media (max-width: 640px) {
             .row-2 { grid-template-columns: 1fr; }
             .shell { margin-top: 20px; }
@@ -160,9 +191,13 @@ ob_end_clean();
         <div class="hero-mark">BOG</div>
         <div>
             <h1>ამონაწერის გენერაცია</h1>
-            <p>საქართველოს ბანკი · <?= htmlspecialchars(BANK_BOG_COMPANY_LABEL) ?></p>
+            <p>საქართველოს ბანკი · <?= count($accounts) ?> ანგარიში / ვალუტა</p>
         </div>
     </div>
+
+    <?php if ($missingCredentials): ?>
+        <div class="flash error">client ID / secret არ არის მითითებული: <?= htmlspecialchars(implode(', ', $missingCredentials)) ?> (bank_integration/credentials.php)</div>
+    <?php endif; ?>
 
     <?php if ($flash): ?>
         <div class="flash <?= htmlspecialchars($flash['type']) ?>"><?= htmlspecialchars($flash['text']) ?></div>
@@ -176,22 +211,19 @@ ob_end_clean();
             </div>
         <?php else: ?>
         <form method="post" action="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>" id="loadForm">
+            <input type="hidden" name="MODE" id="MODE" value="one">
             <div class="field">
                 <label for="ACCOUNT">ანგარიში</label>
-                <select id="ACCOUNT" name="ACCOUNT" required>
-                    <?php foreach ($accounts as $acc): ?>
-                        <option value="<?= htmlspecialchars($acc['number']) ?>" <?= ($selectedAccount === $acc['number']) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars(($acc['label'] ?? '') . ' — ' . $acc['number']) ?>
-                        </option>
+                <select id="ACCOUNT" name="ACCOUNT">
+                    <?php foreach ($accountsByProject as $project => $projectAccounts): ?>
+                        <optgroup label="<?= htmlspecialchars($project) ?>">
+                            <?php foreach ($projectAccounts as $acc): ?>
+                                <option value="<?= htmlspecialchars($acc['key']) ?>" <?= ($selectedAccount === $acc['key']) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($acc['iban'] . ' ' . $acc['currency'] . ' · ' . $acc['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </optgroup>
                     <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="field">
-                <label for="CURRENCY">ვალუტა</label>
-                <select id="CURRENCY" name="CURRENCY" required>
-                    <option value="GEL" <?= (($_POST['CURRENCY'] ?? 'GEL') === 'GEL') ? 'selected' : '' ?>>GEL</option>
-                    <option value="USD" <?= (($_POST['CURRENCY'] ?? '') === 'USD') ? 'selected' : '' ?>>USD</option>
-                    <option value="EUR" <?= (($_POST['CURRENCY'] ?? '') === 'EUR') ? 'selected' : '' ?>>EUR</option>
                 </select>
             </div>
             <div class="row-2">
@@ -205,20 +237,62 @@ ob_end_clean();
                 </div>
             </div>
             <div class="actions">
-                <button class="btn btn-primary" type="submit" id="submitBtn">ჩატვირთვა</button>
+                <button class="btn btn-primary" type="submit" value="one">ჩატვირთვა</button>
+                <button class="btn btn-primary" type="submit" value="all">ყველა ანგარიში</button>
                 <a class="btn btn-ghost" href="/crm/deal/bog_merge.php">გადახდებთან მიბმა →</a>
             </div>
         </form>
         <?php endif; ?>
     </div>
+
+    <?php if ($results): ?>
+        <div class="card results">
+            <table>
+                <thead>
+                <tr>
+                    <th>ანგარიში</th>
+                    <th class="num">ახალი</th>
+                    <th class="num">დუბლიკატი</th>
+                    <th class="num" title="შიდა გადარიცხვა, კონვერტაცია, ხაზინა... - ინახება, მიბმის გვერდზე ჩანს გამოტოვებულებში">გამოტოვებული</th>
+                    <th class="num" title="გასავალი თანხები არ ინახება">გასავალი</th>
+                    <th class="num" title="ბანკში ჯერ არ არის გატარებული - შემდეგ იმპორტზე ჩაიტვირთება">დაუსრულებელი</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($results as $key => $stats): ?>
+                    <?php $acc = $accounts[$key]; ?>
+                    <tr>
+                        <td>
+                            <b><?= htmlspecialchars($acc['project']) ?></b> · <?= htmlspecialchars($acc['name']) ?>
+                            <div class="muted"><?= htmlspecialchars($acc['iban'] . ' ' . $acc['currency']) ?></div>
+                            <?php foreach ($stats['errors'] as $error): ?>
+                                <div class="row-error"><?= htmlspecialchars($error) ?></div>
+                            <?php endforeach; ?>
+                        </td>
+                        <td class="num"><b><?= (int)$stats['created'] ?></b></td>
+                        <td class="num"><?= (int)$stats['skipped_dup'] ?></td>
+                        <td class="num"><?= (int)$stats['skipped_filter'] ?></td>
+                        <td class="num"><?= (int)$stats['debit'] ?></td>
+                        <td class="num"><?= (int)$stats['pending'] ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
 </div>
 <script>
 var loadForm = document.getElementById('loadForm');
 if (loadForm) {
-    loadForm.addEventListener('submit', function () {
-        var btn = document.getElementById('submitBtn');
-        btn.disabled = true;
-        btn.textContent = 'იტვირთება…';
+    loadForm.addEventListener('submit', function (e) {
+        var submitter = e.submitter;
+        document.getElementById('MODE').value = submitter && submitter.value === 'all' ? 'all' : 'one';
+        loadForm.querySelectorAll('button[type="submit"]').forEach(function (btn) {
+            btn.disabled = true;
+        });
+        if (submitter) {
+            submitter.textContent = 'იტვირთება…';
+        }
     });
 }
 </script>

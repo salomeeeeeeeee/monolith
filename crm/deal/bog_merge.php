@@ -275,6 +275,12 @@ ob_end_clean();
             <input class="date-input" type="date" id="dateTo">
         </div>
         <div class="field">
+            <label for="projectFilter">პროექტი</label>
+            <select id="projectFilter">
+                <option value="">ყველა</option>
+            </select>
+        </div>
+        <div class="field">
             <label for="currencyFilter">ვალუტა</label>
             <select id="currencyFilter">
                 <option value="">ყველა</option>
@@ -402,6 +408,17 @@ function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({
         '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
     }[c]));
+}
+
+/** რომელ ანგარიშზე შემოვიდა: პროექტი · IBAN */
+function accountMeta(row) {
+    const parts = [row.PROJECT, row.ACCOUNT].filter(Boolean);
+    return parts.length ? `<div class="deal-meta">${esc(parts.join(' · '))}</div>` : '';
+}
+/** EUR-ზე საწყისი თანხაც ჩანს - ცხრილში მხოლოდ ₾ და $ სვეტებია */
+function currencyCell(row) {
+    const cur = esc(row.CURRENCY);
+    return row.CURRENCY === 'EUR' ? `${cur}<div class="deal-meta">${money(row.AMOUNT)} €</div>` : cur;
 }
 
 function updateSaveButtonsState() {
@@ -584,16 +601,17 @@ function renderMatched() {
         tr.dataset.expectedUsd = String(row.BANK_AMOUNT_USD || 0);
         tr.dataset.date = String(row.DATE || '');
         tr.dataset.search = [
-            row.CLIENT_NAME, row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY,
+            row.CLIENT_NAME, row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY, row.PROJECT, row.ACCOUNT,
             ...(deals.map(d => d.ID + ' ' + (d.NAME || '')))
         ].join(' ').toLowerCase();
         tr.dataset.currency = (row.CURRENCY || '').toUpperCase();
+        tr.dataset.project = row.PROJECT || '';
         tr.innerHTML = `
             <td><b>${esc(row.CLIENT_NAME || row.NAME)}</b><div class="deal-meta">${esc(row.STATUS || '')} · ${esc(row.INN || '')}</div></td>
             <td>${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
-            <td>${esc(row.BENEFICIARY)}</td>
-            <td>${esc(row.CURRENCY)}</td>
+            <td>${esc(row.BENEFICIARY)}${accountMeta(row)}</td>
+            <td>${currencyCell(row)}</td>
             <td class="amount">${money(row.BANK_AMOUNT_GEL)}</td>
             <td class="amount">${money(row.BANK_AMOUNT_USD)}</td>
             <td title="NBG USD კურსი ამონაწერის თარიღზე (${esc(row.DATE)})">${esc(row.NBG_RATE)}</td>
@@ -620,15 +638,16 @@ function renderErrors() {
         tr.className = 'filtertr tone-red';
         tr.dataset.expectedUsd = String(usd);
         tr.dataset.date = String(row.DATE || '');
-        tr.dataset.search = [row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY].join(' ').toLowerCase();
+        tr.dataset.search = [row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY, row.PROJECT, row.ACCOUNT].join(' ').toLowerCase();
         tr.dataset.currency = (row.CURRENCY || '').toUpperCase();
+        tr.dataset.project = row.PROJECT || '';
         tr.innerHTML = `
             <td><b>${esc(row.NAME)}</b></td>
             <td>${esc(row.INN)}</td>
             <td>${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
-            <td>${esc(row.BENEFICIARY)}</td>
-            <td>${esc(row.CURRENCY)}</td>
+            <td>${esc(row.BENEFICIARY)}${accountMeta(row)}</td>
+            <td>${currencyCell(row)}</td>
             <td title="NBG USD კურსი ამონაწერის თარიღზე">${esc(row.NBG_RATE)}</td>
             <td class="amount">${money(row.AMOUNT_GEL || row.BANK_AMOUNT_GEL)}</td>
             <td class="amount">${money(usd)}</td>
@@ -687,15 +706,15 @@ function renderSkipped() {
         const tr = document.createElement('tr');
         tr.className = 'skipped-row';
         tr.dataset.reason = row.REASON_CODE || '';
-        tr.dataset.search = [row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.REASON, row.list_id].join(' ').toLowerCase();
+        tr.dataset.search = [row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.REASON, row.list_id, row.PROJECT, row.ACCOUNT].join(' ').toLowerCase();
         tr.innerHTML = `
             <td>${esc(row.list_id)}</td>
             <td><b>${esc(row.NAME)}</b></td>
             <td>${esc(row.INN)}</td>
             <td>${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
-            <td>${esc(row.BENEFICIARY)}</td>
-            <td>${esc(row.CURRENCY)}</td>
+            <td>${esc(row.BENEFICIARY)}${accountMeta(row)}</td>
+            <td>${currencyCell(row)}</td>
             <td class="amount">${money(row.AMOUNT_GEL)}</td>
             <td class="amount">${money(row.AMOUNT_USD)}</td>
             <td><span class="reason-badge">${esc(row.REASON)}</span></td>
@@ -717,6 +736,7 @@ function applySkippedFilters() {
 function applyFilters() {
     const q = (document.getElementById('searchBox').value || '').trim().toLowerCase();
     const cur = (document.getElementById('currencyFilter').value || '').toUpperCase();
+    const project = document.getElementById('projectFilter').value || '';
     const from = document.getElementById('dateFrom').value || '';
     const to = document.getElementById('dateTo').value || '';
 
@@ -726,21 +746,35 @@ function applyFilters() {
         const rowDate = tr.dataset.date || '';
         const okQ = !q || hay.includes(q);
         const okC = !cur || rowCur === cur;
+        const okP = !project || tr.dataset.project === project;
         let okD = true;
         if (from && rowDate && rowDate < from) okD = false;
         if (to && rowDate && rowDate > to) okD = false;
-        tr.classList.toggle('hidden-row', !(okQ && okC && okD));
+        tr.classList.toggle('hidden-row', !(okQ && okC && okP && okD));
     });
     checkRowTotals('myForm');
     checkRowTotals('myForm_er');
+}
+
+function fillProjectFilter() {
+    const select = document.getElementById('projectFilter');
+    const projects = [...new Set([...(data || []), ...(errors || [])].map(r => r.PROJECT).filter(Boolean))].sort();
+    projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        select.appendChild(opt);
+    });
 }
 
 renderMatched();
 renderErrors();
 renderSkipped();
 refreshStats();
+fillProjectFilter();
 document.getElementById('searchBox').addEventListener('input', applyFilters);
 document.getElementById('currencyFilter').addEventListener('change', applyFilters);
+document.getElementById('projectFilter').addEventListener('change', applyFilters);
 document.getElementById('dateFrom').addEventListener('change', applyFilters);
 document.getElementById('dateTo').addEventListener('change', applyFilters);
 
