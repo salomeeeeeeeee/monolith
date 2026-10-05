@@ -1,2 +1,5 @@
 # BOG API client ID / secret - only on the server, the repo is public
 crm/deal/bank_integration/credentials.php
+
+# site webhook secret (X-Webhook-Secret) - only on the server
+local/php_interface/site_webhook_secret.php
