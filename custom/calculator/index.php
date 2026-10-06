@@ -92,7 +92,21 @@ $scheduleTypeArr['allCash'] = [
 
 $instalmentPlanArr['allCash'] = 'ერთიანი გადახდა';
 
+// ნიუ დეპოზე გეგმების ფასები პროდუქტის ველებიდან (ერთიანი, 0/20/80, 60 თვიანი)
+$isNewDepo = calcCanonicalProject($projectName) === 'New Depo';
+if ($isNewDepo) {
+    $planPrice = calcProductPlanPrice($prod, 'ერთიანი გადახდა');
+    if ($planPrice) {
+        $scheduleTypeArr['allCash'] = calcApplyPlanPrice($scheduleTypeArr['allCash'], $planPrice, $oldPrice, $totalKVM, $startSqmPrice);
+    }
+}
+
 foreach ($conditionElements as $element) {
+    $planPrice = $isNewDepo ? calcProductPlanPrice($prod, $element['NAME']) : null;
+    if ($planPrice === false) {
+        continue; // 60 თვიანი ამ ფართზე დაშვებული არ არის
+    }
+
     // ფასდაკლება: DISCOUNT_PERCENT (%) უპირატესია, სხვა შემთხვევაში DISCOUNT ($)
     $discountInfo = calcResolveDiscountPerSqm($element, $startSqmPrice);
     $discountPerSqm = $discountInfo['perSqm'];
@@ -133,6 +147,9 @@ foreach ($conditionElements as $element) {
         'endDateFixed' => $endDateFixed,
         'monthAmount' => $monthAmount,
     ];
+    if ($planPrice) {
+        $scheduleTypeArr[$element['ID']] = calcApplyPlanPrice($scheduleTypeArr[$element['ID']], $planPrice, $oldPrice, $totalKVM, $startSqmPrice);
+    }
 }
 ?>
 <!DOCTYPE html>

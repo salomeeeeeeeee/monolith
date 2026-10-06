@@ -378,9 +378,25 @@ if (!function_exists('calcIsActiveCondition')) {
     }
 }
 
+if (!function_exists('calcCanonicalProject')) {
+    // ლისტ 20-ში ნიუ დეპო ძველი სახელითაა, დილებსა და პროდუქტებზე კი "New Depo"
+    function calcCanonicalProject($name)
+    {
+        $aliases = ['მონოლით ნიუ დეპო' => 'New Depo'];
+        $text = is_array($name) ? (string)($name[0] ?? '') : (string)$name;
+        foreach ($aliases as $from => $to) {
+            if (calcNormalizeText($text) === calcNormalizeText($from)) {
+                return $to;
+            }
+        }
+        return $text;
+    }
+}
+
 if (!function_exists('calcGetInstallmentConditions')) {
     function calcGetInstallmentConditions($projectName, $iblockId = 20, $productType = '')
     {
+        $projectName = calcCanonicalProject($projectName);
         $all = calcGetCIBlockElementsByFilter(['IBLOCK_ID' => $iblockId]);
         $matched = [];
         foreach ($all as $element) {
@@ -388,12 +404,12 @@ if (!function_exists('calcGetInstallmentConditions')) {
                 continue;
             }
             // PROJECT_LIST (List) უპირატესია; ძველი PROJECT (String) fallback-ად რჩება
-            $projects = calcGetListValues($element, ['PROJECT_LIST']);
+            $projects = array_map('calcCanonicalProject', calcGetListValues($element, ['PROJECT_LIST']));
             if ($projects) {
                 if (!calcListMatches($projects, $projectName)) {
                     continue;
                 }
-            } elseif (!calcProjectMatches($element['PROJECT'] ?? '', $projectName)) {
+            } elseif (!calcProjectMatches(calcCanonicalProject($element['PROJECT'] ?? ''), $projectName)) {
                 continue;
             }
             // FART_TYPE_LIST — ცარიელი ნიშნავს ყველა ფართის ტიპს
@@ -403,6 +419,67 @@ if (!function_exists('calcGetInstallmentConditions')) {
             $matched[] = $element;
         }
         return $matched;
+    }
+}
+
+if (!function_exists('calcProductPlanPrice')) {
+    /**
+     * ნიუ დეპოს პროდუქტზე თითო გადახდის გეგმის ფასი ცალკე ველშია.
+     * აბრუნებს ['price', 'kvmPrice']-ს; false-ს, თუ გეგმა ამ ფართზე დაშვებული არ არის;
+     * null-ს, თუ გეგმას პროდუქტის ველი არ შეესაბამება (ფასი ლისტი 20-დან ითვლება).
+     */
+    function calcProductPlanPrice($prod, $planName)
+    {
+        $plans = [
+            ['names' => ['ერთიანი'],              'full' => '__3OT6VA',       'sqm' => '__TTJCKI'],
+            ['names' => ['0/20/80'],              'full' => '_02080__AEC240', 'sqm' => '_02080__1D1HZL'],
+            ['names' => ['10/20/70', '10/30/60'], 'full' => '_60__WZXWF3',    'sqm' => '_60__Q44IB7', 'allowed' => 'PROP_60__RHMZW7'],
+        ];
+        $toNumber = function ($value) {
+            $value = is_array($value) ? ($value[0] ?? '') : $value;
+            return (float)preg_replace('/[^0-9.]/', '', (string)$value);
+        };
+        foreach ($plans as $plan) {
+            $matched = false;
+            foreach ($plan['names'] as $name) {
+                if (mb_strpos((string)$planName, $name) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+            // 60 თვიანი მხოლოდ იმ ფართზე, სადაც "60 თვიანი დაშვება" = კი
+            if (!empty($plan['allowed']) && calcNormalizeText($prod[$plan['allowed']] ?? '') !== 'კი') {
+                return false;
+            }
+            $price = $toNumber($prod[$plan['full']] ?? '');
+            if ($price <= 0) {
+                return !empty($plan['allowed']) ? false : null;
+            }
+            $kvmPrice = $toNumber($prod[$plan['sqm']] ?? '');
+            if ($kvmPrice <= 0) {
+                $kvmPrice = ($prod['TOTAL_AREA'] ?? 0) > 0 ? round($price / $prod['TOTAL_AREA'], 2) : 0;
+            }
+            return ['price' => round($price, 2), 'kvmPrice' => round($kvmPrice, 2)];
+        }
+        return null;
+    }
+}
+
+if (!function_exists('calcApplyPlanPrice')) {
+    // გეგმის ფასი პროდუქტიდან; ფასდაკლება = საწყისი ფასი - გეგმის ფასი (უარყოფითი = ფასნამატი)
+    function calcApplyPlanPrice($row, $planPrice, $oldPrice, $totalKVM, $startSqmPrice)
+    {
+        $discountAmount = round($oldPrice - $planPrice['price'], 2);
+        $discountPerSqm = $totalKVM > 0 ? round($discountAmount / $totalKVM, 2) : 0;
+        $row['price'] = $planPrice['price'];
+        $row['kvmPrice'] = $planPrice['kvmPrice'];
+        $row['discountAmount'] = $discountAmount;
+        $row['discountPerSqm'] = $discountPerSqm;
+        $row['discountPct'] = $startSqmPrice > 0 ? round($discountPerSqm / $startSqmPrice * 100, 2) : 0;
+        return $row;
     }
 }
 
