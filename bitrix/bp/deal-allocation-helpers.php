@@ -137,9 +137,26 @@ if (!function_exists('allocation_assignProductToDeal')) {
     }
 }
 
+if (!function_exists('allocation_reservationFields')) {
+    /**
+     * რეზერვაციის UF ველები, რომლებიც დაშლისას ასლზე გადადის.
+     */
+    function allocation_reservationFields()
+    {
+        return array(
+            "UF_CRM_1779278640735", // რეზერვაციის ტიპი (სტანდარტული/არასტანდარტული)
+            "UF_CRM_1775116922461", // რეზერვაციის ტიპი (უფასო/ფასიანი)
+            "UF_CRM_1779278590201", // დარეზერვების თარიღი
+            "UF_CRM_1779278567041", // დარეზერვებულია თარიღამდე
+            "UF_CRM_1658259058",    // ჯავშნის მოქმედების ვადა
+            "UF_CRM_1781181993925", // რეზერვაციის კომენტარი
+        );
+    }
+}
+
 if (!function_exists('allocation_copyDeal')) {
     /**
-     * წყარო დილის ასლი — იგივე სტეიჯი/კონტაქტი/UF/SOURCE_ID, პროდუქტების გარეშე.
+     * წყარო დილის ასლი — იგივე სტეიჯი/კონტაქტი/SOURCE_ID/რეზერვაციის ველები, პროდუქტების გარეშე.
      */
     function allocation_copyDeal($sourceDeal)
     {
@@ -149,7 +166,7 @@ if (!function_exists('allocation_copyDeal')) {
 
         $sourceId = intval($sourceDeal["ID"]);
 
-        // GetByID იძლევა სრულ ველებს (SOURCE_ID, UF_...), GetList ხშირად აკლებს
+        // GetByID იძლევა SOURCE_ID-ს, მაგრამ UF ველებს არა - ისინი ქვემოთ ცალკე იკითხება
         $fullDeal = CCrmDeal::GetByID($sourceId, false);
         if (!$fullDeal || empty($fullDeal["ID"])) {
             $fullDeal = $sourceDeal;
@@ -184,6 +201,21 @@ if (!function_exists('allocation_copyDeal')) {
         }
 
         $fields["CLOSED"] = "N";
+
+        // რეზერვაციის თარიღები/ტიპი, თორემ ასლზე ჯავშნის მონაცემები ცარიელი რჩება
+        $reservationFields = allocation_reservationFields();
+        $ufRow = CCrmDeal::GetListEx(
+            array(),
+            array("=ID" => $sourceId, "CHECK_PERMISSIONS" => "N"),
+            false,
+            false,
+            array_merge(array("ID"), $reservationFields)
+        )->Fetch();
+        foreach ($reservationFields as $code) {
+            if ($ufRow && isset($ufRow[$code]) && $ufRow[$code] !== "" && $ufRow[$code] !== false) {
+                $fields[$code] = $ufRow[$code];
+            }
+        }
 
         // წყარო აშკარად გადავიტანოთ (Add ზოგჯერ ტოვებს ცარიელს)
         if (!empty($fullDeal["SOURCE_ID"])) {
