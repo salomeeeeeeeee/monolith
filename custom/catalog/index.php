@@ -2379,14 +2379,14 @@ function appendPriceSection(container, apt) {
             <span class="block-header-title">ფასი</span>
         </div>
         <div style="background:linear-gradient(135deg,#f0fdf9,#e6fff8);border:1px solid #a7f3d0;border-radius:8px;padding:7px 9px;display:flex;flex-direction:column;gap:4px;margin-top:6px;">
-            ${kvmUsd ? `<div style="display:flex;gap:4px;">
-                <div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:5px;padding:4px 7px;"><div style="font-size:8px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px;">მ² ფასი $</div><div style="font-size:12px;font-weight:700;color:#047857;font-family:'JetBrains Mono',monospace;">$${fmt(kvmUsd)}</div></div>
-                <div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:5px;padding:4px 7px;"><div style="font-size:8px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px;">მ² ფასი ₾</div><div style="font-size:12px;font-weight:700;color:#047857;font-family:'JetBrains Mono',monospace;">₾${fmt(kvmGel)}</div></div>
+            ${(price || kvmUsd) ? `<div style="display:flex;gap:4px;">
+                ${planBox("სრული ფასი $", price, false)}
+                ${planBox("მ² ფასი $", kvmUsd, false)}
             </div>` : ""}
-            <div style="display:flex;gap:4px;">
-                ${price ? `<div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:5px;padding:4px 7px;"><div style="font-size:8px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px;">სრული ფასი $</div><div style="font-size:12px;font-weight:700;color:#047857;font-family:'JetBrains Mono',monospace;">$${fmt(price)}</div></div>` : ""}
-                ${priceGel ? `<div style="flex:1;background:#fff;border:1px solid #d1fae5;border-radius:5px;padding:4px 7px;"><div style="font-size:8px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px;">სრული ფასი ₾</div><div style="font-size:12px;font-weight:700;color:#047857;font-family:'JetBrains Mono',monospace;">₾${fmt(priceGel)}</div></div>` : ""}
-            </div>
+            ${(priceGel || kvmGel) ? `<div style="display:flex;gap:4px;">
+                ${planBox("სრული ფასი ₾", priceGel, true)}
+                ${planBox("მ² ფასი ₾", kvmGel, true)}
+            </div>` : ""}
             <div style="text-align:right;font-size:8px;color:#6b7280;padding-top:2px;border-top:1px solid #d1fae5;">NBG კურსი: <span style="font-weight:700;color:#047857;">${nbg} ₾</span></div>
             ${planRow("60 თვიანი დაშვება (მონოლითი)", plan60Full, plan60Kvm, plan60Down)}
             ${planRow("0/20/80 (მონოლითი)", plan02080Full, plan02080Kvm, "")}
