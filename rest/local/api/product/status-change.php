@@ -14,12 +14,17 @@ function pmCfg() {
 
         // SYNC
         "PROPS" => array(
-            "STATUS"    => "_P64GYD",
-            "PROMOTION" => "_UQIM2I",
+            "STATUS"      => "_P64GYD",
+            "PROMOTION"   => "_UQIM2I",
+            "NFS_COMMENT" => "NFScomment",
         ),
 
         // only products that currently have these statuses can be changed // SYNC
         "VISIBLE_STATUSES" => array("თავისუფალი", "NFS"),
+
+        // setting this status requires a reason, saved to NFS_COMMENT // SYNC
+        "COMMENT_STATUS"     => "NFS",
+        "COMMENT_MAX_LENGTH" => 1000, // SYNC
 
         // statuses that can be SET: value written => label // SYNC
         "STATUS_OPTIONS" => array(
@@ -194,6 +199,16 @@ if ($hasStatus) {
     }
 }
 
+// NFS needs a reason: the comment is required and saved together with the status
+$statusComment = "";
+if ($hasStatus && $statusValue === $cfg["COMMENT_STATUS"]) {
+    $statusComment = is_string($postJson["status_comment"] ?? null) ? trim($postJson["status_comment"]) : "";
+    if ($statusComment === "") {
+        pmaJsonOut(array("success" => false, "error" => "კომენტარი სავალდებულოა"), 400);
+    }
+    $statusComment = mb_substr($statusComment, 0, $cfg["COMMENT_MAX_LENGTH"]);
+}
+
 $promoWriteKey   = null;
 $promoWriteValue = null;
 $promoLabel      = "";
@@ -224,6 +239,7 @@ foreach ($ids as $id) {
     $propertyValues = array();
     if ($hasStatus) $propertyValues[pmaCode("STATUS")] = $statusValue;
     if ($hasPromo)  $propertyValues[$promoWriteKey]    = $promoWriteValue;
+    if ($statusComment !== "") $propertyValues[pmaCode("NFS_COMMENT")] = $statusComment;
 
     CIBlockElement::SetPropertyValuesEx($id, $iblockId, $propertyValues);
     pmaUpdateIndex($iblockId, $id);
@@ -236,6 +252,7 @@ if ($successCount > 0) {
     $parts = array();
     if ($hasStatus) $parts[] = "სტატუსი: {$statusValue}";
     if ($hasPromo)  $parts[] = "აქცია: {$promoLabel}";
+    if ($statusComment !== "") $parts[] = "კომენტარი: {$statusComment}";
 
     $log = $cfg["LOG"];
     pmaSaveLog("პროდუქტების მოდული - სტატუსი/აქცია " . date("d.m.Y H:i"), array(

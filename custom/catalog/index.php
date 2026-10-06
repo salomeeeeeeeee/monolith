@@ -839,6 +839,7 @@ const F_KVM_USD    = '__6ZWTER';
 const F_SALE       = '_UQIM2I';
 // const F_CADASTRAL  = '__51MODL';
 const F_SECTOR     = '_3BU0JH';
+const F_NFS_COMMENT = 'NFScomment';
 
 
 
@@ -909,6 +910,7 @@ const SKIP_CODES = new Set([
     "_P64GYD","Number","FLOOR","__X1GCRZ","_L24CUB",
     "__51MODL","__6ZWTER", "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL", "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
     "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","__3OT6VA","__TTJCKI",
+    F_NFS_COMMENT,
 ]);
 const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA"];
 
@@ -2098,10 +2100,14 @@ function renderBlockSections(apt) {
         "__51MODL","__6ZWTER",  "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL","RESERVATION_STAGE_ID","RESERVATION_DATE",
         "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
         "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","__3OT6VA","__TTJCKI",
+        F_NFS_COMMENT,
     ]);
     // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
     shownCodes.add("PRICE"); shownCodes.add("PRICE_GEL");
+
+    // ── NFS reason (set in the products module together with the status) ──
+    if (apt["_P64GYD"] === "NFS" && apt[F_NFS_COMMENT]) appendNfsSection(container, apt);
 
     // ── 2. Grouped sections ───────────────────────────────────────────
     POPUP_GROUPS.forEach(group => {
@@ -2247,6 +2253,25 @@ if (apt["RESERVATION_STAGE_ID"]) {
             bf.appendChild(row);
         });
     }
+}
+
+// value comes HTML-escaped from the server (GetProperties VALUE)
+function appendNfsSection(container, apt) {
+    const icon = `<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#00d4aa" stroke-width="1.2"/><path d="M3.8 3.8l8.4 8.4" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+    const sec = document.createElement("div");
+    sec.className = "block-section";
+    sec.innerHTML = `
+        <div class="block-header">
+            <div class="block-header-icon">${icon}</div>
+            <span class="block-header-title">NFS ინფორმაცია</span>
+        </div>
+        <div class="block-fields">
+            <div class="field-row row-stacked is-main apt-notforsale">
+                <span class="field-label">კომენტარი</span>
+                <div class="field-value-long" style="white-space:pre-wrap;">${apt[F_NFS_COMMENT]}</div>
+            </div>
+        </div>`;
+    container.appendChild(sec);
 }
 
 function appendSectionWithIcon(container, title, iconSvg, fields, apt, statusClass, openByDefault = false) {
@@ -2569,6 +2594,7 @@ async function exportToExcel() {
               // ── Status and block must always be exported (they're in SKIP_CODES for the popup/filters only) ──
               skipExport.delete("_P64GYD");
         skipExport.delete(F_BLOCK);
+        skipExport.delete(F_NFS_COMMENT);
 
         const priorityKeys = ["ID","_P64GYD","Number","__X1GCRZ","_3BU0JH", F_BLOCK,"FLOOR","TOTAL_AREA","PRICE","PRICE_GEL", F_KVM_USD];
         
@@ -2627,6 +2653,10 @@ async function exportToExcel() {
             orderedKeys.forEach(k => {
                 let v = apt[k];
                 if (v === undefined || v === null) v = "";
+                // the NFS reason belongs to the current NFS status only; free text comes HTML-escaped
+                if (k === F_NFS_COMMENT) {
+                    v = apt["_P64GYD"] === "NFS" ? new DOMParser().parseFromString(String(v), "text/html").documentElement.textContent : "";
+                }
                 if (Array.isArray(v)) v = v.join(", ");
                 rd[k] = String(v);
             });

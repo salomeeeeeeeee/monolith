@@ -31,10 +31,15 @@ function pmCfg() {
             "KVM_PRICE"   => "__6ZWTER",
             "PRICE_TOTAL" => "__9YCWGZ",
             "SALE_PRICE"  => "__YOIUM1",
+            "NFS_COMMENT" => "NFScomment",
         ),
 
         // ONLY products with these statuses are loaded (empty array = all) // SYNC
         "VISIBLE_STATUSES" => array("თავისუფალი", "NFS"),
+
+        // setting this status requires a reason, saved to NFS_COMMENT // SYNC
+        "COMMENT_STATUS"     => "NFS",
+        "COMMENT_MAX_LENGTH" => 1000, // SYNC
 
         // Sort order (natural compare, in PHP)
         "SORT_KEYS" => array("PROJECT", "BLOCK", "FLOOR", "NUMBER"),
@@ -69,6 +74,7 @@ function pmCfg() {
             "PRICE_TOTAL"   => "ჯამური<br>ღირებულება $",
             "SALE_PRICE"    => "გაყიდვის<br>ღირებულება",
             "CATALOG_PRICE" => "კატალოგის<br>ფასი",
+            "NFS_COMMENT"   => "NFS<br>კომენტარი",
         ),
 
         // Statuses that can be SET: value written => label // SYNC
@@ -146,7 +152,8 @@ function getCIBlockElementsByFilter($arFilter = array()) {
         $arPushs = $ob->GetFields();
         foreach ($ob->GetProperties() as $key => $arProp) {
             $propCode = (!empty($arProp["CODE"]) ? $arProp["CODE"] : $key);
-            $arPushs[$propCode] = $arProp["VALUE"];
+            // raw value (~VALUE): the page escapes on output, VALUE is already escaped by Bitrix
+            $arPushs[$propCode] = array_key_exists("~VALUE", $arProp) ? $arProp["~VALUE"] : $arProp["VALUE"];
             if ($arProp["PROPERTY_TYPE"] === "L") {
                 $arPushs[$propCode . "_ENUM_ID"] = $arProp["VALUE_ENUM_ID"] ?? "";
                 $arPushs[$propCode . "_XML_ID"]  = $arProp["VALUE_XML_ID"] ?? "";
@@ -187,6 +194,8 @@ function cellValue($p, $key) {
     if ($key === "ID")            return (string)$p["ID"];
     if ($key === "PROMOTION")     return isPromoYes($p) ? "Yes" : "No";
     if ($key === "CATALOG_PRICE") return (string)$p["CATALOG_PRICE"];
+    // the comment explains the current NFS status only
+    if ($key === "NFS_COMMENT")   return pv($p, "STATUS") === pmCfg()["COMMENT_STATUS"] ? pv($p, $key) : "";
     return pv($p, $key);
 }
 
@@ -303,6 +312,9 @@ $filterInfo = implode(" | ", $filterInfoParts);
     .form-group { display: flex; flex-direction: column; gap: 4px; }
     .form-group label { font-weight: bold; font-size: 13px; }
     .form-group select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; min-width: 180px; }
+    .comment-group { display: none; margin-top: 14px; max-width: 600px; }
+    .comment-group textarea { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font: inherit; resize: vertical; }
+    td.cell-comment { text-align: left; white-space: pre-wrap; min-width: 200px; max-width: 360px; }
 
     .btn-action { color: #fff; border: none; padding: 9px 22px; font-size: 14px; border-radius: 4px; cursor: pointer; }
     .btn-update { background: #2c6fad; }
@@ -423,7 +435,7 @@ $filterInfo = implode(" | ", $filterInfoParts);
         <div class="form-row">
             <div class="form-group">
                 <label>სტატუსი</label>
-                <select id="status-value">
+                <select id="status-value" onchange="toggleStatusComment()">
                     <option value="">— არ შეცვალოთ —</option>
                     <?php foreach ($statusOptions as $k => $label): ?>
                         <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($label) ?></option>
@@ -444,7 +456,11 @@ $filterInfo = implode(" | ", $filterInfoParts);
                 <button class="btn-action btn-update" onclick="submitStatusChange()">განახლება</button>
             </div>
         </div>
-        <p style="margin: 12px 0 0; font-size: 12px; color: #555;">აირჩიეთ მინიმუმ ერთი ველი (სტატუსი ან აქცია); დანარჩენი უცვლელი დარჩება.</p>
+        <div class="form-group comment-group" id="status-comment-group">
+            <label for="status-comment"><?= htmlspecialchars($CFG["COMMENT_STATUS"]) ?> კომენტარი <span class="required-star">*</span></label>
+            <textarea id="status-comment" rows="3" maxlength="<?= (int)$CFG["COMMENT_MAX_LENGTH"] ?>" placeholder="რა მიზეზით / რის გამო ეცვლება სტატუსი <?= htmlspecialchars($CFG["COMMENT_STATUS"]) ?>-ზე"></textarea>
+        </div>
+        <p style="margin: 12px 0 0; font-size: 12px; color: #555;">აირჩიეთ მინიმუმ ერთი ველი (სტატუსი ან აქცია); დანარჩენი უცვლელი დარჩება. <?= htmlspecialchars($CFG["COMMENT_STATUS"]) ?>-ზე გადაყვანისას კომენტარი სავალდებულოა.</p>
         <div class="loading-msg" id="status-loading">⏳ მიმდინარეობს მონაცემების დამუშავება...</div>
         <div class="success-msg" id="status-success">✅ დასრულებულია მონაცემების დამუშავება</div>
         <div class="error-msg"   id="status-error">❌ შეცდომა მონაცემების დამუშავებისას</div>
@@ -466,7 +482,7 @@ $filterInfo = implode(" | ", $filterInfoParts);
             <?php foreach ($filtered as $p): ?>
             <tr>
                 <?php foreach ($CFG["COLUMNS"] as $key => $label): ?>
-                    <td><?= htmlspecialchars(cellValue($p, $key)) ?></td>
+                    <td<?= $key === "NFS_COMMENT" ? ' class="cell-comment"' : '' ?>><?= htmlspecialchars(cellValue($p, $key)) ?></td>
                 <?php endforeach; ?>
             </tr>
             <?php endforeach; ?>
@@ -481,6 +497,13 @@ $filterInfo = implode(" | ", $filterInfoParts);
     const filteredIds = <?= json_encode(array_column($filtered, "ID")) ?>;
     const API_STATUS  = <?= json_encode($CFG["API_STATUS"]) ?>;
     const filterInfo  = <?= json_encode($filterInfo, JSON_UNESCAPED_UNICODE) ?>;
+    const COMMENT_STATUS = <?= json_encode($CFG["COMMENT_STATUS"], JSON_UNESCAPED_UNICODE) ?>;
+
+    // the comment field is shown only when the status that needs a reason (NFS) is picked
+    function toggleStatusComment() {
+        const show = document.getElementById("status-value").value === COMMENT_STATUS;
+        document.getElementById("status-comment-group").style.display = show ? "flex" : "none";
+    }
 
     function setMsg(prefix, state) {
         ["loading", "success", "error"].forEach(s =>
@@ -511,9 +534,18 @@ $filterInfo = implode(" | ", $filterInfoParts);
         }
         if (!filteredIds.length) { alert("ფილტრის შედეგი ცარიელია"); return; }
 
+        const needsComment = status === COMMENT_STATUS;
+        const comment      = document.getElementById("status-comment").value.trim();
+        if (needsComment && comment === "") {
+            alert(COMMENT_STATUS + "-ზე გადაყვანისას მიუთითეთ კომენტარი: რა მიზეზით / რის გამო");
+            document.getElementById("status-comment").focus();
+            return;
+        }
+
         const payload = { ids: filteredIds, filter_info: filterInfo };
-        if (hasStatus) payload.status = status;
-        if (hasPromo)  payload.promotion = promotion;
+        if (hasStatus)    payload.status = status;
+        if (hasPromo)     payload.promotion = promotion;
+        if (needsComment) payload.status_comment = comment;
 
         setMsg("status", "loading");
 
