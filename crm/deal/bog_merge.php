@@ -91,6 +91,7 @@ ob_end_clean();
             background: rgba(255, 255, 255, 0.1); color: #fff;
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
+        .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
         .wrap { width: min(1480px, calc(100% - 28px)); margin: 18px auto 60px; }
         .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
         .stat {
@@ -218,6 +219,13 @@ ob_end_clean();
         </div>
     </div>
     <div class="top-actions">
+        <a class="btn btn-ghost" href="/crm/deal/mainpage.php">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 10.5 12 3l9 7.5"></path>
+                <path d="M5 9.5V21h14V9.5"></path>
+            </svg>
+            მთავარი გვერდი
+        </a>
         <a class="btn btn-ghost" href="/crm/deal/bog_import.php">← ამონაწერის იმპორტი</a>
         <button class="btn btn-primary" type="submit" form="myForm" id="main_button" disabled>შენახვა</button>
     </div>

@@ -126,6 +126,18 @@ ob_end_clean();
         }
         .hero p { margin: 4px 0 0; color: rgba(255, 255, 255, 0.82); font-size: 13px; }
         .hero div { position: relative; z-index: 1; }
+        .hero-home {
+            margin-left: auto; position: relative; z-index: 1;
+            display: inline-flex; align-items: center; gap: 6px;
+            height: 36px; padding: 0 14px; border-radius: 2px;
+            background: rgba(255, 255, 255, 0.1); color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+            text-transform: uppercase; text-decoration: none; white-space: nowrap;
+            transition: background .15s ease;
+        }
+        .hero-home:hover { background: rgba(255, 255, 255, 0.2); }
+        .hero-home svg { width: 14px; height: 14px; flex-shrink: 0; }
         .card {
             background: var(--surface); border: 1px solid var(--line);
             border-radius: 4px; box-shadow: var(--shadow); padding: 22px;
@@ -182,6 +194,7 @@ ob_end_clean();
         @media (max-width: 640px) {
             .row-2 { grid-template-columns: 1fr; }
             .shell { margin-top: 20px; }
+            .hero { flex-wrap: wrap; }
         }
     </style>
 </head>
@@ -193,6 +206,13 @@ ob_end_clean();
             <h1>ამონაწერის გენერაცია</h1>
             <p>საქართველოს ბანკი · <?= count($accounts) ?> ანგარიში / ვალუტა</p>
         </div>
+        <a class="hero-home" href="/crm/deal/mainpage.php">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 10.5 12 3l9 7.5"></path>
+                <path d="M5 9.5V21h14V9.5"></path>
+            </svg>
+            მთავარი გვერდი
+        </a>
     </div>
 
     <?php if ($missingCredentials): ?>
