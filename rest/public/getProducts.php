@@ -238,13 +238,19 @@ foreach ($rawItems as $item) {
 
     $block = $props["_L24CUB"] ?? $props["_MVA3NL"] ?? null;
 
+    // NFS საიტზე ჩანს როგორც "დაჯავშნილი"
+    $status = $props["_P64GYD"] ?? "";
+    if ($status === "NFS") {
+        $status = "დაჯავშნილი";
+    }
+
     $raw = [
         // ─── System fields ───────────────────────────────────────
         "id"                    => $pid,
         "name"                  => $arFields["NAME"] ?: null,
 
         // ─── Status ──────────────────────────────────────────────
-        "status"                => $props["_P64GYD"] ?? "",
+        "status"                => $status,
 
         // ─── Price ───────────────────────────────────────────────
         "price"                 => $priceUsd,
