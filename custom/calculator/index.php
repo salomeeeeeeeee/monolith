@@ -102,6 +102,11 @@ if ($isNewDepo) {
 }
 
 foreach ($conditionElements as $element) {
+    // ერთიანი გადახდა ცალკე ტიპია, შიდა განვადების გრაფიკებში არ ჩანს
+    if (mb_strpos((string)$element['NAME'], 'ერთიანი') !== false) {
+        continue;
+    }
+
     $planPrice = $isNewDepo ? calcProductPlanPrice($prod, $element['NAME']) : null;
     if ($planPrice === false) {
         continue; // 60 თვიანი ამ ფართზე დაშვებული არ არის
