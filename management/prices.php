@@ -7,7 +7,7 @@ $APPLICATION->SetTitle("პროდუქტების მოდული");
 
 /* =====================================================================
  *  CONFIG
- *  Lines marked // SYNC must match status-change.php
+ *  Lines marked // SYNC must match status-change.php / price-change.php
  *  Open the page with ?debug_props=1 (admin only) to see the real codes
  * ===================================================================== */
 function pmCfg() {
@@ -88,7 +88,30 @@ function pmCfg() {
         "PROMOTION_NO"              => array("N", "No", "NO", "არა", "0"),
         "PROMOTION_ANY_ENUM_IS_YES" => false,
 
+        // Price change types and the price they work on: key sent to the API => label // SYNC (keys)
+        "PRICE_CHANGE_TYPES" => array(
+            "percent" => "პროცენტი (%)",
+            "fixed"   => "ფიქსირებული თანხა ($)",
+            "set"     => "ახალი ფასი ($)",
+        ),
+        // percent gives the same result on both, so it has no target
+        "PRICE_TARGETS" => array(
+            "sqm"  => "1 კვ.მ. ფასი",
+            "full" => "სრული ფასი",
+        ),
+        // value field label: "type" or "type.target"
+        "PRICE_VALUE_LABELS" => array(
+            "percent"    => "პროცენტი (%)",
+            "fixed.sqm"  => "თანხა 1 კვ.მ.-ზე ($)",
+            "fixed.full" => "თანხა სრულ ფასზე ($)",
+            "set.sqm"    => "ახალი 1 კვ.მ. ფასი ($)",
+            "set.full"   => "ახალი სრული ფასი ($)",
+        ),
+        // list where price-change.php logs every change (created by /custom/setup/priceChangeLog.php)
+        "PRICE_LOG_CODE" => "PRICE_CHANGE_LOG",
+
         "API_STATUS" => "/rest/local/api/product/status-change.php",
+        "API_PRICE"  => "/rest/local/api/product/price-change.php",
     );
     return $cfg;
 }
@@ -160,7 +183,7 @@ function getCIBlockElementsByFilter($arFilter = array()) {
             }
         }
         $basePrice = CPrice::GetBasePrice($arPushs["ID"]);
-        $arPushs["CATALOG_PRICE"] = ($basePrice && isset($basePrice["PRICE"])) ? $basePrice["PRICE"] : "";
+        $arPushs["CATALOG_PRICE"] = ($basePrice && isset($basePrice["PRICE"])) ? pmNum($basePrice["PRICE"]) : "";
         $arElements[] = $arPushs;
     }
 
@@ -203,6 +226,12 @@ function toFloat($v) {
     return (float)str_replace(array(",", " "), array(".", ""), $v);
 }
 
+/** Price without trailing zeros, the way price-change.php writes it (69043.00000000 -> 69043) */
+function pmNum($v) {
+    $s = number_format((float)$v, 2, ".", "");
+    return strpos($s, ".") === false ? $s : rtrim(rtrim($s, "0"), ".");
+}
+
 function printArr($arr) {
     echo "<pre>"; print_r($arr); echo "</pre>";
 }
@@ -231,6 +260,14 @@ foreach ($CFG["SELECT_FILTERS"] as $sf) {
 
 // Status options for the status panel: only the configured ones
 $statusOptions = $CFG["STATUS_OPTIONS"];
+
+// Action tabs above the table; the open one is posted with the filter form so it stays open after filtering
+$actionTabs = array("price" => "ფასის ცვლილება", "status" => "სტატუსი / აქცია");
+$activeTab  = isset($actionTabs[$_POST["active_tab"] ?? ""]) ? $_POST["active_tab"] : "price";
+
+// Price change log list (linked under the price panel); 0 = not created yet
+$priceLog   = CIBlock::GetList(array(), array("CODE" => $CFG["PRICE_LOG_CODE"], "CHECK_PERMISSIONS" => "N"))->Fetch();
+$priceLogId = $priceLog ? (int)$priceLog["ID"] : 0;
 
 $filtered   = $products;
 $isFiltered = false;
@@ -305,9 +342,14 @@ $filterInfo = implode(" | ", $filterInfoParts);
     td { padding: 6px 5px; border: 1px solid #ddd; text-align: center; }
     tr:nth-child(even) td { background: #f0f5ff; }
 
-    /* სტატუსი / აქცია პანელი */
-    .action-panel { margin-top: 20px; margin-bottom: 10px; border: 1px solid #ccc; padding: 20px; border-radius: 4px; background: #fafafa; }
-    .action-panel h3 { margin: 0 0 14px; font-size: 14px; color: #2c6fad; }
+    /* ფასის ცვლილება / სტატუსი / აქცია - ტაბები */
+    .tabs-container { margin-top: 20px; margin-bottom: 10px; }
+    .tab-buttons { display: flex; flex-wrap: wrap; }
+    .tab-btn { padding: 10px 28px; cursor: pointer; border: 1px solid #ccc; border-bottom: none; background: #e8e8e8; font: 13px Arial, sans-serif; border-radius: 4px 4px 0 0; transition: background .15s; }
+    .tab-btn:hover { background: #dcdcdc; }
+    .tab-btn.active { background: #2c6fad; color: #fff; border-color: #2c6fad; }
+    .tab-content { display: none; border: 1px solid #ccc; padding: 20px; border-radius: 0 4px 4px 4px; background: #fafafa; }
+    .tab-content.active { display: block; }
     .form-row { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
     .form-group label { font-weight: bold; font-size: 13px; }
@@ -316,13 +358,18 @@ $filterInfo = implode(" | ", $filterInfoParts);
     .comment-group textarea { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font: inherit; resize: vertical; }
     td.cell-comment { text-align: left; white-space: pre-wrap; min-width: 200px; max-width: 360px; }
 
+    .form-group input[type="number"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; min-width: 160px; }
+    .panel-note { margin: 12px 0 0; font-size: 12px; color: #555; }
+
     .btn-action { color: #fff; border: none; padding: 9px 22px; font-size: 14px; border-radius: 4px; cursor: pointer; }
+    .btn-action:disabled { opacity: .6; cursor: wait; }
     .btn-update { background: #2c6fad; }
     .btn-update:hover { background: #1a4f85; }
 
     .loading-msg { display: none; margin-top: 12px; padding: 10px 16px; background: #fff8e1; border: 1px solid #f0c040; border-radius: 4px; font-size: 13px; color: #7a5800; }
     .success-msg { display: none; margin-top: 12px; padding: 10px 16px; background: #e8f5e9; border: 1px solid #66bb6a; border-radius: 4px; font-size: 13px; color: #2e7d32; }
     .error-msg   { display: none; margin-top: 12px; padding: 10px 16px; background: #ffebee; border: 1px solid #ef9a9a; border-radius: 4px; font-size: 13px; color: #b71c1c; }
+    .success-msg, .error-msg { white-space: pre-line; }
 
     .table-wrap { overflow-x: auto; }
     .debug-box { background: #fffbe6; border: 1px solid #e0c060; padding: 12px; margin-bottom: 20px; border-radius: 6px; }
@@ -383,6 +430,7 @@ $filterInfo = implode(" | ", $filterInfoParts);
 <!-- ფილტრის ფორმა -->
 <form method="POST" class="filter-form">
     <input type="hidden" name="filter_submit" value="1">
+    <input type="hidden" name="active_tab" id="active-tab" value="<?= htmlspecialchars($activeTab) ?>">
     <div class="filter-row">
 
         <?php foreach ($CFG["SELECT_FILTERS"] as $sf): ?>
@@ -429,9 +477,65 @@ $filterInfo = implode(" | ", $filterInfoParts);
 
 <?php if ($isFiltered): ?>
 
+    <div class="tabs-container">
+        <div class="tab-buttons">
+            <?php foreach ($actionTabs as $tab => $label): ?>
+                <button type="button" class="tab-btn<?= $tab === $activeTab ? " active" : "" ?>" data-tab="<?= $tab ?>" onclick="switchTab('<?= $tab ?>')"><?= htmlspecialchars($label) ?></button>
+            <?php endforeach; ?>
+        </div>
+
+    <!-- ფასის ცვლილება -->
+    <div class="tab-content<?= $activeTab === "price" ? " active" : "" ?>" id="tab-price">
+        <div class="form-row">
+            <div class="form-group">
+                <label>ცვლილების ტიპი</label>
+                <select id="price-type" onchange="onPriceTypeChange()">
+                    <option value="">-- აირჩიეთ --</option>
+                    <?php foreach ($CFG["PRICE_CHANGE_TYPES"] as $k => $label): ?>
+                        <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="form-group" id="price-target-group" style="display: none;">
+                <label>ფასის ტიპი</label>
+                <select id="price-target" onchange="onPriceTypeChange()">
+                    <?php foreach ($CFG["PRICE_TARGETS"] as $k => $label): ?>
+                        <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="form-group" id="price-direction-group">
+                <label>მიმართულება</label>
+                <select id="price-direction">
+                    <option value="increase">მომატება</option>
+                    <option value="decrease">დაკლება</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label id="price-value-label">მნიშვნელობა</label>
+                <input type="number" id="price-value" min="0.01" step="0.01">
+            </div>
+
+            <div class="form-group" style="justify-content: flex-end;">
+                <button class="btn-action btn-update" id="price-submit" onclick="submitPriceChange()">ფასის შეცვლა</button>
+            </div>
+        </div>
+        <p class="panel-note">
+            იცვლება ფილტრის ყველა პროდუქტის კვ.მ. ფასი და სრული (კატალოგის) ფასი. პროცენტი ორივეზე ერთნაირად მოქმედებს; თანხა და ახალი ფასი - არჩეულზე, მეორე გადაითვლება
+            (კვ.მ.-ის არჩევისას სრული = კვ.მ. × ფართი, სრულის არჩევისას კვ.მ. იმავე პროპორციით). ნიუ დეპოზე გეგმების ფასებიც (ერთიანი, 0/20/80, 60 თვიანი) იმავე პროპორციით იცვლება. გაყიდვის ღირებულება არ იცვლება.
+            შეცვლამდე გამოჩნდება შედეგი დასადასტურებლად. ყველა ცვლილება იწერება
+            <?php if ($priceLogId > 0): ?><a href="/services/lists/<?= $priceLogId ?>/view/0/" target="_blank">ფასის ცვლილებების ლოგში</a><?php else: ?>ფასის ცვლილებების ლოგში<?php endif; ?>.
+        </p>
+        <div class="loading-msg" id="price-loading">⏳ მიმდინარეობს მონაცემების დამუშავება...</div>
+        <div class="success-msg" id="price-success"></div>
+        <div class="error-msg"   id="price-error"></div>
+    </div>
+
     <!-- სტატუსი / აქცია -->
-    <div class="action-panel">
-        <h3>სტატუსი / აქცია</h3>
+    <div class="tab-content<?= $activeTab === "status" ? " active" : "" ?>" id="tab-status">
         <div class="form-row">
             <div class="form-group">
                 <label>სტატუსი</label>
@@ -465,6 +569,7 @@ $filterInfo = implode(" | ", $filterInfoParts);
         <div class="success-msg" id="status-success">✅ დასრულებულია მონაცემების დამუშავება</div>
         <div class="error-msg"   id="status-error">❌ შეცდომა მონაცემების დამუშავებისას</div>
     </div>
+    </div>
 
     <div class="count-line">რაოდენობა: <?= count($filtered) ?></div>
 
@@ -480,9 +585,9 @@ $filterInfo = implode(" | ", $filterInfoParts);
         </thead>
         <tbody>
             <?php foreach ($filtered as $p): ?>
-            <tr>
+            <tr data-id="<?= (int)$p["ID"] ?>">
                 <?php foreach ($CFG["COLUMNS"] as $key => $label): ?>
-                    <td<?= $key === "NFS_COMMENT" ? ' class="cell-comment"' : '' ?>><?= htmlspecialchars(cellValue($p, $key)) ?></td>
+                    <td data-col="<?= htmlspecialchars($key) ?>"<?= $key === "NFS_COMMENT" ? ' class="cell-comment"' : '' ?>><?= htmlspecialchars(cellValue($p, $key)) ?></td>
                 <?php endforeach; ?>
             </tr>
             <?php endforeach; ?>
@@ -496,8 +601,130 @@ $filterInfo = implode(" | ", $filterInfoParts);
     <script>
     const filteredIds = <?= json_encode(array_column($filtered, "ID")) ?>;
     const API_STATUS  = <?= json_encode($CFG["API_STATUS"]) ?>;
+    const API_PRICE   = <?= json_encode($CFG["API_PRICE"]) ?>;
     const filterInfo  = <?= json_encode($filterInfo, JSON_UNESCAPED_UNICODE) ?>;
     const COMMENT_STATUS = <?= json_encode($CFG["COMMENT_STATUS"], JSON_UNESCAPED_UNICODE) ?>;
+    const PRICE_VALUE_LABELS = <?= json_encode($CFG["PRICE_VALUE_LABELS"], JSON_UNESCAPED_UNICODE) ?>;
+
+    function switchTab(tab) {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === "tab-" + tab));
+        document.getElementById("active-tab").value = tab;
+    }
+
+    // percent has no target (same result on sqm and full price); "set" writes one price to every product, so it has no direction
+    function onPriceTypeChange() {
+        const type   = document.getElementById("price-type").value;
+        const target = document.getElementById("price-target").value;
+        document.getElementById("price-target-group").style.display    = (type && type !== "percent") ? "flex" : "none";
+        document.getElementById("price-direction-group").style.display = type === "set" ? "none" : "flex";
+        document.getElementById("price-value-label").innerText = type
+            ? PRICE_VALUE_LABELS[type === "percent" ? type : type + "." + target]
+            : "მნიშვნელობა";
+    }
+
+    function fmtMoney(n) {
+        return Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
+    }
+
+    function failedText(failed, limit) {
+        const all  = failed || [];
+        const list = all.slice(0, limit).map(f => "ID:" + f.id + " (" + f.error + ")");
+        if (all.length > limit) list.push("... და კიდევ " + (all.length - limit));
+        return list.join("\n");
+    }
+
+    // new prices into the table without reloading (the filter stays as it is)
+    function applyPriceResults(products) {
+        products.forEach(p => {
+            const row = document.querySelector('tr[data-id="' + p.id + '"]');
+            if (!row) return;
+            const cells = { KVM_PRICE: p.kvm, PRICE_TOTAL: p.total, CATALOG_PRICE: p.catalog };
+            Object.keys(cells).forEach(col => {
+                const td = row.querySelector('td[data-col="' + col + '"]');
+                if (td && cells[col] !== null) td.textContent = cells[col];
+            });
+        });
+    }
+
+    async function submitPriceChange() {
+        const type      = document.getElementById("price-type").value;
+        const target    = document.getElementById("price-target").value;
+        const direction = document.getElementById("price-direction").value;
+        const value     = parseFloat(document.getElementById("price-value").value);
+
+        if (!type) { alert("აირჩიეთ ცვლილების ტიპი"); return; }
+        if (isNaN(value) || value <= 0) { alert("შეიყვანეთ დადებითი მნიშვნელობა"); return; }
+        if (type === "percent" && direction === "decrease" && value >= 100) { alert("დაკლება 100%-ზე ნაკლები უნდა იყოს"); return; }
+        if (!filteredIds.length) { alert("ფილტრის შედეგი ცარიელია"); return; }
+
+        const payload = { ids: filteredIds, change_type: type, target: target, direction: direction, value: value, filter_info: filterInfo };
+        const btn     = document.getElementById("price-submit");
+        const errBox  = document.getElementById("price-error");
+        const okBox   = document.getElementById("price-success");
+
+        btn.disabled = true;
+        setMsg("price", "loading");
+
+        try {
+            // 1. the server calculates what would change, nothing is written yet
+            let res  = await post_fetch(API_PRICE, Object.assign({ dry_run: true }, payload));
+            let data = await res.json();
+
+            if (!res.ok || !data.success) {
+                errBox.textContent = "❌ შეცდომა" + (data.error ? ": " + data.error : "");
+                setMsg("price", "error");
+                return;
+            }
+            if (!data.ok) {
+                errBox.textContent = "❌ ვერცერთ პროდუქტს ფასი ვერ შეეცვლება:\n" + failedText(data.failed_ids, 20);
+                setMsg("price", "error");
+                return;
+            }
+
+            let question = data.operation
+                + "\n\nშეიცვლება " + data.ok + " პროდუქტის ფასი."
+                + "\nკატალოგის ფასების ჯამი: " + fmtMoney(data.sum_before) + "$ -> " + fmtMoney(data.sum_after) + "$";
+            if (data.plans) question += "\nნიუ დეპოს გეგმების ფასებიც შეიცვლება " + data.plans + " პროდუქტზე.";
+            if (data.failed) question += "\n\nგამოტოვდება " + data.failed + " პროდუქტი:\n" + failedText(data.failed_ids, 10);
+            question += "\n\nგავაგრძელო?";
+
+            if (!confirm(question)) {
+                setMsg("price", "");
+                return;
+            }
+
+            // 2. write
+            res  = await post_fetch(API_PRICE, payload);
+            data = await res.json();
+
+            applyPriceResults(data.products || []);
+
+            if (!data.updated) {
+                errBox.textContent = "❌ შეცდომა" + (data.error ? ": " + data.error : "")
+                    + (data.failed ? "\n" + failedText(data.failed_ids, 20) : "");
+                setMsg("price", "error");
+                return;
+            }
+
+            okBox.textContent = "✅ დასრულებულია - " + data.operation + ", განახლდა " + data.updated + " პროდუქტი";
+            if (data.failed) okBox.textContent += "\nვერ განახლდა " + data.failed + ":\n" + failedText(data.failed_ids, 20);
+            if (data.log_error) okBox.textContent += "\n⚠ " + data.log_error;
+            if (data.log_url) {
+                const link = document.createElement("a");
+                link.href = data.log_url;
+                link.target = "_blank";
+                link.textContent = "ლოგის ჩანაწერი";
+                okBox.append("\n", link);
+            }
+            setMsg("price", "success");
+        } catch (e) {
+            errBox.textContent = "❌ შეცდომა: " + e.message;
+            setMsg("price", "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
 
     // the comment field is shown only when the status that needs a reason (NFS) is picked
     function toggleStatusComment() {
