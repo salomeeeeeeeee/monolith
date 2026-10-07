@@ -18,7 +18,11 @@ const AGENT_LEAD_ASSIGNED_BY_ID = 1;
 const AGENT_LEAD_WORKFLOW_ID    = 86;
 const AGENT_LEAD_SOURCE_ID      = "UC_HN9W32";
 const AGENT_LEAD_TITLE_PREFIX   = "აგენტის ფორმა - ";
-// აგენტის მიერ დაფიქსირებული ნომერი ამდენი თვის შემდეგ თავისუფლდება
+// ნომრის დაკავების წესი:
+//   true  - ნომერი დაკავებულია, თუ ბაზაში რომელიმე კონტაქტზე ფიქსირდება (დილის სტადიას მნიშვნელობა არ აქვს)
+//   false - ძველი წესი: იკავებს მხოლოდ მიმდინარე დილი, აგენტის დილი - შექმნიდან AGENT_LEAD_FIXATION_MONTHS თვემდე
+const AGENT_LEAD_ANY_CONTACT_HOLDS_PHONE = true;
+// აგენტის მიერ დაფიქსირებული ნომერი ამდენი თვის შემდეგ თავისუფლდება (მხოლოდ ძველ წესში)
 const AGENT_LEAD_FIXATION_MONTHS = 3;
 const AGENT_LEAD_F_AGENCY_AGENT  = "UF_CRM_1790340288"; // string: სააგენტო/აგენტი ფორმიდან
 
@@ -228,6 +232,12 @@ function agentLeadBusyPhones(array $phones)
     $fixationExpiredBefore = strtotime('-' . AGENT_LEAD_FIXATION_MONTHS . ' months');
     $busy = [];
     foreach ($phones as $phone) {
+        if (AGENT_LEAD_ANY_CONTACT_HOLDS_PHONE) {
+            if (agentLeadFindContactIdsByPhone($phone)) {
+                $busy[] = agentLeadPhoneSearchPart($phone);
+            }
+            continue;
+        }
         foreach (agentLeadFindDealsByPhone($phone) as $deal) {
             if (agentLeadDealHoldsPhone($deal, $fixationExpiredBefore)) {
                 $busy[] = agentLeadPhoneSearchPart($phone);
@@ -358,8 +368,8 @@ if ($agency === '' && $agent === '') {
     agentLeadRespond(['status' => 400, 'message' => 'მიუთითეთ სააგენტო ან აგენტი'], 400);
 }
 
-// მიმდინარე დილზე მიბმული ნომერი მხოლოდ ინფორმაციაა - დილი მაინც იქმნება.
-// ახალი დილის შექმნამდე ვამოწმებთ, თორემ თავად ის დაიკავებდა ნომერს.
+// დაკავებული ნომერი მხოლოდ ინფორმაციაა - დილი მაინც იქმნება.
+// კონტაქტისა და დილის შექმნამდე ვამოწმებთ, თორემ თავად ისინი დაიკავებდნენ ნომერს.
 $busyPhones = agentLeadBusyPhones($phones);
 
 $displayName = trim($firstName . ' ' . $lastName);

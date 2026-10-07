@@ -817,7 +817,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         setPhoneState(
           row,
           busy ? 'info' : 'ok',
-          busy ? 'ნომერი უკვე ფიქსირდება სისტემაში' : 'ნომერი თავისუფალია'
+          busy ? 'ეს ნომერი დამუშავებაშია' : 'ნომერი თავისუფალია'
         );
       }
 
@@ -914,8 +914,8 @@ $apiUrl  = '/rest/public/addAgentLead.php';
           let message = 'დილი შეიქმნა წარმატებით' + (data.dealId ? ' (#' + data.dealId + ')' : '') + '.';
           const busyPhones = Array.isArray(data.busyPhones) ? data.busyPhones : [];
           if (busyPhones.length) {
-            message += '' + (busyPhones.length > 1 ? 'ნომრები ' : 'ნომერი ')
-              + busyPhones.join(', ') + ' უკვე ფიქსირდებოდა სისტემაში.';
+            message += ' ' + (busyPhones.length > 1 ? 'ნომრები ' : 'ნომერი ')
+              + busyPhones.join(', ') + ' დამუშავებაშია.';
           }
           showStatus('ok', message);
           closeCountryMenu();
