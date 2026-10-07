@@ -210,14 +210,18 @@ foreach ($conditionElements as $element) {
             grid-template-columns: repeat(4, 1fr);
             gap: 14px;
         }
-        .form-grid.grid-5 { grid-template-columns: repeat(5, 1fr); }
+        /* ბოლო ორი (ფასის) სვეტი უფრო განიერია, რომ "... ჯამური ღირებულება ($)" ერთ ხაზზე დაეტიოს */
+        .form-grid.grid-5 { grid-template-columns: repeat(3, 1fr) repeat(2, 1.25fr); }
         @media (max-width: 1100px) { .form-grid { grid-template-columns: repeat(4, 1fr); } }
         @media (max-width: 600px)  { .form-grid { grid-template-columns: 1fr; } }
         @media (max-width: 600px)  { .form-grid.grid-5 { grid-template-columns: 1fr; } }
+        /* ორ ხაზზე გადასული დასახელების დროს ველები მაინც ერთ ხაზზე დარჩეს */
+        .field { display: flex; flex-direction: column; justify-content: flex-end; }
+        /* letter-spacing ქართულ ასოებს არაფერს მატებს და გრძელ დასახელებას მეორე ხაზზე აგდებდა */
         .field label {
             display: block; font-size: 11px; font-weight: 600;
             color: var(--muted); margin-bottom: 5px;
-            text-transform: uppercase; letter-spacing: 0.04em;
+            text-transform: uppercase; letter-spacing: 0;
         }
         .field input, .field select, .field textarea {
             width: 100%; height: 38px; padding: 0 12px;
@@ -313,7 +317,8 @@ foreach ($conditionElements as $element) {
 
 <!-- საინფორმაციო ველები -->
 <div class="card-panel">
-    <div class="form-grid">
+    <!-- 5 სვეტი, როგორც ფასების ბლოკში: საწყისი ღირებულებები ზუსტად საბოლოოების თავზე დგას -->
+    <div class="form-grid grid-5">
         <div class="field frozen">
             <label>დილი</label>
             <div style="height:38px;display:flex;align-items:center;padding:0 12px;background:#f0f4ff;border:1.5px solid #c7d2fe;border-radius:8px;">
@@ -325,8 +330,12 @@ foreach ($conditionElements as $element) {
             </div>
         </div>
         <div class="field frozen">
-            <label>უძრავი ქონების № / მ²</label>
-            <input value="<?= htmlspecialchars($binisNomeri) ?> / <?= $totalKVM ?> მ²" disabled>
+            <label>უძრავი ქონების №</label>
+            <input value="<?= htmlspecialchars($binisNomeri) ?>" disabled>
+        </div>
+        <div class="field frozen">
+            <label>სრული ფართი (მ²)</label>
+            <input value="<?= $totalKVM ?>" disabled>
         </div>
         <div class="field frozen">
             <label>საწყისი კვ.მ ღირებულება ($)</label>
@@ -392,15 +401,15 @@ foreach ($conditionElements as $element) {
             <input id="discountNum" value="0" oninput="calculateDiscount()" onblur="formatDiscountField('discountNum')">
         </div>
         <div class="field">
-            <label>საბოლოო კვ.მ ფასი ($)</label>
+            <label>საბოლოო კვ.მ ღირებულება ($)</label>
             <input id="kvmPrice" disabled>
         </div>
         <div class="field">
-            <label>საბოლოო ფასი ($)</label>
+            <label>საბოლოო ჯამური ღირებულება ($)</label>
             <input id="price" disabled>
         </div>
         <div class="field" style="display:none;">
-            <label>საბოლოო ფასი (₾)</label>
+            <label>საბოლოო ჯამური ღირებულება (₾)</label>
             <input id="priceGel" disabled>
         </div>
     </div>
@@ -929,7 +938,7 @@ async function saveGraph() {
 
     const total = paymentPlan.reduce((s, r) => s + r.amount, 0);
     if (Math.abs(total - price) > 0.05) {
-        alert('გრაფიკის ჯამი (' + formatNumber(total) + ') არ ემთხვევა საბოლოო ფასს (' + formatNumber(price) + ')');
+        alert('გრაფიკის ჯამი (' + formatNumber(total) + ') არ ემთხვევა საბოლოო ჯამურ ღირებულებას (' + formatNumber(price) + ')');
         return;
     }
 
