@@ -2152,6 +2152,71 @@ if (Main\Loader::includeModule('crm')) {
 })();
 </script>
 
+<?php
+// WON stage - progress bar frozen for everyone except admins (server-side guard: local/php_interface/won_stage_lock.php)
+$canMoveWonDeal = $dealId <= 0 || !class_exists('MonolithWonStageLock') || MonolithWonStageLock::canMoveWonDeal();
+$wonLockInitialStage = isset($deal['STAGE_ID']) ? (string)$deal['STAGE_ID'] : '';
+?>
+<style>
+.dmg-won-locked {
+    cursor: not-allowed;
+}
+
+.dmg-won-locked .crm-entity-section-status-step {
+    pointer-events: none !important;
+}
+</style>
+<script>
+(function() {
+    if (window.__dmgWonStageLockBound) {
+        return;
+    }
+    window.__dmgWonStageLockBound = true;
+
+    var canMoveWon = <?= $canMoveWonDeal ? 'true' : 'false' ?>;
+    if (canMoveWon) {
+        return;
+    }
+
+    var initialStage = <?= json_encode($wonLockInitialStage) ?>;
+    var LOCK_TITLE = 'გაყიდული დილის სტადიას ვერ შეცვლით';
+
+    function isWonStage(id) {
+        return /(^|:)WON$/.test(id || '');
+    }
+
+    function currentStage() {
+        var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
+        var model = editor && editor.getModel && editor.getModel();
+        return (model && model.getField('STAGE_ID')) || initialStage;
+    }
+
+    function syncWonLock() {
+        var locked = isWonStage(currentStage());
+        document.querySelectorAll('.crm-entity-section-status-wrap').forEach(function(wrap) {
+            wrap.classList.toggle('dmg-won-locked', locked);
+            if (locked) {
+                wrap.setAttribute('title', LOCK_TITLE);
+            } else if (wrap.getAttribute('title') === LOCK_TITLE) {
+                wrap.removeAttribute('title');
+            }
+        });
+    }
+
+    // Capture-phase block in case the pointer-events lock is bypassed
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.closest && e.target.closest('.dmg-won-locked')) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+
+    syncWonLock();
+    setInterval(syncWonLock, 300);
+})();
+</script>
+
 <script>
 // UF_CRM_1785491867 (ბროკერი): ერთი სახელის დუბლიკატები ვიზუალურად დამალე
 (function() {
