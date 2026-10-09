@@ -2153,6 +2153,68 @@ if (Main\Loader::includeModule('crm')) {
 </script>
 
 <?php
+// "Close deal" popup - everyone except users 1 and 3 gets only "წარუმატებელი მოლაპარაკება":
+// the "Close deal: Deal lost" selector and the LOSE radio are hidden
+$canChooseDealCloseResult = in_array((int)$userID, [1, 3], true);
+?>
+<style>
+.dmg-close-result-locked {
+    display: none !important;
+}
+
+.popup-window-titlebar:has(.dmg-close-result-locked) {
+    display: none !important;
+}
+</style>
+<script>
+(function() {
+    if (window.__dmgCloseResultLockBound) {
+        return;
+    }
+    window.__dmgCloseResultLockBound = true;
+
+    var canChooseResult = <?= $canChooseDealCloseResult ? 'true' : 'false' ?>;
+    if (canChooseResult) {
+        return;
+    }
+
+    var HIDDEN_STAGE_ID = 'LOSE';       // გაუქმებული ხელშეკრულება
+    var DEFAULT_STAGE_ID = 'UC_QFL99J'; // წარუმატებელი მოლაპარაკება
+
+    // Fires while BX.CrmProcessFailureDialog builds its content, before the popup is shown
+    BX.addCustomEvent('CrmProcessFailureDialogContentCreated', function(dialog, wrapper) {
+        if (!dialog || !wrapper || dialog.getEntityType() !== 'DEAL') {
+            return;
+        }
+
+        var defaultButton = wrapper.querySelector('.crm-list-fail-deal-button[value="' + DEFAULT_STAGE_ID + '"]');
+        if (!defaultButton) {
+            return;
+        }
+
+        var hiddenButton = wrapper.querySelector('.crm-list-fail-deal-button[value="' + HIDDEN_STAGE_ID + '"]');
+        if (hiddenButton) {
+            hiddenButton.disabled = true;
+            hiddenButton.closest('.crm-list-end-deal-button-wrapper').classList.add('dmg-close-result-locked');
+        }
+
+        // Opened for the success stage - keep its selector as is
+        if (dialog.getValue() === dialog.getSuccessValue()) {
+            return;
+        }
+
+        // "Close deal: Deal lost" selector (switches to გაყიდული); the CSS above hides its titlebar
+        if (dialog._selector && dialog._selector.parentNode) {
+            dialog._selector.parentNode.classList.add('dmg-close-result-locked');
+        }
+
+        // setValue, not just checked: the dialog saves its own value, not the radio state
+        dialog.setValue(DEFAULT_STAGE_ID, true);
+    });
+})();
+</script>
+
+<?php
 // WON stage - progress bar frozen for everyone except admins (server-side guard: local/php_interface/won_stage_lock.php)
 $canMoveWonDeal = $dealId <= 0 || !class_exists('MonolithWonStageLock') || MonolithWonStageLock::canMoveWonDeal();
 $wonLockInitialStage = isset($deal['STAGE_ID']) ? (string)$deal['STAGE_ID'] : '';
