@@ -1247,6 +1247,7 @@ if (!function_exists('bankBogBuildMergeModels')) {
                     'CLIENT_NAME' => $clientName,
                     'UNIT' => bankBogUfValue($deal[BANK_D_UNIT] ?? ''),
                     'BLOCK' => bankBogUfValue($deal[BANK_D_BLOCK] ?? ''),
+                    'TYPE' => bankBogUfValue($deal[BANK_D_TYPE] ?? ''),
                 ];
             }
 
@@ -1391,6 +1392,7 @@ if (!function_exists('bankBogCreatePaymentFromMerge')) {
             'NBG' => (string)$nbg,
             'FULL_NAME' => $fullName,
             'xelshNum' => bankBogUfValue($deal[BANK_D_CONTRACT_NUM] ?? ''),
+            'pay_type' => BANK_BOG_PAY_TYPE_BOG,
         ];
 
         $res = bankBogAddElement([

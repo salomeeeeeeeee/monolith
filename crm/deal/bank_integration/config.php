@@ -16,6 +16,10 @@ if (!defined('BANK_BOG_STATEMENT_IBLOCK_CODE')) {
 if (!defined('BANK_BOG_PAYMENT_IBLOCK')) {
     define('BANK_BOG_PAYMENT_IBLOCK', 23);
 }
+/** გადახდის ტიპი (pay_type): "BOG integration" - ასე ჩანს, რომ გადახდა ბანკის ამონაწერიდან შეიქმნა */
+if (!defined('BANK_BOG_PAY_TYPE_BOG')) {
+    define('BANK_BOG_PAY_TYPE_BOG', 122);
+}
 /** გადახდის გრაფიკი (დარიცხვები) */
 if (!defined('BANK_BOG_SCHEDULE_IBLOCK')) {
     define('BANK_BOG_SCHEDULE_IBLOCK', 22);

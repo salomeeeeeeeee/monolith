@@ -595,7 +595,7 @@ function reportSplitSchedule(array $rows)
 }
 
 /**
- * Contract and payment columns of the sales report Excel: accounting ID (list 30), buyer,
+ * Contract and payment columns of the sales report Excel: accounting ID (list 30), deal ID, buyer,
  * contract number, date and status, first/last payment and installment period (list 22),
  * planned vs paid (list 23) and debt. Expects rows from reportEnrichDealBedrooms().
  * Amounts are USD; percentages are of the contract value (DEAL_PRICE).
@@ -709,6 +709,7 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
 
         $products[$id] = array_merge($product, [
             'BUX_ID' => $buxIds[$dealId] ?? '',
+            'DEAL_ID' => $dealId,
             'PROJECT_CODE' => trim((string)($product[F_PROJECT_CODE] ?? '')),
             'CONTRACT_NO' => $contractNo !== '' ? $contractNo : trim((string)($deal[D_CONTRACT_NO] ?? '')),
             'CONTRACT_DATE' => (string)($deal[D_CONTRACT_DATE] ?? ''),

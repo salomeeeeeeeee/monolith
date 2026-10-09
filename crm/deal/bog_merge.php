@@ -93,7 +93,8 @@ ob_end_clean();
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
         .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
-        .wrap { width: min(1480px, calc(100% - 28px)); margin: 18px auto 60px; }
+        /* მთელ სიგანეზე, გვერდებზე მხოლოდ მცირე დაშორება */
+        .wrap { margin: 18px 12px 60px; }
         .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
         .stat {
             background: var(--surface); border: 1px solid var(--line);
@@ -145,33 +146,41 @@ ob_end_clean();
             max-height: calc(100vh - 240px);
             box-shadow: 0 10px 28px rgba(0, 51, 91, 0.06);
         }
-        table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1180px; font-size: 13px; }
+        /* ცხრილი ეკრანში ეტევა: გრძელი ტექსტი (IBAN, SWIFT, მისამართი) გადადის ახალ ხაზზე, სიგანის სქროლი არ ჩნდება */
+        table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         thead th {
-            text-align: left; padding: 12px 10px;
+            text-align: left; padding: 12px 8px;
             background: #e8eef4; color: var(--primary);
             border-bottom: 1px solid var(--line);
             font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
             position: sticky; top: 0; z-index: 6;
         }
-        td { padding: 10px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
+        td { padding: 10px 8px; border-bottom: 1px solid #eef1f4; vertical-align: top; overflow-wrap: anywhere; }
+        .nowrap { white-space: nowrap; }
+        th.col-client { width: 150px; }
+        th.col-alloc { width: 290px; }
         tr.filtertr.tone-green { background: var(--green); }
         tr.filtertr.tone-yellow { background: var(--yellow); }
         tr.filtertr.tone-red { background: var(--red); }
         tr.hidden-row { display: none; }
         input.form-control {
-            width: 100%; min-width: 72px; height: 36px; border-radius: 4px;
+            width: 100%; min-width: 0; height: 36px; border-radius: 4px;
             border: 1px solid var(--line); padding: 0 8px; font: inherit; background: #fff; color: var(--ink);
         }
         input.form-control.deal-inactive { border-color: #e08b86; background: #fff6f5; }
-        .alloc-list { display: flex; flex-direction: column; gap: 8px; min-width: 320px; }
-        .alloc-row { display: grid; grid-template-columns: minmax(140px, 1.4fr) 110px 34px; gap: 8px; align-items: start; }
+        .alloc-list { display: flex; flex-direction: column; gap: 8px; }
+        .alloc-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(80px, 104px) 34px; gap: 6px; align-items: start; }
         .deal-meta { font-size: 11px; color: var(--muted); line-height: 1.35; margin-top: 4px; }
-        .amount { font-variant-numeric: tabular-nums; font-weight: 700; }
+        .amount { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
         .mini-btn {
-            height: 28px; padding: 0 8px; border-radius: 4px;
+            height: 28px; padding: 0 8px; border-radius: 4px; white-space: nowrap;
             border: 1px solid var(--line); background: #fff; color: var(--ink);
             font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
         }
+        /* დილის ინფო ველების ქვეშ, მთელ სიგანეზე */
+        .alloc-meta { grid-column: 1 / -1; margin-top: -4px; }
+        .alloc-meta .deal-meta { margin-top: 0; }
+        .add-deal { margin-top: 8px; }
         .alloc-del {
             height: 36px; width: 34px; border-radius: 4px;
             border: 1px solid #e8bcb8; background: #fef3f2; color: var(--err);
@@ -217,6 +226,7 @@ ob_end_clean();
             background: var(--surface); border: 1px solid var(--line);
             border-radius: 4px; padding: 20px; box-shadow: 0 10px 28px rgba(0, 51, 91, 0.06);
         }
+        @media (max-width: 1200px) { th.col-alloc { width: 240px; } }
         @media (max-width: 900px) { .stats { grid-template-columns: 1fr 1fr; } }
     </style>
 </head>
@@ -334,7 +344,7 @@ ob_end_clean();
             <table>
                 <thead>
                 <tr>
-                    <th>კლიენტი</th>
+                    <th class="col-client">კლიენტი</th>
                     <th>თარიღი</th>
                     <th>დანიშნულება</th>
                     <th>მიმღები</th>
@@ -342,8 +352,7 @@ ob_end_clean();
                     <th>თანხა ₾</th>
                     <th>თანხა $</th>
                     <th title="NBG კურსი ამონაწერის EntryDate-ის მიხედვით">კურსი</th>
-                    <th>დილი / თანხა $</th>
-                    <th></th>
+                    <th class="col-alloc">დილი / თანხა $</th>
                 </tr>
                 </thead>
                 <tbody id="tbody_data"></tbody>
@@ -361,7 +370,7 @@ ob_end_clean();
             <table>
                 <thead>
                 <tr>
-                    <th>კლიენტი</th>
+                    <th class="col-client">კლიენტი</th>
                     <th>INN</th>
                     <th>თარიღი</th>
                     <th>დანიშნულება</th>
@@ -370,8 +379,7 @@ ob_end_clean();
                     <th>კურსი</th>
                     <th>თანხა ₾</th>
                     <th>თანხა $</th>
-                    <th>დილი / თანხა $</th>
-                    <th></th>
+                    <th class="col-alloc">დილი / თანხა $</th>
                 </tr>
                 </thead>
                 <tbody id="tbody_data_errors"></tbody>
@@ -403,7 +411,7 @@ ob_end_clean();
                     <thead>
                     <tr>
                         <th>ID</th>
-                        <th>კლიენტი</th>
+                        <th class="col-client">კლიენტი</th>
                         <th>INN</th>
                         <th>თარიღი</th>
                         <th>დანიშნულება</th>
@@ -568,12 +576,12 @@ function buildAllocRow(idx, paymentId, dealId, metaHtml, value) {
         <div class="alloc-deal">
             <input class="form-control" name="DEAL_${idx}" value="${esc(dealId)}" placeholder="Deal ID">
             <input type="hidden" name="PAYMENT_${idx}" value="${esc(paymentId)}">
-            ${metaHtml || ''}
         </div>
         <div class="alloc-value">
             <input class="form-control" name="VALUE_${idx}" type="number" step="0.01" value="${value}">
         </div>
         <button type="button" class="alloc-del" title="წაშლა" onclick="removeAllocRow(this)">×</button>
+        ${metaHtml ? `<div class="alloc-meta">${metaHtml}</div>` : ''}
     </div>`;
 }
 
@@ -590,7 +598,7 @@ function removeAllocRow(btn) {
         deal.value = '';
         val.value = '0';
         clearDealValidationState(deal);
-        const meta = allocRow.querySelector('.deal-meta');
+        const meta = allocRow.querySelector('.alloc-meta');
         if (meta) meta.remove();
     } else {
         allocRow.remove();
@@ -623,7 +631,9 @@ function renderMatched() {
             deals.forEach((d) => {
                 const idx = indexDeals++;
                 const prefill = deals.length === 1 ? Number(row.BANK_AMOUNT_USD || 0) : 0;
-                const meta = `<div class="deal-meta" title="დარჩენილი დავალიანება: გრაფიკი − გადახდები (დღემდე)">#${esc(d.ID)} · ${esc(d.PROJECT || '—')} · ${esc(d.BLOCK || '')} ${esc(d.UNIT || '')}<br>დარჩენილი: <b>${money(d.LEFT_TO_PAY)}</b></div>`;
+                // პროექტი · უძრავი ქონების ტიპი · ბლოკი ნომერი
+                const info = [d.PROJECT || '-', d.TYPE, [d.BLOCK, d.UNIT].filter(Boolean).join(' ')].filter(Boolean);
+                const meta = `<div class="deal-meta" title="დარჩენილი დავალიანება: გრაფიკი - გადახდები (დღემდე)">#${esc(d.ID)} · ${esc(info.join(' · '))}<br>დარჩენილი: <b>${money(d.LEFT_TO_PAY)}</b></div>`;
                 allocParts.push(buildAllocRow(idx, row.list_id, d.ID, meta, prefill));
             });
         } else {
@@ -637,21 +647,20 @@ function renderMatched() {
         tr.dataset.date = String(row.DATE || '');
         tr.dataset.search = [
             row.CLIENT_NAME, row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY, row.PROJECT, row.ACCOUNT,
-            ...(deals.map(d => d.ID + ' ' + (d.NAME || '')))
+            ...(deals.map(d => d.ID + ' ' + (d.NAME || '') + ' ' + (d.TYPE || '')))
         ].join(' ').toLowerCase();
         tr.dataset.currency = (row.CURRENCY || '').toUpperCase();
         tr.dataset.project = row.PROJECT || '';
         tr.innerHTML = `
             <td><b>${esc(row.CLIENT_NAME || row.NAME)}</b><div class="deal-meta">${esc(row.STATUS || '')} · ${esc(row.INN || '')}</div></td>
-            <td>${esc(row.DATE)}</td>
+            <td class="nowrap">${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
             <td>${esc(row.BENEFICIARY)}${accountMeta(row)}</td>
-            <td>${currencyCell(row)}</td>
+            <td class="nowrap">${currencyCell(row)}</td>
             <td class="amount">${money(row.BANK_AMOUNT_GEL)}</td>
             <td class="amount">${money(row.BANK_AMOUNT_USD)}</td>
-            <td title="NBG USD კურსი ამონაწერის თარიღზე (${esc(row.DATE)})">${esc(row.NBG_RATE)}</td>
-            <td><div class="alloc-list">${allocParts.join('')}</div></td>
-            <td><button type="button" class="mini-btn" onclick="addDealField(this,'myForm')">+ დილი</button></td>
+            <td class="nowrap" title="NBG USD კურსი ამონაწერის თარიღზე (${esc(row.DATE)})">${esc(row.NBG_RATE)}</td>
+            <td><div class="alloc-list">${allocParts.join('')}</div><button type="button" class="mini-btn add-deal" onclick="addDealField(this,'myForm')">+ დილი</button></td>
         `;
         tbody.appendChild(tr);
         tr.querySelectorAll('input[name^="DEAL_"]').forEach(bindDealInput);
@@ -679,15 +688,14 @@ function renderErrors() {
         tr.innerHTML = `
             <td><b>${esc(row.NAME)}</b></td>
             <td>${esc(row.INN)}</td>
-            <td>${esc(row.DATE)}</td>
+            <td class="nowrap">${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
             <td>${esc(row.BENEFICIARY)}${accountMeta(row)}</td>
-            <td>${currencyCell(row)}</td>
-            <td title="NBG USD კურსი ამონაწერის თარიღზე">${esc(row.NBG_RATE)}</td>
+            <td class="nowrap">${currencyCell(row)}</td>
+            <td class="nowrap" title="NBG USD კურსი ამონაწერის თარიღზე">${esc(row.NBG_RATE)}</td>
             <td class="amount">${money(row.AMOUNT_GEL || row.BANK_AMOUNT_GEL)}</td>
             <td class="amount">${money(usd)}</td>
-            <td><div class="alloc-list">${buildAllocRow(idx, row.PAYMENT || row.list_id, '', '', usd)}</div></td>
-            <td><button type="button" class="mini-btn" onclick="addDealField(this,'myForm_er')">+ დილი</button></td>
+            <td><div class="alloc-list">${buildAllocRow(idx, row.PAYMENT || row.list_id, '', '', usd)}</div><button type="button" class="mini-btn add-deal" onclick="addDealField(this,'myForm_er')">+ დილი</button></td>
         `;
         tbody.appendChild(tr);
         tr.querySelectorAll('input[name^="DEAL_"]').forEach(bindDealInput);
@@ -746,10 +754,10 @@ function renderSkipped() {
             <td>${esc(row.list_id)}</td>
             <td><b>${esc(row.NAME)}</b></td>
             <td>${esc(row.INN)}</td>
-            <td>${esc(row.DATE)}</td>
+            <td class="nowrap">${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
             <td>${esc(row.BENEFICIARY)}${accountMeta(row)}</td>
-            <td>${currencyCell(row)}</td>
+            <td class="nowrap">${currencyCell(row)}</td>
             <td class="amount">${money(row.AMOUNT_GEL)}</td>
             <td class="amount">${money(row.AMOUNT_USD)}</td>
             <td><span class="reason-badge">${esc(row.REASON)}</span></td>

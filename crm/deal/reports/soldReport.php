@@ -27,6 +27,7 @@ $t = array_merge($t, [
 // Sales sheets of the Excel: the accountants' contract register first, then the report's own columns.
 $exportColumns = [
     'BUX_ID' => $lang === 'eng' ? 'Accounting Code' : 'ბუღ. კოდი',
+    'DEAL_ID' => $lang === 'eng' ? 'Deal ID' : 'დილის ID',
     F_PROJECT => $lang === 'eng' ? 'Project Name' : 'პროექტის დასახელება',
     'PROJECT_CODE' => $lang === 'eng' ? 'Project Code' : 'პროექტის კოდი',
     'CONTRACT_NO' => $lang === 'eng' ? 'Contract No.' : 'ხელშეკრულების ნომერი',
@@ -94,7 +95,7 @@ $filteredProducts = reportFilterProducts($products, $filters);
 
 // Excel button: rows of the sales sheets, fetched on demand (the payment lists are slow to read).
 if (($_GET['export'] ?? '') === 'rows') {
-    $numeric = ['BUX_ID', F_FLOOR, F_UNIT_NO, F_TOTAL_AREA, 'INNER_AREA', 'BEDROOMS'];
+    $numeric = ['BUX_ID', 'DEAL_ID', F_FLOOR, F_UNIT_NO, F_TOTAL_AREA, 'INNER_AREA', 'BEDROOMS'];
     $rows = [];
     foreach (reportEnrichSoldExport($filteredProducts, $lang) as $product) {
         $product[F_PROJECT] = reportFilterLabel($product[F_PROJECT] ?? '');
