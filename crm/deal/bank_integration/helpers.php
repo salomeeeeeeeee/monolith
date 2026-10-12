@@ -1068,30 +1068,114 @@ if (!function_exists('bankBogStatementAmounts')) {
     }
 }
 
-if (!function_exists('bankBogLoadMergedPaymentIds')) {
-    function bankBogLoadMergedPaymentIds()
+/**
+ * ბანკიდან შექმნილი გადახდები: ამონაწერის ID => [დილის ID => true].
+ * ერთი ამონაწერი შეიძლება რამდენიმე დილზე იყოს გადანაწილებული.
+ */
+if (!function_exists('bankBogLoadMergedPaymentDeals')) {
+    function bankBogLoadMergedPaymentDeals()
     {
-        $set = [];
+        $map = [];
         $res = CIBlockElement::GetList(
             [],
             ['IBLOCK_ID' => BANK_BOG_PAYMENT_IBLOCK, '!PROPERTY_BANK_PAYMENT_ID' => false, 'CHECK_PERMISSIONS' => 'N'],
             false,
             false,
-            ['ID', 'PROPERTY_BANK_PAYMENT_ID']
+            ['ID', 'PROPERTY_BANK_PAYMENT_ID', 'PROPERTY_DEAL']
         );
         while ($row = $res->Fetch()) {
             $pid = trim((string)($row['PROPERTY_BANK_PAYMENT_ID_VALUE'] ?? ''));
-            if ($pid !== '') {
-                $set[$pid] = true;
+            if ($pid === '') {
+                continue;
+            }
+            if (!isset($map[$pid])) {
+                $map[$pid] = [];
+            }
+            $dealId = bankBogNormalizeDealId($row['PROPERTY_DEAL_VALUE'] ?? '');
+            if ($dealId !== '') {
+                $map[$pid][$dealId] = true;
             }
         }
-        return $set;
+        return $map;
+    }
+}
+
+/**
+ * INN-ის ადგილას ჩაწერილი ნულები (მაგ. 00000000000 უცხოელებზე) - ასეთი INN ბევრ სხვადასხვა გადამხდელს აქვს.
+ */
+if (!function_exists('bankBogIsPlaceholderInn')) {
+    function bankBogIsPlaceholderInn($inn)
+    {
+        return (bool)preg_match('/^(\d)\1*$/', trim((string)$inn));
+    }
+}
+
+/** გადამხდელის INN ამონაწერიდან; ცარიელი, თუ არ წერია ან ნულებია. */
+if (!function_exists('bankBogStatementPayerInn')) {
+    function bankBogStatementPayerInn(array $list)
+    {
+        $inn = trim((string)($list['DocumentPayerInn'] ?? ''));
+        if ($inn === '') {
+            $inn = trim((string)($list['SenderDetails_Inn'] ?? ''));
+        }
+        return bankBogIsPlaceholderInn($inn) ? '' : $inn;
+    }
+}
+
+if (!function_exists('bankBogStatementSenderAccount')) {
+    function bankBogStatementSenderAccount(array $list)
+    {
+        return strtoupper(preg_replace('/\s+/', '', (string)($list['SenderDetails_AccountNumber'] ?? '')));
+    }
+}
+
+/**
+ * ანგარიშები, საიდანაც სხვადასხვა INN-ით შემოდის (მაგ. ბანკის სალაროს ტრანზიტული ანგარიში) -
+ * ასეთი ანგარიში გადამხდელს ვერ ამოიცნობს.
+ */
+if (!function_exists('bankBogSharedSenderAccounts')) {
+    function bankBogSharedSenderAccounts(array $statements)
+    {
+        $innsByAccount = [];
+        foreach ($statements as $list) {
+            $account = bankBogStatementSenderAccount($list);
+            $inn = bankBogStatementPayerInn($list);
+            if ($account !== '' && $inn !== '') {
+                $innsByAccount[$account][$inn] = true;
+            }
+        }
+        $shared = [];
+        foreach ($innsByAccount as $account => $inns) {
+            if (count($inns) > 1) {
+                $shared[$account] = true;
+            }
+        }
+        return $shared;
+    }
+}
+
+/**
+ * გადამხდელის გასაღები წინა მიბმების მოსაძებნად: INN, ის თუ ცარიელია - გამგზავნის ანგარიში
+ * (საერთო ანგარიშის გარდა). სახელით არ ვეძებთ - სახელები ხშირად ემთხვევა.
+ */
+if (!function_exists('bankBogStatementPayerKey')) {
+    function bankBogStatementPayerKey(array $list, array $sharedAccounts = [])
+    {
+        $inn = bankBogStatementPayerInn($list);
+        if ($inn !== '') {
+            return 'INN:' . $inn;
+        }
+        $account = bankBogStatementSenderAccount($list);
+        return ($account !== '' && !isset($sharedAccounts[$account])) ? 'ACC:' . $account : '';
     }
 }
 
 /**
  * Build matchable + unmatched + skipped statement models for merge UI.
  * Returns [$matched, $errors, $skipped]
+ *
+ * დილები იძებნება გადამხდელის INN-ით და წინა მიბმებით: თუ ამ გადამხდელის ჩარიცხვა
+ * ადრე რომელიმე დილზე მიება, ის დილიც შემოგვთავაზდება (RECOGNIZED, თუ INN-ით ვერ მოიძებნებოდა).
  */
 if (!function_exists('bankBogBuildMergeModels')) {
     function bankBogBuildMergeModels()
@@ -1101,22 +1185,37 @@ if (!function_exists('bankBogBuildMergeModels')) {
             return [[], [], []];
         }
 
-        $mergedIds = bankBogLoadMergedPaymentIds();
+        $mergedDeals = bankBogLoadMergedPaymentDeals();
         $statements = bankBogGetElements(
             ['IBLOCK_ID' => $iblockId],
             null,
             ['ID' => 'DESC']
         );
+        $sharedAccounts = bankBogSharedSenderAccounts($statements);
 
         $pending = [];
         $inns = [];
         $skipped = [];
+        // გადამხდელის გასაღები => [დილის ID => ['COUNT' => მიბმული ამონაწერები, 'LAST' => Y-m-d]]
+        $history = [];
 
         foreach ($statements as $list) {
             $id = (string)$list['ID'];
 
-            // უკვე მიბმული — საერთოდ არ ვაჩვენებთ (არც მერჯზე, არც გამოტოვებულებში)
-            if (isset($mergedIds[$id])) {
+            // უკვე მიბმული - არ ვაჩვენებთ (არც მერჯზე, არც გამოტოვებულებში), მაგრამ ვიმახსოვრებთ, რომელ დილზე წავიდა
+            if (isset($mergedDeals[$id])) {
+                $payerKey = bankBogStatementPayerKey($list, $sharedAccounts);
+                $date = explode('T', (string)($list['EntryDate'] ?? ''))[0];
+                if ($payerKey !== '') {
+                    foreach (array_keys($mergedDeals[$id]) as $dealId) {
+                        $entry = $history[$payerKey][$dealId] ?? ['COUNT' => 0, 'LAST' => ''];
+                        $entry['COUNT']++;
+                        if ($date > $entry['LAST']) {
+                            $entry['LAST'] = $date;
+                        }
+                        $history[$payerKey][$dealId] = $entry;
+                    }
+                }
                 continue;
             }
 
@@ -1151,8 +1250,10 @@ if (!function_exists('bankBogBuildMergeModels')) {
                 $inn = $senderInn;
             }
             $list['_RESOLVED_INN'] = $inn;
+            $list['_PAYER_KEY'] = bankBogStatementPayerKey($list, $sharedAccounts);
             $pending[] = $list;
-            if ($inn !== '') {
+            // ნულოვანი INN კონტაქტს არ ებმება - ბევრი უცხოელი გადამხდელის საერთოა
+            if ($inn !== '' && !bankBogIsPlaceholderInn($inn)) {
                 $inns[] = $inn;
             }
         }
@@ -1183,6 +1284,24 @@ if (!function_exists('bankBogBuildMergeModels')) {
             }
         }
 
+        // წინა მიბმების დილები, რომლებიც INN-ით არ ჩაიტვირთა; სტეიჯის ფილტრი არააქტიურ დილებს ტოვებს
+        $historyDealIds = [];
+        foreach ($pending as $list) {
+            foreach (array_keys($history[$list['_PAYER_KEY']] ?? []) as $dealId) {
+                if (!isset($dealsById[$dealId])) {
+                    $historyDealIds[$dealId] = true;
+                }
+            }
+        }
+        if (!empty($historyDealIds)) {
+            foreach (bankBogGetDealsByFilter(
+                ['ID' => array_keys($historyDealIds), 'STAGE_ID' => bankBogMergeStages()],
+                bankBogDealSelectFields()
+            ) as $deal) {
+                $dealsById[(int)$deal['ID']] = $deal;
+            }
+        }
+
         $allDealIds = array_keys($dealsById);
         $leftMap = bankBogComputeLeftToPayMap($allDealIds);
 
@@ -1208,24 +1327,35 @@ if (!function_exists('bankBogBuildMergeModels')) {
                 'BENEFICIARY' => $list['BeneficiaryDetails_Name'] ?? '',
                 'PROJECT' => $list['PROJECT'] ?? '',
                 'ACCOUNT' => $list['ACCOUNT_NUMBER'] ?? '',
+                'SENDER_ACCOUNT' => $list['SenderDetails_AccountNumber'] ?? '',
+                // რითი ამოიცნობა გადამხდელი: INN ან გამგზავნის ანგარიში
+                'PAYER' => preg_replace('/^(INN|ACC):/', '', $list['_PAYER_KEY']),
                 'DATE' => $date,
                 'list_id' => $list['ID'],
                 'PAYMENT' => $list['ID'],
                 'COMMENT' => $list['EntryComment'] ?? '',
             ];
 
-            if ($inn === '' || !isset($payers[$inn])) {
-                $errors[] = $base;
-                continue;
-            }
-
-            $payer = $payers[$inn];
+            $payer = ($inn !== '' && isset($payers[$inn])) ? $payers[$inn] : null;
             $dealIds = [];
-            if ($payer['type'] === 'contact') {
+            if ($payer && $payer['type'] === 'contact') {
                 $dealIds = $dealsByContact[$payer['id']] ?? [];
-            } else {
+            } elseif ($payer) {
                 $dealIds = $dealsByCompany[$payer['id']] ?? [];
             }
+
+            // წინა მიბმები, ბოლოს მიბმული პირველი; INN-ით ვერნაპოვნი დილი რიგს "ამოცნობილს" ხდის
+            $payerHistory = $history[$list['_PAYER_KEY']] ?? [];
+            uasort($payerHistory, function ($a, $b) {
+                return strcmp($b['LAST'], $a['LAST']);
+            });
+            $innDealIds = $dealIds;
+            foreach (array_keys($payerHistory) as $dealId) {
+                if (isset($dealsById[$dealId]) && !in_array($dealId, $dealIds, true)) {
+                    $dealIds[] = $dealId;
+                }
+            }
+            $recognized = count($dealIds) > count($innDealIds);
 
             $modeled = [];
             foreach ($dealIds as $dealId) {
@@ -1235,8 +1365,9 @@ if (!function_exists('bankBogBuildMergeModels')) {
                 }
                 $clientName = trim((string)($deal['CONTACT_FULL_NAME'] ?? ''));
                 if ($clientName === '') {
-                    $clientName = trim((string)($deal['COMPANY_TITLE'] ?? $payer['name']));
+                    $clientName = trim((string)($deal['COMPANY_TITLE'] ?? ($payer ? $payer['name'] : '')));
                 }
+                $hist = $payerHistory[$dealId] ?? null;
                 $modeled[] = [
                     'ID' => (int)$deal['ID'],
                     'NAME' => $deal['TITLE'] ?? '',
@@ -1248,21 +1379,27 @@ if (!function_exists('bankBogBuildMergeModels')) {
                     'UNIT' => bankBogUfValue($deal[BANK_D_UNIT] ?? ''),
                     'BLOCK' => bankBogUfValue($deal[BANK_D_BLOCK] ?? ''),
                     'TYPE' => bankBogUfValue($deal[BANK_D_TYPE] ?? ''),
+                    'FROM_HISTORY' => !in_array($dealId, $innDealIds, true),
+                    'HISTORY_COUNT' => $hist ? $hist['COUNT'] : 0,
+                    'HISTORY_LAST' => $hist ? bankBogFormatDateDmy($hist['LAST']) : '',
                 ];
             }
 
             if (!empty($modeled)) {
                 $matched[] = array_merge($base, [
-                    'CLIENT_NAME' => $payer['name'] ?: $name,
-                    'CLIENT_ID' => $payer['id'],
-                    'STATUS' => $payer['type'],
+                    'CLIENT_NAME' => ($payer ? $payer['name'] : '') ?: $name,
+                    'CLIENT_ID' => $payer ? $payer['id'] : 0,
+                    'STATUS' => $payer ? $payer['type'] : '',
+                    'RECOGNIZED' => $recognized,
                     'MERGE_DEALS' => $modeled,
                 ]);
-            } else {
+            } elseif ($payer) {
                 $errors[] = array_merge($base, [
                     'CLIENT_ID' => $payer['id'],
                     'STATUS' => $payer['type'],
                 ]);
+            } else {
+                $errors[] = $base;
             }
         }
 
