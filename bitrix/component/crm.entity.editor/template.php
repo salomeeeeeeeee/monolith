@@ -1094,8 +1094,10 @@ if ($dealId > 0 && ($isDealEntity || (isset($urlParts[4]) && $urlParts[4] == "de
 		"PROPERTY_DEAL" => $dealId,
 	));
 	foreach ($resPayments as $payment) {
-		$paymentsArr["PAYMENTS_SUM"] += moneyToNum_CRM_ENTITY($payment["TANXA"] ?? 0);
-		$paymentsArr["PAYMENTS_SUM_GEL"] += moneyToNum_CRM_ENTITY($payment["tanxa_gel"] ?? 0);
+		// უკუგატარება (refund = YES) ჯამს აკლდება
+		$sign = (($payment["refund"] ?? "") === "YES") ? -1 : 1;
+		$paymentsArr["PAYMENTS_SUM"] += $sign * moneyToNum_CRM_ENTITY($payment["TANXA"] ?? 0);
+		$paymentsArr["PAYMENTS_SUM_GEL"] += $sign * moneyToNum_CRM_ENTITY($payment["tanxa_gel"] ?? 0);
 	}
 	$paymentsArr["PAYMENTS_SUM_FORMATED"] = moneyFormatNum_CRM_ENTITY($paymentsArr["PAYMENTS_SUM"]);
 	$paymentsArr["PAYMENTS_SUM_FORMATED_GEL"] = moneyFormatNum_CRM_ENTITY_GEL($paymentsArr["PAYMENTS_SUM_GEL"]);

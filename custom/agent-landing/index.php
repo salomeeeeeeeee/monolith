@@ -119,7 +119,8 @@ $apiUrl  = '/rest/public/addAgentLead.php';
       color: var(--steel);
     }
 
-    label .req {
+    label .req,
+    .section-label .req {
       color: #b42318;
       margin-left: 2px;
     }
@@ -351,6 +352,69 @@ $apiUrl  = '/rest/public/addAgentLead.php';
       gap: 14px;
     }
 
+    .lead-status {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+      border: none;
+      padding: 0;
+      min-width: 0;
+    }
+
+    .status-option {
+      position: relative;
+      display: block;
+      margin: 0;
+      padding: 14px 14px 14px 44px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    .status-option:hover {
+      border-color: var(--steel);
+      background: var(--white);
+    }
+
+    .status-option input {
+      position: absolute;
+      top: 16px;
+      left: 15px;
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: var(--navy);
+      cursor: pointer;
+    }
+
+    .status-option:has(input:checked) {
+      border-color: var(--navy);
+      background: var(--white);
+      box-shadow: 0 0 0 3px var(--navy-soft);
+    }
+
+    .status-option:has(input:focus-visible) {
+      box-shadow: 0 0 0 4px var(--navy-soft);
+    }
+
+    .status-title {
+      display: block;
+      color: var(--navy);
+      font-size: 0.98rem;
+      font-weight: 700;
+    }
+
+    .status-desc {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 500;
+    }
+
     .btn-submit {
       width: 100%;
       margin-top: 18px;
@@ -411,6 +475,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
       .page { width: min(100% - 20px, 720px); padding: 24px 0 40px; }
       .panel { padding: 22px 18px 18px; border-radius: 18px; }
       .grid-2 { grid-template-columns: 1fr; gap: 0; }
+      .lead-status { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -454,6 +519,21 @@ $apiUrl  = '/rest/public/addAgentLead.php';
           <label for="agencyComment">სააგენტოს კომენტარი</label>
           <textarea id="agencyComment" name="agency_comment" placeholder="დამატებითი ინფორმაცია კლიენტზე ან მოთხოვნაზე"></textarea>
         </div>
+
+        <div class="section-label">ლიდის სტატუსი <span class="req">*</span></div>
+
+        <fieldset class="lead-status" id="leadStatus">
+          <label class="status-option">
+            <input type="radio" name="lead_status" value="fix" required>
+            <span class="status-title">Fix</span>
+            <span class="status-desc">ნომრის დაფიქსირება - კლიენტთან თავად ვმუშაობ</span>
+          </label>
+          <label class="status-option">
+            <input type="radio" name="lead_status" value="contact">
+            <span class="status-title">Contact</span>
+            <span class="status-desc">მონოლითის გაყიდვების მენეჯერი დაუკავშირდება კლიენტს</span>
+          </label>
+        </fieldset>
 
         <button type="submit" class="btn-submit" id="submitBtn">დილის შექმნა</button>
         <div class="status" id="statusBox" role="status" aria-live="polite"></div>
@@ -886,6 +966,8 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         const agency = agencyInput.value.trim();
         const agent = agentInput.value.trim();
         const agencyComment = document.getElementById('agencyComment').value.trim();
+        const leadStatusInput = form.querySelector('input[name="lead_status"]:checked');
+        const leadStatus = leadStatusInput ? leadStatusInput.value : '';
         const phoneRows = Array.from(phonesList.querySelectorAll('.phone-row'));
         const phones = phoneRows
           .map(function (row) { return rowPhone(row); })
@@ -909,6 +991,11 @@ $apiUrl  = '/rest/public/addAgentLead.php';
           showStatus('err', 'გთხოვთ მიუთითოთ სააგენტო ან აგენტი.');
           return;
         }
+        if (!leadStatus) {
+          showStatus('err', 'გთხოვთ აირჩიოთ ლიდის სტატუსი: Fix ან Contact.');
+          form.querySelector('input[name="lead_status"]').focus();
+          return;
+        }
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'იგზავნება...';
@@ -922,7 +1009,8 @@ $apiUrl  = '/rest/public/addAgentLead.php';
               phones: phones,
               agency: agency,
               agent: agent,
-              agency_comment: agencyComment
+              agency_comment: agencyComment,
+              lead_status: leadStatus
             })
           });
 

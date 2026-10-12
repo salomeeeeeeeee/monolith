@@ -13,10 +13,24 @@ CModule::IncludeModule('crm');
 CModule::IncludeModule('bizproc');
 
 const AGENT_LEAD_CATEGORY_ID    = 0;
-const AGENT_LEAD_STAGE_ID       = "UC_0WHVSO";
-const AGENT_LEAD_ASSIGNED_BY_ID = 1;
-const AGENT_LEAD_WORKFLOW_ID    = 86;
 const AGENT_LEAD_SOURCE_ID      = "UC_HN9W32";
+const AGENT_LEAD_ASSIGNED_BY_ID = 1;
+
+// ლიდის სტატუსი ფორმიდან:
+//   fix     - აგენტი კლიენტთან თავად მუშაობს, მხოლოდ ნომერს აფიქსირებს
+//   contact - აგენტი ითხოვს, რომ სეილი დაუკავშირდეს კლიენტს
+const AGENT_LEAD_STATUS_FIX     = 'fix';
+const AGENT_LEAD_STATUS_CONTACT = 'contact';
+
+// Contact: "Agent Leads" ეტაპი, BP 89 პასუხისმგებელს გაყიდვების ჯგუფზე (group 17) მორიგეობით ანაწილებს
+const AGENT_LEAD_STAGE_ID       = "UC_0WHVSO";
+const AGENT_LEAD_WORKFLOW_ID    = 89;
+
+// Fix: "წარუმატებელი მოლაპარაკება", მიზეზი "აგენტი", დილიც და კონტაქტიც ნუკი პაიჭაძეზე
+const AGENT_LEAD_FIX_STAGE_ID       = "UC_QFL99J";
+const AGENT_LEAD_FIX_ASSIGNED_BY_ID = 9;
+const AGENT_LEAD_F_FIX_REASON       = "UF_CRM_1780473790937";
+const AGENT_LEAD_FIX_REASON_ID      = 492;
 const AGENT_LEAD_TITLE_PREFIX   = "აგენტის ფორმა - ";
 // ნომრის დაკავების წესი:
 //   true  - ნომერი დაკავებულია, თუ ბაზაში რომელიმე კონტაქტზე ფიქსირდება (დილის სტადიას მნიშვნელობა არ აქვს)
@@ -263,9 +277,14 @@ function agentLeadGetPhones($contactId)
     return array_values(array_filter($values));
 }
 
-function agentLeadBuildComments($agency, $agent, $agencyComment)
+function agentLeadBuildComments($agency, $agent, $agencyComment, $leadStatus = '')
 {
     $lines = [];
+    if ($leadStatus !== '') {
+        $lines[] = 'ლიდის სტატუსი: ' . ($leadStatus === AGENT_LEAD_STATUS_FIX
+            ? 'Fix (აგენტი თავად ემუშავება)'
+            : 'Contact (სეილი დაუკავშირდეს)');
+    }
     if ($agency !== '') {
         $lines[] = 'სააგენტო: ' . $agency;
     }
@@ -278,9 +297,9 @@ function agentLeadBuildComments($agency, $agent, $agencyComment)
     return implode("\n", $lines);
 }
 
-function agentLeadBuildCommentsHtml($agency, $agent, $agencyComment)
+function agentLeadBuildCommentsHtml($agency, $agent, $agencyComment, $leadStatus = '')
 {
-    $text = agentLeadBuildComments($agency, $agent, $agencyComment);
+    $text = agentLeadBuildComments($agency, $agent, $agencyComment, $leadStatus);
     if ($text === '') {
         return '';
     }
@@ -343,6 +362,7 @@ $lastName       = agentLeadPick($input, ['last_name', 'lastName', 'surname']);
 $agency         = agentLeadPick($input, ['agency', 'agency_name', 'agencyName']);
 $agent          = agentLeadPick($input, ['agent', 'agent_name', 'agentName']);
 $agencyComment  = agentLeadPick($input, ['agency_comment', 'agencyComment', 'comment']);
+$leadStatus     = strtolower((string)agentLeadPick($input, ['lead_status', 'leadStatus']));
 $phones         = agentLeadCollectPhones($input);
 
 // ფორმის მხრიდან ნომრის წინასწარი შემოწმება - დილი არ იქმნება
@@ -368,6 +388,13 @@ if ($agency === '' && $agent === '') {
     agentLeadRespond(['status' => 400, 'message' => 'მიუთითეთ სააგენტო ან აგენტი'], 400);
 }
 
+if (!in_array($leadStatus, [AGENT_LEAD_STATUS_FIX, AGENT_LEAD_STATUS_CONTACT], true)) {
+    agentLeadRespond(['status' => 400, 'message' => 'აირჩიეთ ლიდის სტატუსი: Fix ან Contact'], 400);
+}
+
+$isFix = $leadStatus === AGENT_LEAD_STATUS_FIX;
+$assignedById = $isFix ? AGENT_LEAD_FIX_ASSIGNED_BY_ID : AGENT_LEAD_ASSIGNED_BY_ID;
+
 // დაკავებულ ნომერზე აგენტი დილს ვერ არეგისტრირებს.
 // კონტაქტისა და დილის შექმნამდე ვამოწმებთ, თორემ თავად ისინი დაიკავებდნენ ნომერს.
 $busyPhones = agentLeadBusyPhones($phones);
@@ -385,8 +412,8 @@ if ($displayName === '') {
     $displayName = $clientName;
 }
 
-$comments = agentLeadBuildComments($agency, $agent, $agencyComment);
-$commentsHtml = agentLeadBuildCommentsHtml($agency, $agent, $agencyComment);
+$comments = agentLeadBuildComments($agency, $agent, $agencyComment, $leadStatus);
+$commentsHtml = agentLeadBuildCommentsHtml($agency, $agent, $agencyComment, $leadStatus);
 
 global $USER;
 $authorizedHere = false;
@@ -462,7 +489,7 @@ if ($contactId > 0) {
     $contactFields = [
         'NAME'           => $firstName !== '' ? $firstName : $displayName,
         'LAST_NAME'      => $lastName,
-        'ASSIGNED_BY_ID' => AGENT_LEAD_ASSIGNED_BY_ID,
+        'ASSIGNED_BY_ID' => $assignedById,
         'OPENED'         => 'Y',
         'FM'             => ['PHONE' => $fmPhones],
     ];
@@ -492,15 +519,18 @@ $dealTitle = AGENT_LEAD_TITLE_PREFIX . ($displayName !== '' ? $displayName : $ph
 $dealFields = [
     'TITLE'          => $dealTitle,
     'CATEGORY_ID'    => AGENT_LEAD_CATEGORY_ID,
-    'STAGE_ID'       => AGENT_LEAD_STAGE_ID,
+    'STAGE_ID'       => $isFix ? AGENT_LEAD_FIX_STAGE_ID : AGENT_LEAD_STAGE_ID,
     'SOURCE_ID'      => AGENT_LEAD_SOURCE_ID,
     'CONTACT_ID'     => (int)$contactId,
-    'ASSIGNED_BY_ID' => AGENT_LEAD_ASSIGNED_BY_ID,
+    'ASSIGNED_BY_ID' => $assignedById,
     'OPENED'         => 'Y',
     'COMMENTS'       => $commentsHtml !== '' ? $commentsHtml : $comments,
     // ფორმაში ჩაწერილი სააგენტო/აგენტი - ორივე თუ მიუთითეს, „სააგენტო / აგენტი“
     AGENT_LEAD_F_AGENCY_AGENT => implode(' / ', array_filter([$agency, $agent], 'strlen')),
 ];
+if ($isFix) {
+    $dealFields[AGENT_LEAD_F_FIX_REASON] = AGENT_LEAD_FIX_REASON_ID;
+}
 
 $deal = new CCrmDeal(false);
 $dealId = $deal->Add($dealFields, true, [
@@ -551,15 +581,39 @@ if ($commentsHtml !== '') {
 $workflowErrors = [];
 $startedWorkflow = null;
 
-try {
-    $startedWorkflow = CBPDocument::StartWorkflow(
-        AGENT_LEAD_WORKFLOW_ID,
-        ['crm', 'CCrmDocumentDeal', 'DEAL_' . $dealId],
-        [],
-        $workflowErrors
-    );
-} catch (Exception $e) {
-    $workflowErrors[] = $e->getMessage();
+// განაწილება მხოლოდ Contact-ზე; Fix დილი პირდაპირ ნუკიზე იწერება
+if (!$isFix) {
+    try {
+        $startedWorkflow = CBPDocument::StartWorkflow(
+            AGENT_LEAD_WORKFLOW_ID,
+            ['crm', 'CCrmDocumentDeal', 'DEAL_' . $dealId],
+            [],
+            $workflowErrors
+        );
+    } catch (Exception $e) {
+        $workflowErrors[] = $e->getMessage();
+    }
+
+    // ახალი კონტაქტიც იმ მენეჯერზე, ვისაც BP 89-მა დილი მიაწერა (BP სინქრონულად სრულდება)
+    if ($contactCreated) {
+        $assignedDeal = CCrmDeal::GetListEx(
+            [],
+            ['ID' => (int)$dealId, 'CHECK_PERMISSIONS' => 'N'],
+            false,
+            ['nTopCount' => 1],
+            ['ID', 'ASSIGNED_BY_ID']
+        )->Fetch();
+
+        $dealAssignedById = (int)($assignedDeal['ASSIGNED_BY_ID'] ?? 0);
+        if ($dealAssignedById > 0 && $dealAssignedById !== $assignedById) {
+            $contactAssignFields = ['ASSIGNED_BY_ID' => $dealAssignedById];
+            $contactUpdater = new CCrmContact(false);
+            $contactUpdater->Update((int)$contactId, $contactAssignFields, true, true, [
+                'DISABLE_USER_FIELD_CHECK' => true,
+                'CURRENT_USER'             => AGENT_LEAD_ASSIGNED_BY_ID,
+            ]);
+        }
+    }
 }
 
 if ($authorizedHere) {
@@ -574,11 +628,12 @@ $response = [
     'dealId'         => (int)$dealId,
     'contactId'      => (int)$contactId,
     'dealTitle'      => $dealTitle,
-    'workflowId'     => AGENT_LEAD_WORKFLOW_ID,
+    'leadStatus'     => $leadStatus,
+    'workflowId'     => $isFix ? 0 : AGENT_LEAD_WORKFLOW_ID,
     'commentId'      => (int)$timelineCommentId,
 ];
 
-if (!$startedWorkflow) {
+if (!$isFix && !$startedWorkflow) {
     $response['workflowWarning'] = 'პროცესი შესაძლოა არ გაეშვა';
     $response['workflowErrors']  = $workflowErrors;
 }
