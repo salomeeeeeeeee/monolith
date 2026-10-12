@@ -50,6 +50,7 @@ if ($deal_id) {
             foreach ($prevProds as $prod) {
                 $productData = getCIBlockElementsByID($prod["PRODUCT_ID"]);
                 if (!$productData) continue;
+                if (($productData["_P64GYD"] ?? "") !== "თავისუფალი") continue;
                 $arUpdateProps = [
                     "PROPERTY_VALUES" => array_merge($productData, [
                         "OWNER_DEAL"             => "",
@@ -103,6 +104,8 @@ if ($deal_id) {
     $sawyisiGirebuleba = $productIdsForAdd = "";
     $summerspace = $bedrooms = $bathrooms = $rooms = $cadastralCode = $sector = $contractNo = "";
 
+    $attachedIds = array_map(fn($row) => (int)$row["PRODUCT_ID"], CCrmDeal::LoadProductRows($deal_id) ?: []);
+
     $rows = [];
     foreach ($productIds as $pid) {
         $productData = getCIBlockElementsByID($pid);
@@ -110,6 +113,15 @@ if ($deal_id) {
         if (!$productData) {
             $resArray["status"] = 400;
             $resArray["error"]  = "ბინა ვერ მოიძებნა";
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($resArray, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        // დილზე ახლად მხოლოდ თავისუფალი ბინა ემატება
+        if (!in_array((int)$pid, $attachedIds, true) && ($productData["_P64GYD"] ?? "") !== "თავისუფალი") {
+            $resArray["status"] = 409;
+            $resArray["error"]  = "ბინა N" . $productData["__6KWOWZ"] . " არ არის თავისუფალი (" . $productData["_P64GYD"] . ") და დილზე ვერ დაემატება";
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode($resArray, JSON_UNESCAPED_UNICODE);
             exit;
@@ -179,6 +191,8 @@ if ($deal_id) {
                 if (!$pid) continue;
                 $productData = getCIBlockElementsByID($pid);
                 if (!$productData || empty($productData["IBLOCK_ID"])) continue;
+                // დაჯავშნილ/დასადასტურებელ/გაყიდულ ბინაზე მფლობელ დილს არ ვცვლით
+                if (($productData["_P64GYD"] ?? "") !== "თავისუფალი") continue;
 
                 CIBlockElement::SetPropertyValuesEx($pid, $productData["IBLOCK_ID"], [
                     "OWNER_DEAL"             => $deal_id,

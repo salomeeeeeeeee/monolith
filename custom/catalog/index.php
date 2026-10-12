@@ -758,7 +758,7 @@ ob_end_clean();
             <div class="legend-item status-reserved-frame"><span class="legend-color status-reserved"></span> დაჯავშნილი <span class="legend-count" id="count-reserved">0</span></div>
             <div class="legend-item status-sold-frame"><span class="legend-color status-sold"></span> გაყიდული <span class="legend-count" id="count-sold">0</span></div>
             <div class="legend-item status-nfs-frame"><span class="legend-color status-notforsale"></span> NFS <span class="legend-count" id="count-nfs">0</span></div>
-            <div class="legend-item status-queue-frame"><span class="legend-color status-queue"></span> ჯავშნის რიგში <span class="legend-count" id="count-queue">0</span></div>
+            <div class="legend-item status-queue-frame"><span class="legend-color status-queue"></span> დასადასტურებელი ჯავშანი <span class="legend-count" id="count-queue">0</span></div>
             <div class="legend-item" style="cursor:default;"><span class="legend-color" style="background:var(--text2);"></span> სულ <span class="legend-count" id="count-total">0</span></div>
 
             <button id="exportExcelBtn" onclick="exportToExcel()">⬇ Excel</button>
@@ -919,6 +919,7 @@ const STATUS_MAP = {
     "თავისუფალი":    { tile:"active",     apt:"apt-active",     badge:"badge-active" },
     "დაჯავშნილი":    { tile:"reserved",   apt:"apt-reserved",   badge:"badge-reserved" },
     "გაყიდული":      { tile:"sold",       apt:"apt-sold",       badge:"badge-sold" },
+    "დასადასტურებელი ჯავშანი": { tile:"queue", apt:"apt-queue",  badge:"badge-queue" },
     "ჯავშნის რიგში": { tile:"queue",      apt:"apt-queue",      badge:"badge-queue" },
     "NFS":           { tile:"notforsale", apt:"apt-notforsale", badge:"badge-nfs" },
 };
@@ -1709,6 +1710,7 @@ function updateLegendCounts(prods) {
             case "დაჯავშნილი":    c.reserved++; break;
             case "გაყიდული":      c.sold++;     break;
             case "NFS":           c.nfs++;      break;
+            case "დასადასტურებელი ჯავშანი":
             case "ჯავშნის რიგში": c.queue++;    break;
         }
     });
@@ -1976,10 +1978,8 @@ function openPopup(aptId, fromBox=false) {
     selectBtn.style.background = "var(--red)";
     selectBtn.dataset.mode  = "delete";
 }  else {
-    const canAdd = !alreadyAdded
-                   && apt["_P64GYD"] !== "გაყიდული" 
-                   && apt["_P64GYD"] !== "NFS"
-                   && apt["_P64GYD"] !== "ჯავშნის რიგში";
+    // დილზე მხოლოდ თავისუფალი ბინა ემატება
+    const canAdd = !alreadyAdded && apt["_P64GYD"] === "თავისუფალი";
     selectBtn.style.display    = canAdd ? "flex" : "none";
     selectBtn.textContent      = "დამატება";
     selectBtn.style.background = "var(--accent)";
@@ -2461,8 +2461,7 @@ function addSelectedApartment() {
     const pb = document.getElementById("productsBox");
     const pt = document.getElementById("popupTitle");
     const aptId = pt.dataset.id, status = pt.dataset.status;
-    if (status === "გაყიდული") { alert("ბინა უკვე გაყიდულია."); return; }
-    if (status === "ჯავშნის რიგში") { alert("ბინა ჯავშნის რიგშია და ვერ დაემატება."); return; }
+    if (status !== "თავისუფალი") { alert("დილზე მხოლოდ თავისუფალი ბინის დამატება შეიძლება."); return; }
     if (pb.querySelector(`.apt[data-id="${aptId}"]`)) { alert("ბინა უკვე დამატებულია."); return; }
    
     if (productsIds.includes(aptId) || productsIds.includes(Number(aptId))) return; 
@@ -2535,7 +2534,7 @@ const legendStatusMap = {
     "count-reserved": "დაჯავშნილი",
     "count-sold":     "გაყიდული",
     "count-nfs":      "NFS",
-    "count-queue":    "ჯავშნის რიგში",
+    "count-queue":    "დასადასტურებელი ჯავშანი",
 };
 
 document.querySelectorAll("#legendBar .legend-item").forEach(item=>{
@@ -2643,6 +2642,7 @@ async function exportToExcel() {
             "თავისუფალი":    { fill:"FF7CDF9C", font:"FF087A58" },
             "დაჯავშნილი":    { fill:"FFFFCF37", font:"FFB35900" },
             "გაყიდული":      { fill:"FFF67581", font:"FFA8202C" },
+            "დასადასტურებელი ჯავშანი": { fill:"FFB69BFF", font:"FF5433C1" },
             "ჯავშნის რიგში": { fill:"FFB69BFF", font:"FF5433C1" },
             "NFS":           { fill:"FFC0C0C0", font:"FF4E3F45" },
         };

@@ -368,9 +368,17 @@ if ($agency === '' && $agent === '') {
     agentLeadRespond(['status' => 400, 'message' => 'მიუთითეთ სააგენტო ან აგენტი'], 400);
 }
 
-// დაკავებული ნომერი მხოლოდ ინფორმაციაა - დილი მაინც იქმნება.
+// დაკავებულ ნომერზე აგენტი დილს ვერ არეგისტრირებს.
 // კონტაქტისა და დილის შექმნამდე ვამოწმებთ, თორემ თავად ისინი დაიკავებდნენ ნომერს.
 $busyPhones = agentLeadBusyPhones($phones);
+if (!empty($busyPhones)) {
+    agentLeadRespond([
+        'status'     => 409,
+        'message'    => (count($busyPhones) > 1 ? 'ნომრები ' : 'ნომერი ') . implode(', ', $busyPhones)
+            . ' უკვე დამუშავებაშია - დილის რეგისტრაცია შეუძლებელია.',
+        'busyPhones' => $busyPhones,
+    ], 409);
+}
 
 $displayName = trim($firstName . ' ' . $lastName);
 if ($displayName === '') {
@@ -568,7 +576,6 @@ $response = [
     'dealTitle'      => $dealTitle,
     'workflowId'     => AGENT_LEAD_WORKFLOW_ID,
     'commentId'      => (int)$timelineCommentId,
-    'busyPhones'     => $busyPhones,
 ];
 
 if (!$startedWorkflow) {

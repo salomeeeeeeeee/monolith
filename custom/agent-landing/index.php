@@ -284,9 +284,9 @@ $apiUrl  = '/rest/public/addAgentLead.php';
 
     .phone-hint {
       grid-column: 1 / -1;
-      margin-top: -2px;
-      font-size: 0.84rem;
-      font-weight: 500;
+      margin-top: 0;
+      font-size: 1rem;
+      font-weight: 700;
       display: none;
     }
 
@@ -294,6 +294,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
     .phone-hint.wait { color: var(--muted); }
     .phone-hint.ok { color: var(--ok); }
     .phone-hint.info { color: var(--info); }
+    .phone-hint.err { color: var(--danger); }
 
     .field-note {
       margin: -4px 0 12px;
@@ -810,15 +811,28 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         const hint = row.querySelector('.phone-hint');
         hint.className = 'phone-hint' + (type ? ' show ' + type : '');
         hint.textContent = message;
+        row.dataset.busy = type === 'err' ? '1' : '';
       }
 
-      // ნაპოვნი ნომერი მხოლოდ ინფორმაციაა - დილი მაინც იქმნება
+      // ბაზაში ნაპოვნ ნომერზე დილი ვერ დარეგისტრირდება
       function markPhone(row, busy) {
         setPhoneState(
           row,
-          busy ? 'info' : 'ok',
-          busy ? 'ეს ნომერი დამუშავებაშია' : 'ნომერი თავისუფალია'
+          busy ? 'err' : 'ok',
+          busy ? 'ეს ნომერი დამუშავებაშია - დილის რეგისტრაცია შეუძლებელია' : 'ნომერი თავისუფალია'
         );
+      }
+
+      // სერვერმა უარი თქვა - შესაბამის ველებზე იგივე წარწერა გამოჩნდეს
+      function markBusyRows(busyPhones) {
+        if (!Array.isArray(busyPhones)) return;
+        phonesList.querySelectorAll('.phone-row').forEach(function (row) {
+          const key = phoneKey(rowPhone(row));
+          if (key && busyPhones.indexOf(key) !== -1) {
+            row.dataset.checked = key;
+            markPhone(row, true);
+          }
+        });
       }
 
       async function checkPhone(row) {
@@ -872,9 +886,11 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         const agency = agencyInput.value.trim();
         const agent = agentInput.value.trim();
         const agencyComment = document.getElementById('agencyComment').value.trim();
-        const phones = Array.from(phonesList.querySelectorAll('.phone-row'))
+        const phoneRows = Array.from(phonesList.querySelectorAll('.phone-row'));
+        const phones = phoneRows
           .map(function (row) { return rowPhone(row); })
           .filter(Boolean);
+        const busyRow = phoneRows.find(function (row) { return row.dataset.busy === '1'; });
 
         if (!clientName) {
           showStatus('err', 'გთხოვთ მიუთითოთ კლიენტის სახელი/გვარი.');
@@ -882,6 +898,11 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         }
         if (!phones.length) {
           showStatus('err', 'გთხოვთ მიუთითოთ მინიმუმ ერთი ტელეფონი.');
+          return;
+        }
+        if (busyRow) {
+          showStatus('err', 'ნომერი ' + localDigits(busyRow) + ' უკვე დამუშავებაშია - დილის რეგისტრაცია შეუძლებელია.');
+          busyRow.querySelector('input[type="tel"]').focus();
           return;
         }
         if (!agency && !agent) {
@@ -908,16 +929,11 @@ $apiUrl  = '/rest/public/addAgentLead.php';
           const data = await response.json().catch(function () { return {}; });
 
           if (!response.ok || data.status !== 200) {
+            markBusyRows(data.busyPhones);
             throw new Error(data.message || 'შეცდომა დილის შექმნისას');
           }
 
-          let message = 'დილი შეიქმნა წარმატებით' + (data.dealId ? ' (#' + data.dealId + ')' : '') + '.';
-          const busyPhones = Array.isArray(data.busyPhones) ? data.busyPhones : [];
-          if (busyPhones.length) {
-            message += ' ' + (busyPhones.length > 1 ? 'ნომრები ' : 'ნომერი ')
-              + busyPhones.join(', ') + ' დამუშავებაშია.';
-          }
-          showStatus('ok', message);
+          showStatus('ok', 'დილი შეიქმნა წარმატებით' + (data.dealId ? ' (#' + data.dealId + ')' : '') + '.');
           closeCountryMenu();
           form.reset();
           phonesList.innerHTML = '';

@@ -296,9 +296,9 @@ if(pathname[1] == "crm"){
             .replace(/"/g, "&quot;");
     }
 
-    function toggleExpiringReservationsList() {
-        const list = document.getElementById("expiringReservationsList");
-        const arrow = document.getElementById("expiringReservationsArrow");
+    function toggleExpiringReservationsList(prefix) {
+        const list = document.getElementById(prefix + "List");
+        const arrow = document.getElementById(prefix + "Arrow");
         if (!list || !arrow) return;
 
         const isHidden = list.style.display === "none" || list.style.display === "";
@@ -306,7 +306,7 @@ if(pathname[1] == "crm"){
         arrow.textContent = isHidden ? "▲" : "▼";
     }
 
-    function buildExpiringReservationRow(deal) {
+    function buildExpiringReservationRow(deal, showApartment) {
         const origin = location.origin;
         const dealLink = `<a href="${origin}/crm/deal/details/${deal.ID}/" target="_blank">${deal.ID}</a>`;
 
@@ -319,46 +319,49 @@ if(pathname[1] == "crm"){
         }
 
         const deadline = deal.DEADLINE ? escapeExpiringReservationHtml(deal.DEADLINE) : "-";
+        const apartment = showApartment && deal.APARTMENT
+            ? `<span style="color:#475569;"> · ${escapeExpiringReservationHtml(deal.APARTMENT)}</span>`
+            : "";
+        const ellipsis = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
 
+        // ორ ხაზად: დილი · ბინა / ვადა, ქვემოთ კლიენტი - ვიწრო ბლოკში ჰორიზონტალური scroll აღარ ჩნდება
         return `
-            <div style="display:grid; grid-template-columns: 90px 1fr 90px; gap:12px; padding:8px 0; border-bottom:1px solid #e2e8f0; font-size:13px;">
-                <div>${dealLink}</div>
-                <div>${clientCell}</div>
-                <div>${deadline}</div>
+            <div style="padding:7px 0; border-bottom:1px solid #e2e8f0; font-size:12px; line-height:1.4;">
+                <div style="display:flex; justify-content:space-between; gap:8px;">
+                    <div style="${ellipsis} font-weight:600;">${dealLink}${apartment}</div>
+                    <div style="flex-shrink:0; color:#b91c1c; font-weight:600;">${deadline}</div>
+                </div>
+                <div style="${ellipsis}">${clientCell}</div>
             </div>
         `;
     }
 
-    function mountExpiringReservationsWidget(deals) {
-        if (document.getElementById("expiringReservationsWidget")) return true;
+    // cfg: { prefix, title, showApartment }
+    function mountExpiringReservationsWidget(deals, cfg) {
+        if (document.getElementById(cfg.prefix + "Widget")) return true;
 
         const filterDiv = document.querySelector(".ui-toolbar-filter-box");
         if (!filterDiv) return false;
 
         const rowsHtml = deals.length
-            ? deals.map(buildExpiringReservationRow).join("")
+            ? deals.map((deal) => buildExpiringReservationRow(deal, cfg.showApartment)).join("")
             : `<div style="padding:12px 0; color:#64748b; font-size:13px;">არ მოიძებნა</div>`;
 
         const countBadge = deals.length
-            ? `<span style="display:inline-block; min-width:20px; padding:0 6px; margin-left:6px; border-radius:999px; background:#2563eb; color:#fff; font-size:12px; line-height:20px; text-align:center;">${deals.length}</span>`
+            ? `<span style="flex-shrink:0; display:inline-block; min-width:20px; padding:0 6px; border-radius:999px; background:#2563eb; color:#fff; font-size:12px; line-height:20px; text-align:center;">${deals.length}</span>`
             : "";
 
         const widget = document.createElement("div");
-        widget.id = "expiringReservationsWidget";
-        widget.style.cssText = "margin:0 1rem; background:rgba(255,255,255,.85); padding:8px 12px; border-radius:8px; min-width:280px;";
+        widget.id = cfg.prefix + "Widget";
+        widget.style.cssText = "margin:0 0 0 1rem; background:rgba(255,255,255,.9); padding:8px 12px; border-radius:8px; flex:0 0 340px; width:340px; min-width:340px; box-sizing:border-box; align-self:flex-start;";
         widget.innerHTML = `
-            <div style="font-size:13px; font-weight:600; color:#1d4ed8; text-align:center;">
-                24 სთ-ში რეზერვაციის ვადა ეწურება${countBadge}
+            <div style="display:flex; align-items:center; justify-content:center; gap:6px; height:20px; font-size:12px; font-weight:600; color:#1d4ed8; white-space:nowrap;">
+                <span style="overflow:hidden; text-overflow:ellipsis;">${cfg.title}</span>${countBadge}
             </div>
             <div style="display:flex; justify-content:center; margin-top:4px;">
-                <button type="button" id="expiringReservationsArrow" onclick="toggleExpiringReservationsList()" style="background:none; border:none; cursor:pointer; font-size:18px; line-height:1; color:#1d4ed8;">▼</button>
+                <button type="button" id="${cfg.prefix}Arrow" onclick="toggleExpiringReservationsList('${cfg.prefix}')" style="background:none; border:none; cursor:pointer; font-size:18px; line-height:1; color:#1d4ed8;">▼</button>
             </div>
-            <div id="expiringReservationsList" style="display:none; margin-top:8px; max-height:260px; overflow:auto;">
-                <div style="display:grid; grid-template-columns: 90px 1fr 90px; gap:12px; padding-bottom:6px; border-bottom:1px solid #cbd5e1; font-size:12px; font-weight:700; color:#475569;">
-                    <div>დილი</div>
-                    <div>კლიენტი</div>
-                    <div>ვადა</div>
-                </div>
+            <div id="${cfg.prefix}List" style="display:none; margin-top:6px; max-height:260px; overflow-y:auto; overflow-x:hidden;">
                 ${rowsHtml}
             </div>
         `;
@@ -367,17 +370,17 @@ if(pathname[1] == "crm"){
         return true;
     }
 
-    if (isDealListOrKanbanPage()) {
-        fetch(`${location.origin}/rest/local/api/deal/getExpiringReservations.php`)
+    function loadExpiringWidget(url, cfg) {
+        fetch(url)
             .then((response) => response.json())
             .then((data) => {
                 const deals = Array.isArray(data.deals) ? data.deals : [];
-                if (mountExpiringReservationsWidget(deals)) return;
+                if (mountExpiringReservationsWidget(deals, cfg)) return;
 
                 let attempts = 0;
                 const mountTimer = setInterval(() => {
                     attempts++;
-                    if (mountExpiringReservationsWidget(deals) || attempts >= 20) {
+                    if (mountExpiringReservationsWidget(deals, cfg) || attempts >= 20) {
                         clearInterval(mountTimer);
                     }
                 }, 500);
@@ -385,6 +388,20 @@ if(pathname[1] == "crm"){
             .catch((error) => {
                 console.log(error);
             });
+    }
+
+    if (isDealListOrKanbanPage()) {
+        loadExpiringWidget(`${location.origin}/rest/local/api/deal/getExpiringReservations.php`, {
+            prefix: "expiringReservations",
+            title: "24 სთ-ში რეზერვაციის ვადა ეწურება",
+            showApartment: false,
+        });
+        // ხელშეკრულების ეტაპი: 5 სამუშაო დღე
+        loadExpiringWidget(`${location.origin}/rest/local/api/deal/getExpiringContracts.php`, {
+            prefix: "expiringContracts",
+            title: "24 სთ-ში ხელშეკრულების ვადა ეწურება",
+            showApartment: true,
+        });
     }
 
 </script>

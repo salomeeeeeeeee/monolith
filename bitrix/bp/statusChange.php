@@ -208,12 +208,7 @@ if (!function_exists('new_stage')) {
         foreach ($arProducts as $product) {
             $element = getCIBlockElementByID($product["PRODUCT_ID"]);
             if (!$element) continue;
- 
-            // Add to queue if not already present
-            if (!alreadyInQueue($element["QUEUE"], $dealID)) {
-                $element["QUEUE"] .= "|$dealID";
-            }
- 
+
             if (productOwnedByDeal($element, $dealID)) {
                 $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
                 sendNotificationToQueue($element["QUEUE"], $notification);
@@ -301,22 +296,21 @@ if (!function_exists('queueStage')) {
                 . " OWNER_DEAL=" . ($element["OWNER_DEAL"] ?? "")
                 . " QUEUE=" . $element["QUEUE"];
 
-            if (productOwnedByDeal($element, $dealID)) {
-                $element = clearProductOwnerFields($element);
-            }
+            // არასტანდარტული ჯავშანი დასტურს ელოდება: ბინა ამ დილზეა, დასტურისას - "დაჯავშნილი", უარისას - "თავისუფალი"
+            $element = setProductOwnerFields(
+                $element,
+                $dealID,
+                $deal["CONTACT_ID"] ?? "",
+                $deal["ASSIGNED_BY_ID"] ?? ""
+            );
+            $element["_P64GYD"] = "დასადასტურებელი ჯავშანი";
 
-            if (!alreadyInQueue($element["QUEUE"], $dealID)) {
-                $element["QUEUE"] .= "|$dealID";
-            }
-
-            $element["_P64GYD"] = "ჯავშნის რიგში";
-
-            $debugLines[] = "ProdID " . $element["ID"] . " AFTER (before save): _P64GYD=" . $element["_P64GYD"] . " QUEUE=" . $element["QUEUE"];
+            $debugLines[] = "ProdID " . $element["ID"] . " AFTER (before save): _P64GYD=" . $element["_P64GYD"];
 
             $elementsForUpdate[$product["PRODUCT_ID"]] = $element;
         }
 
-        $logText = updateProdElement($elementsForUpdate) . "ჯავშნის რიგში გადავიდა";
+        $logText = updateProdElement($elementsForUpdate) . "დასადასტურებელი ჯავშანი";
 
         $debugDump = implode("\n", $debugLines);
 
@@ -387,7 +381,7 @@ if (!function_exists('junk')) {
                 sendNotificationToQueue($element["QUEUE"], $notification);
                 sendNotificationToResponsible($dealID, $notification);
  
-                $element["_P64GYD"] = $element["QUEUE"] ? "ჯავშნის რიგში" : "თავისუფალი";
+                $element["_P64GYD"] = "თავისუფალი";
                 $element = clearProductOwnerFields($element);
                 $needNotification = true;
  
