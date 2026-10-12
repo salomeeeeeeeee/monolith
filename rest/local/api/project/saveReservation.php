@@ -60,6 +60,14 @@ $comment         = $_POST['comment']     ?? '';
 $prodNum         = $_POST['prodNum']     ?? '';
 $passportFileId  = $_POST['passport'] ?? null;
 
+// ბინის გარეშე ჯავშანი არ შეიძლება
+if ($dealId && !MonolithApartmentStageGuard::dealHasApartment($dealId)) {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => 409, "message" => MonolithApartmentStageGuard::MESSAGE], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // სტანდარტული (უფასო) ჯავშანი დადასტურებული რეზერვაციის შემდეგ აღარ შეიძლება
 if ($userSelect == '41' && $dealId && dealHadConfirmedReservation($dealId)) {
     ob_end_clean();

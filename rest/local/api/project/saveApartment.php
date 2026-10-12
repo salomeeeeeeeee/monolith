@@ -40,6 +40,17 @@ if ($deal_id) {
 
     // ── EMPTY: clear all products and wipe deal fields ──
    if (empty($productIds)) {
+    // რეზერვაციის და შემდგომ სტადიებზე დილი ბინის გარეშე არ უნდა დარჩეს
+    $stageRow = CCrmDeal::GetList(["ID" => "ASC"], ["ID" => $deal_id], ["ID", "STAGE_ID"])->Fetch();
+    if ($stageRow && MonolithApartmentStageGuard::requiresApartment($stageRow["STAGE_ID"])) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            "status" => 409,
+            "error"  => "დილი რეზერვაციის ან შემდგომ სტადიაზეა - ბინას ვერ მოხსნით. ჯერ დილი დააბრუნეთ დამუშავებაზე.",
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     // Load BEFORE clearing
     $prevProds = CCrmDeal::LoadProductRows($deal_id);
     $cleared = CCrmDeal::SaveProductRows($deal_id, []);

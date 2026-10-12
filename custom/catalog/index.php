@@ -2941,7 +2941,7 @@ var date   = choice === "42"
                 launchConfetti();
                 setTimeout(closeReservationPopup, 2200);
             } else {
-                showResMsg("error");
+                showResMsg("error", data.message);
                 btn.style.opacity = "1"; btn.style.pointerEvents = "";
             }
         })
@@ -2952,8 +2952,9 @@ var date   = choice === "42"
         });
 }
 
-function showResMsg(type) {
+function showResMsg(type, text) {
     ["resMsgSuccess","resMsgError","resMsgWarn"].forEach(id => document.getElementById(id).style.display="none");
+    if (type === "error") document.getElementById("resMsgError").textContent = text || "შეცდომა გაგზავნისას";
     var map = { success:"resMsgSuccess", error:"resMsgError", warn:"resMsgWarn" };
     if (map[type]) document.getElementById(map[type]).style.display="block";
 }
