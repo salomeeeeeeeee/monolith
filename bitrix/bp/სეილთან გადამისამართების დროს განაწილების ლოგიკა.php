@@ -42,6 +42,50 @@ if ($dealId <= 0 || $groupId <= 0) {
     return;
 }
 
+// დილის კონტაქტიც იმავე პასუხისმგებელზე გადადის, ვისზეც დილი გადავიდა,
+// მაგრამ მხოლოდ მაშინ, თუ კონტაქტი ამ დილთან ერთად შეიქმნა (იგივე შემქმნელი, დილამდე მაქს. 2 წუთით ადრე).
+// ადრე არსებული, ნომრით მიბმული კონტაქტი თავის პასუხისმგებელზე რჩება.
+$syncContactResponsible = static function (array $deal, int $responsibleId) use ($root): void {
+    $contactId = (int)($deal['CONTACT_ID'] ?? 0);
+    if ($contactId <= 0 || $responsibleId <= 0) {
+        return;
+    }
+    $contact = \CCrmContact::GetByID($contactId, false);
+    if (!$contact) {
+        return;
+    }
+    $contactCreatedAt = (int)MakeTimeStamp((string)($contact['DATE_CREATE'] ?? ''));
+    $dealCreatedAt    = (int)MakeTimeStamp((string)($deal['DATE_CREATE'] ?? ''));
+    $createdTogether  = $contactCreatedAt > 0 && $dealCreatedAt > 0
+        && (int)($contact['CREATED_BY_ID'] ?? 0) === (int)($deal['CREATED_BY_ID'] ?? -1)
+        && $dealCreatedAt >= $contactCreatedAt
+        && ($dealCreatedAt - $contactCreatedAt) <= 120;
+    if (!$createdTogether) {
+        $root->WriteToTrackingService('Contact #' . $contactId . ' pre-existed, responsible kept');
+        return;
+    }
+    if ((int)($contact['ASSIGNED_BY_ID'] ?? 0) === $responsibleId) {
+        return;
+    }
+    $contactFields = ['ASSIGNED_BY_ID' => $responsibleId];
+    $contactEntity = new \CCrmContact(false);
+    $ok = $contactEntity->Update(
+        $contactId,
+        $contactFields,
+        true,
+        true,
+        [
+            'DISABLE_USER_FIELD_CHECK' => true,
+            'REGISTER_SONET_EVENT' => false,
+            'ENABLE_SYSTEM_EVENT_ADD' => false,
+        ]
+    );
+    $root->WriteToTrackingService(
+        'Contact #' . $contactId . ' responsible -> ' . $responsibleId
+        . ($ok ? '' : ' FAILED: ' . $contactEntity->LAST_ERROR)
+    );
+};
+
 try {
     $deal = \CCrmDeal::GetByID($dealId, false);
     if (!$deal) {
@@ -141,6 +185,9 @@ try {
                 }
             } else {
                 $assignOk = true;
+            }
+            if ($assignOk) {
+                $syncContactResponsible($deal, $adminId);
             }
 
             // ტაიმლაინის კომენტარი + მენტშენი ადმინზე (ნოტიფისთვის)
@@ -246,6 +293,8 @@ try {
         $root->WriteToTrackingService('Deal update failed: ' . $dealEntity->LAST_ERROR);
         return;
     }
+
+    $syncContactResponsible($deal, (int)$nextResponsible);
 
     $usedIds[] = $nextResponsible;
     $usedIds = array_values(array_unique($usedIds));

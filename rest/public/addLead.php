@@ -303,6 +303,53 @@ function leadIsEmptyValue($value)
     return trim((string)$value) === '';
 }
 
+// კონტაქტი იმავე პასუხისმგებელზე, ვისზეც დილია (BP-ს შემდეგ ვკითხულობთ, რომ განაწილება გათვალისწინებული იყოს).
+// $syncContact = false როცა კონტაქტი ადრე არსებობდა და ნომრით მოიძებნა: მას პასუხისმგებელი არ ეცვლება.
+// აბრუნებს დილის პასუხისმგებლის ID-ს, 0 - თუ ვერ დადგინდა.
+function leadSyncContactAssignedToDeal($dealId, $contactId, $syncContact)
+{
+    $dealId    = (int)$dealId;
+    $contactId = (int)$contactId;
+    if ($dealId <= 0) {
+        return 0;
+    }
+
+    $deal = CCrmDeal::GetListEx(
+        [],
+        ['ID' => $dealId, 'CHECK_PERMISSIONS' => 'N'],
+        false,
+        ['nTopCount' => 1],
+        ['ID', 'ASSIGNED_BY_ID']
+    )->Fetch();
+
+    $dealAssignedById = (int)($deal['ASSIGNED_BY_ID'] ?? 0);
+    if ($dealAssignedById <= 0 || $contactId <= 0 || !$syncContact) {
+        return $dealAssignedById;
+    }
+
+    $contact = CCrmContact::GetListEx(
+        [],
+        ['ID' => $contactId, 'CHECK_PERMISSIONS' => 'N'],
+        false,
+        ['nTopCount' => 1],
+        ['ID', 'ASSIGNED_BY_ID']
+    )->Fetch();
+
+    if ((int)($contact['ASSIGNED_BY_ID'] ?? 0) === $dealAssignedById) {
+        return $dealAssignedById;
+    }
+
+    // Update() ველებს reference-ით იღებს, ლიტერალი მასივი Error-ს აგდებს
+    $assignFields = ['ASSIGNED_BY_ID' => $dealAssignedById];
+    $updater = new CCrmContact(false);
+    $updater->Update($contactId, $assignFields, true, true, [
+        'DISABLE_USER_FIELD_CHECK' => true,
+        'CURRENT_USER'             => LEAD_ASSIGNED_BY_ID,
+    ]);
+
+    return $dealAssignedById;
+}
+
 function leadLogApiCall(array $input, array $response, $createdDealId = null)
 {
     global $leadRequestRaw;
@@ -521,6 +568,9 @@ if ($existingDeal) {
         ]);
     }
 
+    // მხოლოდ ამ მოთხოვნაში შექმნილი კონტაქტი გადადის დილის პასუხისმგებელზე
+    $assignedById = leadSyncContactAssignedToDeal($dealId, $contactId, $contactCreated);
+
     if ($authorizedHere) {
         $USER->Logout();
     }
@@ -532,6 +582,8 @@ if ($existingDeal) {
         'dealId'               => $dealId,
         'contactId'            => (int)$contactId,
         'contactCreated'       => $contactCreated,
+        'assignedById'         => $assignedById,
+        'contactAssignSynced'  => $contactCreated,
         'updatedDealFields'    => array_keys($dealUpdate),
         'updatedContactFields' => $contactUpdatedFields,
     ]);
@@ -589,18 +641,24 @@ try {
     $workflowErrors[] = $e->getMessage();
 }
 
+// ახალი კონტაქტიც იმ მენეჯერზე, ვისაც BP-მ დილი მიაწერა (BP სინქრონულად სრულდება).
+// ადრე არსებული, ნომრით ნაპოვნი კონტაქტი თავის პასუხისმგებელზე რჩება.
+$assignedById = leadSyncContactAssignedToDeal($dealId, $contactId, $contactCreated);
+
 if ($authorizedHere) {
     $USER->Logout();
 }
 
 $response = [
-    'status'         => 200,
-    'message'        => 'OK',
-    'dealCreated'    => true,
-    'contactCreated' => $contactCreated,
-    'dealId'         => (int)$dealId,
-    'contactId'      => (int)$contactId,
-    
+    'status'              => 200,
+    'message'             => 'OK',
+    'dealCreated'         => true,
+    'contactCreated'      => $contactCreated,
+    'dealId'              => (int)$dealId,
+    'contactId'           => (int)$contactId,
+    'assignedById'        => $assignedById,
+    'contactAssignSynced' => $contactCreated,
+
     // 'sourceId'       => $sourceId,
     // 'workflowId'     => $workflowId,
 ];
