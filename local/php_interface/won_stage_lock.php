@@ -13,7 +13,7 @@ use Bitrix\Main\Loader;
 
 class MonolithWonStageLock
 {
-    const MESSAGE = 'გაყიდული დილის სტადიას ვერ შეცვლით. ცვლილება შეუძლია მხოლოდ ადმინისტრატორს.';
+    const MESSAGE = 'გაყიდული დილის სთეიჯს ვერ შეცვლით.ცვლილება შეუძლია მხოლოდ ადმინისტრატორს.';
 
     public static function onBeforeDealUpdate(&$fields)
     {

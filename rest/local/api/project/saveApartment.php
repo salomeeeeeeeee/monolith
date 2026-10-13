@@ -117,6 +117,14 @@ if ($deal_id) {
 
     $attachedIds = array_map(fn($row) => (int)$row["PRODUCT_ID"], CCrmDeal::LoadProductRows($deal_id) ?: []);
 
+    // დილზე დარჩენილი ბინა ამასობაში სხვამ დაჯავშნა - შენახვას ჯავშნის ფორმა მოსდევს, ამიტომ აქვე ვაჩერებთ
+    $busy = MonolithApartmentStageGuard::apartmentsHeldByOthers($deal_id, array_map(fn($pid) => ["PRODUCT_ID" => $pid], $productIds));
+    if ($busy) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(["status" => 409, "error" => MonolithApartmentStageGuard::busyMessage($busy)], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     $rows = [];
     foreach ($productIds as $pid) {
         $productData = getCIBlockElementsByID($pid);

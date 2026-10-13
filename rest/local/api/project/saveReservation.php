@@ -68,6 +68,15 @@ if ($dealId && !MonolithApartmentStageGuard::dealHasApartment($dealId)) {
     exit;
 }
 
+// დილზე დარჩენილი ბინა ამასობაში სხვამ დაჯავშნა - ჯავშანი არ უნდა წავიდეს (BP 7 მფლობელს გადააწერდა)
+$busyApartments = $dealId ? MonolithApartmentStageGuard::apartmentsHeldByOthers($dealId) : [];
+if ($busyApartments) {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => 409, "message" => MonolithApartmentStageGuard::busyMessage($busyApartments)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // სტანდარტული (უფასო) ჯავშანი დადასტურებული რეზერვაციის შემდეგ აღარ შეიძლება
 if ($userSelect == '41' && $dealId && dealHadConfirmedReservation($dealId)) {
     ob_end_clean();

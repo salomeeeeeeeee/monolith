@@ -2167,6 +2167,110 @@ $canChooseDealCloseResult = in_array((int)$userID, [1, 3], true);
 .popup-window-titlebar:has(.dmg-close-result-locked) {
     display: none !important;
 }
+
+/* Without the titlebar the stock gray box sticks to the popup edge - restyle it as a short confirmation */
+.popup-window:has(.dmg-fail-simple) {
+    padding: 24px 24px 18px;
+    border-radius: 12px;
+}
+
+.popup-window:has(.dmg-fail-simple) .popup-window-content {
+    background: transparent;
+    padding: 0;
+}
+
+.popup-window:has(.dmg-fail-simple) .popup-window-buttons {
+    justify-content: flex-start;
+    padding: 20px 0 0;
+}
+
+.popup-window:has(.dmg-fail-simple) .popup-window-button {
+    text-transform: none;
+}
+
+.crm-list-fail-deal-block.dmg-fail-simple {
+    width: 360px;
+}
+
+.dmg-fail-head {
+    padding: 0 28px 16px 0;
+    font-family: var(--ui-font-family-primary, var(--ui-font-family-helvetica));
+}
+
+.dmg-fail-title {
+    color: #333;
+    font-size: 17px;
+    font-weight: var(--ui-font-weight-semi-bold, 600);
+    line-height: 24px;
+}
+
+.dmg-fail-subtitle {
+    margin-top: 4px;
+    color: #828b95;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.dmg-fail-simple .crm-list-end-deal-block-section {
+    padding: 0;
+}
+
+.dmg-fail-simple .crm-list-end-deal-button-wrapper {
+    position: relative;
+    margin: 0 0 8px;
+}
+
+.dmg-fail-simple .crm-list-end-deal-button-wrapper:last-child {
+    margin-bottom: 0;
+}
+
+.dmg-fail-simple .crm-list-fail-deal-button {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.dmg-fail-simple .crm-list-end-deal-block-section label.crm-list-fail-deal-button-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid #dfe3e6;
+    border-radius: 8px;
+    background: #fff;
+    color: #333;
+    font-family: var(--ui-font-family-primary, var(--ui-font-family-helvetica));
+    font-size: 14px;
+    font-weight: var(--ui-font-weight-semi-bold, 600);
+    line-height: 20px;
+    cursor: pointer;
+    transition: border-color .15s, background-color .15s;
+}
+
+.dmg-fail-simple .crm-list-end-deal-block-section label.crm-list-fail-deal-button-label::before {
+    content: '';
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px #c6cdd3;
+}
+
+.dmg-fail-simple .crm-list-fail-deal-button:checked + label.crm-list-fail-deal-button-label {
+    border-color: #ff5752;
+    background: #fff4f3;
+}
+
+.dmg-fail-simple .crm-list-fail-deal-button:checked + label.crm-list-fail-deal-button-label::before {
+    background: #ff5752;
+    box-shadow: 0 0 0 4px rgba(255, 87, 82, .18);
+}
+
+.dmg-fail-simple .crm-list-fail-deal-button:focus-visible + label.crm-list-fail-deal-button-label {
+    outline: 2px solid #2fc6f6;
+    outline-offset: 2px;
+}
 </style>
 <script>
 (function() {
@@ -2212,6 +2316,37 @@ $canChooseDealCloseResult = in_array((int)$userID, [1, 3], true);
 
         // setValue, not just checked: the dialog saves its own value, not the radio state
         dialog.setValue(DEFAULT_STAGE_ID, true);
+
+        // Header in place of the hidden titlebar; the CSS above turns the options into cards
+        var visibleCount = wrapper.querySelectorAll('.crm-list-end-deal-button-wrapper:not(.dmg-close-result-locked)').length;
+        wrapper.classList.add('dmg-fail-simple');
+        wrapper.insertBefore(BX.create('DIV', {
+            attrs: { className: 'dmg-fail-head' },
+            children: [
+                BX.create('DIV', { attrs: { className: 'dmg-fail-title' }, text: 'დილის დახურვა' }),
+                BX.create('DIV', {
+                    attrs: { className: 'dmg-fail-subtitle' },
+                    text: visibleCount > 1 ? 'აირჩიეთ დახურვის მიზეზი' : 'დილი გადავა სთეიჯზე:'
+                })
+            ]
+        }), wrapper.firstChild);
+
+        // The popup and its buttons are created right after this event, inside the same open() call;
+        // a microtask runs once open() returns, before the popup is painted
+        Promise.resolve().then(function() {
+            var popup = dialog._popup;
+            if (!popup || !popup.getButtons) {
+                return;
+            }
+            popup.getButtons().forEach(function(button) {
+                var node = button.getContainer();
+                if (node.classList.contains('popup-window-button-accept')) {
+                    button.setName('შენახვა');
+                } else if (node.classList.contains('popup-window-button-link-cancel')) {
+                    button.setName('გაუქმება');
+                }
+            });
+        });
     });
 })();
 </script>
@@ -2243,7 +2378,7 @@ $wonLockInitialStage = isset($deal['STAGE_ID']) ? (string)$deal['STAGE_ID'] : ''
     }
 
     var initialStage = <?= json_encode($wonLockInitialStage) ?>;
-    var LOCK_TITLE = 'გაყიდული დილის სტადიას ვერ შეცვლით';
+    var LOCK_TITLE = 'გაყიდული დილის სთეიჯს ვერ შეცვლით';
 
     function isWonStage(id) {
         return /(^|:)WON$/.test(id || '');
