@@ -887,8 +887,8 @@ let propertyMap = {
     "_60__Q44IB7":      { name: "ფასი კვ.მ 60 თვიანი (მონოლითი)",           type: "S" },
     "_02080__AEC240":   { name: "ფასი 0/20/80 (მონოლითი)",                  type: "S" },
     "_02080__1D1HZL":   { name: "კვმ 0/20/80 (მონოლითი)",                   type: "S" },
-    "__3OT6VA":         { name: "ფასი ერთიანი გადახდით (მონოლითი)",         type: "S" },
-    "__TTJCKI":         { name: "კვ.მ. ფასი ერთიანი გადახდით (მონოლითი)",   type: "S" },
+    "_101080_7L7QZC":   { name: "სრული ფასი 10/10/80",                       type: "S" },
+    "_101080_QACVJ6":   { name: "კვ.მ 10/10/80",                              type: "S" },
 };
 
 
@@ -909,8 +909,8 @@ const SKIP_CODES = new Set([
     "PRICE","PRICE_GEL",
     "_P64GYD","Number","FLOOR","__X1GCRZ","_L24CUB",
     "__51MODL","__6ZWTER", "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL", "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
-    "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","__3OT6VA","__TTJCKI",
-    F_NFS_COMMENT,
+    "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","_101080_7L7QZC","_101080_QACVJ6",
+        F_NFS_COMMENT,
 ]);
 const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA"];
 
@@ -1094,8 +1094,8 @@ projectSelect.addEventListener("change", function() {
                 "_60__Q44IB7":     "ფასი კვ.მ 60 თვიანი (მონოლითი)",
                 "_02080__AEC240":  "ფასი 0/20/80 (მონოლითი)",
                 "_02080__1D1HZL":  "კვმ 0/20/80 (მონოლითი)",
-                "__3OT6VA":        "ფასი ერთიანი გადახდით (მონოლითი)",
-                "__TTJCKI":        "კვ.მ. ფასი ერთიანი გადახდით (მონოლითი)",
+                "_101080_7L7QZC":  "სრული ფასი 10/10/80",
+                "_101080_QACVJ6":  "კვ.მ 10/10/80",
             };
             propertyMap = {};
             Object.entries(FIELD_NAMES).forEach(([code, name]) => {
@@ -2099,8 +2099,8 @@ function renderBlockSections(apt) {
         "DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","OWNER_PERSONAL_CONTACT","QUEUE",
         "__51MODL","__6ZWTER",  "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL","RESERVATION_STAGE_ID","RESERVATION_DATE",
         "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
-        "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","__3OT6VA","__TTJCKI",
-        F_NFS_COMMENT,
+        "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","_101080_7L7QZC","_101080_QACVJ6",
+                F_NFS_COMMENT,
     ]);
     // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
@@ -2346,10 +2346,10 @@ function appendPriceSection(container, apt) {
     const plan60Kvm      = parseFloat(String(apt["_60__Q44IB7"]    || "0").replace(/[^0-9.]/g, "")) || 0;
     const plan02080Full  = parseFloat(String(apt["_02080__AEC240"] || "0").replace(/[^0-9.]/g, "")) || 0;
     const plan02080Kvm   = parseFloat(String(apt["_02080__1D1HZL"] || "0").replace(/[^0-9.]/g, "")) || 0;
-    const planOneFull    = parseFloat(String(apt["__3OT6VA"]       || "0").replace(/[^0-9.]/g, "")) || 0;
-    const planOneKvm     = parseFloat(String(apt["__TTJCKI"]       || "0").replace(/[^0-9.]/g, "")) || 0;
+    const plan101080Full = parseFloat(String(apt["_101080_7L7QZC"] || "0").replace(/[^0-9.]/g, "")) || 0;
+    const plan101080Kvm  = parseFloat(String(apt["_101080_QACVJ6"] || "0").replace(/[^0-9.]/g, "")) || 0;
 
-    const hasPlans = !!(plan60Down || plan60Full || plan60Kvm || plan02080Full || plan02080Kvm || planOneFull || planOneKvm);
+    const hasPlans = !!(plan60Down || plan60Full || plan60Kvm || plan02080Full || plan02080Kvm || plan101080Full || plan101080Kvm);
 
     if (!price && !priceGel && !kvmUsd && !hasPlans) return;
 
@@ -2389,9 +2389,8 @@ function appendPriceSection(container, apt) {
             </div>` : ""}
             <div style="text-align:right;font-size:8px;color:#6b7280;padding-top:2px;border-top:1px solid #d1fae5;">NBG კურსი: <span style="font-weight:700;color:#047857;">${nbg} ₾</span></div>
             ${planRow("60 თვიანი დაშვება (მონოლითი)", plan60Full, plan60Kvm, plan60Down)}
-            ${planRow("0/20/80 (მონოლითი)", plan02080Full, plan02080Kvm, "")}
-            ${planRow("ერთიანი გადახდით (მონოლითი)", planOneFull, planOneKvm, "")}
-        </div>`;
+            ${planRow("10/10/80 (მონოლითი)", plan101080Full, plan101080Kvm, "")} 
+            ${planRow("0/20/80 (მონოლითი)", plan02080Full, plan02080Kvm, "")} </div>`;
     container.appendChild(sec);
 }
 
