@@ -77,12 +77,28 @@ $scheduleTypeArr['customType'] = [
     'startSqmPrice' => $startSqmPrice,
 ];
 
+// ერთიანი გადახდის ფასდაკლება ლისტი 20-ის "ერთიანი" ჩანაწერიდან (DISCOUNT_PERCENT ან DISCOUNT, 0-იც ითვლება);
+// ჩანაწერი არ არის ან ორივე ველი ცარიელია → ძველებურად 70$ კვ.მ.-ზე
+$allCashDiscount = ['perSqm' => 70, 'pct' => $startSqmPrice > 0 ? round(70 / $startSqmPrice * 100, 2) : 0];
+foreach ($conditionElements as $element) {
+    if (mb_strpos((string)$element['NAME'], 'ერთიანი') === false) {
+        continue;
+    }
+    $hasDiscount = trim(calcGetIblockPropText($element['DISCOUNT'] ?? '')) !== ''
+        || trim(calcGetIblockPropText($element['DISCOUNT_PERCENT'] ?? '')) !== '';
+    if ($hasDiscount) {
+        $allCashDiscount = calcResolveDiscountPerSqm($element, $startSqmPrice);
+    }
+    break;
+}
+$allCashPerSqm = $allCashDiscount['perSqm'];
+
 $scheduleTypeArr['allCash'] = [
-    'price' => round($oldPrice - (70 * $totalKVM), 2),
-    'kvmPrice' => round($startSqmPrice - 70, 2),
-    'discountAmount' => round(70 * $totalKVM, 2),
-    'discountPerSqm' => 70,
-    'discountPct' => $startSqmPrice > 0 ? round(70 / $startSqmPrice * 100, 2) : 0,
+    'price' => round($oldPrice - ($allCashPerSqm * $totalKVM), 2),
+    'kvmPrice' => round($startSqmPrice - $allCashPerSqm, 2),
+    'discountAmount' => round($allCashPerSqm * $totalKVM, 2),
+    'discountPerSqm' => $allCashPerSqm,
+    'discountPct' => $allCashDiscount['pct'],
     'oldPrice' => $oldPrice,
     'TOTAL_AREA' => $totalKVM,
     'startSqmPrice' => $startSqmPrice,
