@@ -65,6 +65,78 @@ if (!function_exists('clearProductOwnerFields')) {
     }
 }
 
+if (!function_exists('productOwnerDealId')) {
+    function productOwnerDealId($element)
+    {
+        $owner = normalizeDealId($element["OWNER_DEAL"] ?? "");
+        return $owner !== "" ? $owner : normalizeDealId($element["ownerDeal"] ?? "");
+    }
+}
+
+if (!function_exists('heldByOtherDeal')) {
+    /**
+     * ბინა სხვა დილისაა: თავისუფალი არ არის და მფლობელი სხვა დილია (ან გაყიდულია).
+     * ასეთზე მფლობელი არ გადაიწერება. 2026-10-13 (N54): ძველი ორმაგი მიბმის დროს ერთი დილის
+     * "რეზერვაცია -> ხელშეკრულება" გადასვლამ მეორე დილის ჯავშანი ჩუმად წაშალა.
+     */
+    function heldByOtherDeal($element, $dealID)
+    {
+        $status = (string)($element["_P64GYD"] ?? "");
+        if ($status === "თავისუფალი" || productOwnedByDeal($element, $dealID)) return false;
+        return productOwnerDealId($element) !== "" || $status === "გაყიდული";
+    }
+}
+
+if (!function_exists('otherActiveDealHolding')) {
+    /**
+     * სხვა აქტიური დილი, რომელსაც ეს ბინა პროდუქტებში აქვს და რეზერვაციის/ხელშეკრულების
+     * სტადიაზე დგას (ძველი ორმაგი მიბმა). გათავისუფლების ნაცვლად ბინა მას გადაეცემა.
+     */
+    function otherActiveDealHolding($productId, $dealID)
+    {
+        $productId = intval($productId);
+        $dealID    = intval($dealID);
+        if ($productId <= 0) return false;
+
+        $ids = array();
+        $res = \Bitrix\Main\Application::getConnection()->query(
+            "SELECT OWNER_ID FROM b_crm_product_row WHERE OWNER_TYPE = 'D' AND PRODUCT_ID = " . $productId . " AND OWNER_ID <> " . $dealID
+        );
+        while ($row = $res->fetch()) $ids[] = intval($row["OWNER_ID"]);
+        if (!count($ids)) return false;
+
+        $deal = CCrmDeal::GetListEx(
+            array("ID" => "ASC"),
+            array(
+                "@ID"               => $ids,
+                "@STAGE_ID"         => array("PREPAYMENT_INVOICE", "FINAL_INVOICE", "EXECUTING", "UC_NSTB3H", "UC_NJ7A78"),
+                "CLOSED"            => "N",
+                "CHECK_PERMISSIONS" => "N",
+            ),
+            false,
+            false,
+            array("ID", "TITLE", "STAGE_ID", "CONTACT_ID", "ASSIGNED_BY_ID")
+        )->Fetch();
+        return $deal ? $deal : false;
+    }
+}
+
+if (!function_exists('handOverProduct')) {
+    /** ბინა გადაეცემა სხვა აქტიურ დილს: "დასადასტურებელი ჯავშანი" თუ ის დასტურს ელოდება, თორემ "დაჯავშნილი" */
+    function handOverProduct($element, $otherDeal, $dealID)
+    {
+        $element = setProductOwnerFields(
+            $element,
+            $otherDeal["ID"],
+            $otherDeal["CONTACT_ID"] ?? "",
+            $otherDeal["ASSIGNED_BY_ID"] ?? ""
+        );
+        $element["_P64GYD"] = $otherDeal["STAGE_ID"] == "PREPAYMENT_INVOICE" ? "დასადასტურებელი ჯავშანი" : "დაჯავშნილი";
+        $element["QUEUE"]   = str_replace("|$dealID", "", $element["QUEUE"]);
+        return $element;
+    }
+}
+
 if (!function_exists('getCIBlockElementByID')) {
     /**
      * Returns a single flat property array for the given element ID,
@@ -210,20 +282,29 @@ if (!function_exists('new_stage')) {
             if (!$element) continue;
 
             if (productOwnedByDeal($element, $dealID)) {
-                $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
-                sendNotificationToQueue($element["QUEUE"], $notification);
-                sendNotificationToResponsible($dealID, $notification);
- 
-                // Remove this deal from the queue since it's being released
-                $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
- 
-                $element["_P64GYD"] = "თავისუფალი";
-                $element = clearProductOwnerFields($element);
-            } 
- 
+                $other = otherActiveDealHolding($product["PRODUCT_ID"], $dealID);
+                if ($other) {
+                    // ბინა სხვა აქტიურ დილსაც აქვს - მას გადაეცემა, არ თავისუფლდება
+                    $element = handOverProduct($element, $other, $dealID);
+                    $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გადაეცა დილს #" . $other["ID"] . ", რომელსაც ის ასევე მიბმული აქვს";
+                    sendNotificationToResponsible($dealID, $notification);
+                    sendNotificationToResponsible($other["ID"], $notification);
+                } else {
+                    $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
+                    sendNotificationToQueue($element["QUEUE"], $notification);
+                    sendNotificationToResponsible($dealID, $notification);
+
+                    // Remove this deal from the queue since it's being released
+                    $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
+
+                    $element["_P64GYD"] = "თავისუფალი";
+                    $element = clearProductOwnerFields($element);
+                }
+            }
+
             $elementsForUpdate[$product["PRODUCT_ID"]] = $element;
         }
- 
+
         return updateProdElement($elementsForUpdate);
     }
 }
@@ -245,15 +326,20 @@ if (!function_exists('reservation')) {
         foreach ($arProducts as $product) {
             $element = getCIBlockElementByID($product["PRODUCT_ID"]);
             if (!$element) continue;
- 
-            if ($element) {
-                if ($element["_P64GYD"] != "დაჯავშნილი") $sendNotification = true;
-                $element = preparationProductForReservation($element, $deal);
+
+            // სხვა დილის ბინაზე მფლობელი არ იცვლება
+            if (heldByOtherDeal($element, $dealID)) {
+                $errors[] = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " ProdID " . $element["ID"]
+                    . " სხვა დილისაა (დილი #" . productOwnerDealId($element) . ", " . $element["_P64GYD"] . ") - ჯავშანი არ შესრულდა";
+                continue;
             }
- 
+
+            if ($element["_P64GYD"] != "დაჯავშნილი") $sendNotification = true;
+            $element = preparationProductForReservation($element, $deal);
+
             $elementsForUpdate[$product["PRODUCT_ID"]] = $element;
         }
- 
+
         if (empty($errors)) {
             $logText = updateProdElement($elementsForUpdate) . "დაიჯავშნა";
             if ($sendNotification) {
@@ -262,11 +348,14 @@ if (!function_exists('reservation')) {
                 $logText = "";
             }
         } else {
-            $logText = changeDealStageToNew($deal, $errors);
-            updateQueue($arProducts, $dealID);
+            // საკუთარი/თავისუფალი ბინები იჯავშნება, სხვისაზე შეტყობინება (რიგი აღარ გამოიყენება)
+            $logText = updateProdElement($elementsForUpdate);
+            foreach ($errors as $i => $error) {
+                $logText .= ($i + 1) . ") " . $error . "\n";
+            }
             sendNotificationToResponsible($dealID, $logText);
         }
- 
+
         return $logText;
     }
 }
@@ -375,16 +464,25 @@ if (!function_exists('junk')) {
             if (!$element) continue;
  
             $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
- 
+
             if (productOwnedByDeal($element, $dealID)) {
-                $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
-                sendNotificationToQueue($element["QUEUE"], $notification);
-                sendNotificationToResponsible($dealID, $notification);
- 
-                $element["_P64GYD"] = "თავისუფალი";
-                $element = clearProductOwnerFields($element);
+                $other = otherActiveDealHolding($product["PRODUCT_ID"], $dealID);
+                if ($other) {
+                    // ბინა სხვა აქტიურ დილსაც აქვს - მას გადაეცემა, არ თავისუფლდება
+                    $element = handOverProduct($element, $other, $dealID);
+                    $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გადაეცა დილს #" . $other["ID"] . ", რომელსაც ის ასევე მიბმული აქვს";
+                    sendNotificationToResponsible($dealID, $notification);
+                    sendNotificationToResponsible($other["ID"], $notification);
+                } else {
+                    $notification = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " გათავისუფლდა ";
+                    sendNotificationToQueue($element["QUEUE"], $notification);
+                    sendNotificationToResponsible($dealID, $notification);
+
+                    $element["_P64GYD"] = "თავისუფალი";
+                    $element = clearProductOwnerFields($element);
+                }
                 $needNotification = true;
- 
+
                 deleteProdFromDeal($dealID);
             } else {
                 if ($element["_P64GYD"] == "ჯავშნის რიგში" && !$element["QUEUE"]) {

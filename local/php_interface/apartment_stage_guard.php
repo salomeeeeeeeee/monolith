@@ -5,7 +5,9 @@
  * ბინა დილს კატალოგიდან ემატება (deal product rows). სტადია ბევრი ადგილიდან იცვლება: ბარათი, კანბანი,
  * სია, REST, BP - ყველა გადის OnBeforeCrmDealUpdate-ზე, ამიტომ აქ ვამოწმებთ: თუ დილი ამ სტადიებიდან
  * ერთ-ერთზე გადადის და ბინა არ აქვს მიბმული, ცვლილებას ვაუქმებთ. უკან (დამუშავება, junk) გადაყვანა თავისუფალია.
- * ამ სტადიებზე გარედან შესვლისას ბინა სხვა დილს არ უნდა ეკავოს (apartmentsHeldByOthers).
+ * ამ სტადიებზე ყოველი შესვლისას ბინა სხვა დილს არ უნდა ეკავოს (apartmentsHeldByOthers) - რეზერვაციის
+ * ჯგუფის შიგნითაც, რადგან BP 7 სტადიის ცვლილებაზე ბინის მფლობელს ამ დილზე წერს (2026-10-13, N54: ძველი
+ * ორმაგი მიბმის დროს "რეზერვაცია -> ხელშეკრულება" გადასვლამ მეორე დილის ჯავშანი ჩუმად წაშალა).
  * იგივე შემოწმებებს იყენებს saveReservation.php (ჯავშანი) და saveApartment.php (ბინის მოხსნა / შენახვა).
  */
 
@@ -44,13 +46,11 @@ class MonolithApartmentStageGuard
                 return false;
             }
 
-            // დამუშავებიდან რეზერვაციაზე შესვლისას ბინა სხვა დილს არ უნდა ეკავოს
-            if (!self::requiresApartment($row['STAGE_ID'] ?? '')) {
-                $busy = self::apartmentsHeldByOthers($dealId, $rows);
-                if ($busy) {
-                    $fields['RESULT_MESSAGE'] = self::busyMessage($busy);
-                    return false;
-                }
+            // ნებისმიერი სტადიიდან შესვლისას ბინა სხვა დილს არ უნდა ეკავოს
+            $busy = self::apartmentsHeldByOthers($dealId, $rows);
+            if ($busy) {
+                $fields['RESULT_MESSAGE'] = self::busyMessage($busy);
+                return false;
             }
             return true;
         } catch (\Throwable $e) {
@@ -120,7 +120,7 @@ class MonolithApartmentStageGuard
 
             $number = (string)($props['__6KWOWZ']['VALUE'] ?? '');
             $busy[] = ($number !== '' ? 'N' . $number : $ob->GetFields()['NAME'])
-                . ' (' . ($status !== '' ? $status : 'სტატუსი არ აქვს') . ($owner ? ', დილი #' . $owner : '') . ')';
+                . ' (' . ($status !== '' ? $status : 'სტატუსი არ აქვს') . ($owner ? ', დილი #' . $owner : ', მფლობელი დილი არ აქვს') . ')';
         }
         return $busy;
     }
