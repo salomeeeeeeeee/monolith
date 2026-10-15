@@ -496,32 +496,11 @@ ob_end_clean();
 
     <div class="field">
       <label>გადახდის მეთოდი <span class="req">*</span></label>
-      <select id="paymentMethod" onchange="handlePaymentMethodChange(this.value)">
+      <select id="paymentMethod">
         <option value="">აირჩიეთ...</option>
         <option value="cash">Cash</option>
         <option value="საბანკო გადარიცხვა">საბანკო გადარიცხვა</option>
       </select>
-    </div>
-
-    <div class="field" id="receiptField" style="display:none;">
-      <label>ჩარიცხვის ქვითარი</label>
-      <div class="drop-zone" id="receiptDropZone" onclick="document.getElementById('receiptFile').click()">
-        <input type="file" id="receiptFile" accept="image/*,.pdf" onchange="handleReceiptFile(this.files[0])">
-        <div class="dz-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#0d9488" stroke-width="1.8" stroke-linejoin="round"/>
-            <path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3" stroke="#0d9488" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="dz-label">ჩააგდეთ ფაილი ან <span>აირჩიეთ</span></div>
-        <div class="dz-hint">ქვითარი · PDF, JPG, PNG</div>
-        <div class="file-preview" id="receiptFilePreview">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M2 8l4 4 8-9" stroke="#0f766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span id="receiptFileName"></span>
-        </div>
-      </div>
     </div>
 
     <?php foreach ($contacts as $i => $c): ?>
@@ -608,7 +587,6 @@ ob_end_clean();
 
 <script>
 var selectedFile = null;
-var selectedReceiptFile = null;
 var planCheck = <?= json_encode($planCheck, JSON_UNESCAPED_UNICODE) ?>;
 var sellPending = <?= $sellPending ? 'true' : 'false' ?>;
 
@@ -623,43 +601,12 @@ var sellPending = <?= $sellPending ? 'true' : 'false' ?>;
   });
 })();
 
-(function(){
-  var dz = document.getElementById('receiptDropZone');
-  if (!dz) return;
-  dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('dragover'); });
-  dz.addEventListener('dragleave', function(){ dz.classList.remove('dragover'); });
-  dz.addEventListener('drop', function(e){
-    e.preventDefault(); dz.classList.remove('dragover');
-    var f = e.dataTransfer.files[0];
-    if (f) handleReceiptFile(f);
-  });
-})();
-
 function handleFile(f) {
   if (!f) return;
   selectedFile = f;
   var preview  = document.getElementById('filePreview');
   document.getElementById('fileName').textContent = f.name;
   preview.classList.add('visible');
-}
-
-function handleReceiptFile(f) {
-  if (!f) return;
-  selectedReceiptFile = f;
-  document.getElementById('receiptFileName').textContent = f.name;
-  document.getElementById('receiptFilePreview').classList.add('visible');
-}
-
-function handlePaymentMethodChange(value) {
-  var receiptField = document.getElementById('receiptField');
-  if (value === 'cash' || value === 'საბანკო გადარიცხვა') {
-    receiptField.style.display = 'block';
-  } else {
-    receiptField.style.display = 'none';
-    selectedReceiptFile = null;
-    document.getElementById('receiptFilePreview').classList.remove('visible');
-    document.getElementById('receiptFile').value = '';
-  }
 }
 
 function setStatus(type, msg) {
@@ -740,9 +687,6 @@ function saveSell() {
   fd.append('payment_method', paymentMethod);
   fd.append('clients',    JSON.stringify(clients));
   fd.append('passport',   selectedFile, selectedFile.name);
-  if (selectedReceiptFile) {
-    fd.append('receipt', selectedReceiptFile, selectedReceiptFile.name);
-  }
 
   fetch(location.origin + '/rest/local/api/projects/saveSellFlatAction.php', {
     method: 'POST',
