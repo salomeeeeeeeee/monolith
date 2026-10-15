@@ -8,6 +8,8 @@
 // სავალდებულოა), ნუკი (user 9) ადასტურებს BP-ში და ახალი თარიღი CONTRACT_DEADLINE_FIELD-ში იწერება.
 // შევსებული ველი 5 დღეს ცვლის (ვადა = ის დღე 23:59). ეტაპიდან გასვლისას ველი იშლება, რომ ხელახლა
 // შესვლისას ისევ 5 დღე დაიწყოს. ლიმიტი არ არის - რამდენჯერაც სჭირდება, იმდენჯერ ითხოვს.
+// სანამ მოთხოვნა დასტურს ელოდება, agent-ი დილს არ აბრუნებს, ვადა გასულიც რომ იყოს; ეტაპიდან სხვა გზით
+// გასვლისას მომლოდინე მოთხოვნა უქმდება.
 
 const CONTRACT_DEADLINE_STAGE        = 'EXECUTING';     // ხელშეკრულება
 const CONTRACT_DEADLINE_RETURN_STAGE = 'PREPARATION';   // დამუშავების პროცესში
@@ -159,22 +161,33 @@ function contractDeadlineComment($products, $deal = null)
     return $text;
 }
 
+/** ამ დილზე მიმდინარე (დასტურის მომლოდინე) გაგრძელების მოთხოვნების workflow ID-ები */
+function contractDeadlinePendingWorkflows($dealId)
+{
+    if (CONTRACT_EXTEND_BP_ID <= 0) {
+        return [];
+    }
+    $ids = [];
+    $res = \Bitrix\Main\Application::getConnection()->query(
+        "SELECT ID FROM b_bp_workflow_state WHERE DOCUMENT_ID = 'DEAL_" . (int)$dealId . "'"
+        . " AND WORKFLOW_TEMPLATE_ID = " . (int)CONTRACT_EXTEND_BP_ID
+        . " AND STATE NOT IN ('Completed', 'Terminated')"
+    );
+    while ($row = $res->fetch()) {
+        $ids[] = $row["ID"];
+    }
+    return $ids;
+}
+
 /** ამ დილზე გაგრძელების მოთხოვნა უკვე მიდის და დასტურს ელოდება? */
 function contractDeadlineRequestPending($dealId)
 {
-    if (CONTRACT_EXTEND_BP_ID <= 0) {
-        return false;
-    }
-    $row = \Bitrix\Main\Application::getConnection()->query(
-        "SELECT ID FROM b_bp_workflow_state WHERE DOCUMENT_ID = 'DEAL_" . (int)$dealId . "'"
-        . " AND WORKFLOW_TEMPLATE_ID = " . (int)CONTRACT_EXTEND_BP_ID
-        . " AND STATE NOT IN ('Completed', 'Terminated') LIMIT 1"
-    )->fetch();
-    return (bool)$row;
+    return count(contractDeadlinePendingWorkflows($dealId)) > 0;
 }
 
 /**
- * ეტაპიდან გასვლისას გაგრძელებული ვადა იშლება (პირდაპირ UF-ში, CRM-ის Update-ის და BP-ების გარეშე).
+ * ეტაპიდან გასვლისას: გაგრძელებული ვადა იშლება (პირდაპირ UF-ში, CRM-ის Update-ის და BP-ების გარეშე)
+ * და დასტურის მომლოდინე გაგრძელების მოთხოვნა უქმდება, რომ ნუკიმ უკვე წასული დილი არ დაადასტუროს.
  * OnAfterCrmDealUpdate ბარათიდანაც, კანბანიდანაც და BP-დანაც ეშვება.
  */
 function contractDeadlineOnAfterDealUpdate($fields)
@@ -186,12 +199,29 @@ function contractDeadlineOnAfterDealUpdate($fields)
         if ($dealId <= 0 || $newStage === "" || $newStage === CONTRACT_DEADLINE_STAGE) {
             return;
         }
-        if (array_key_exists(CONTRACT_DEADLINE_FIELD, $fields) && (string)$fields[CONTRACT_DEADLINE_FIELD] === "") {
-            return; // უკვე გასუფთავდა იმავე შენახვაში
+
+        $alreadyCleared = array_key_exists(CONTRACT_DEADLINE_FIELD, $fields) && (string)$fields[CONTRACT_DEADLINE_FIELD] === "";
+        if (!$alreadyCleared) {
+            $row = CCrmDeal::GetListEx([], ["=ID" => $dealId, "CHECK_PERMISSIONS" => "N"], false, false, ["ID", CONTRACT_DEADLINE_FIELD])->Fetch();
+            if ($row && !empty($row[CONTRACT_DEADLINE_FIELD])) {
+                $USER_FIELD_MANAGER->Update("CRM_DEAL", $dealId, [CONTRACT_DEADLINE_FIELD => ""]);
+            }
         }
-        $row = CCrmDeal::GetListEx([], ["=ID" => $dealId, "CHECK_PERMISSIONS" => "N"], false, false, ["ID", CONTRACT_DEADLINE_FIELD])->Fetch();
-        if ($row && !empty($row[CONTRACT_DEADLINE_FIELD])) {
-            $USER_FIELD_MANAGER->Update("CRM_DEAL", $dealId, [CONTRACT_DEADLINE_FIELD => ""]);
+
+        $pending = contractDeadlinePendingWorkflows($dealId);
+        if ($pending && CModule::IncludeModule('bizproc')) {
+            $reason = "ვადის გაგრძელების მოთხოვნა გაუქმდა: დილი ხელშეკრულების ეტაპიდან გავიდა";
+            foreach ($pending as $workflowId) {
+                $errors = [];
+                CBPDocument::TerminateWorkflow($workflowId, ["crm", "CCrmDocumentDeal", "DEAL_" . $dealId], $errors, $reason);
+            }
+            if (class_exists('\Bitrix\Crm\Timeline\CommentEntry')) {
+                \Bitrix\Crm\Timeline\CommentEntry::create([
+                    "TEXT"      => "სისტემური კომენტარი:\n" . $reason,
+                    "AUTHOR_ID" => 1,
+                    "BINDINGS"  => [["ENTITY_TYPE_ID" => CCrmOwnerType::Deal, "ENTITY_ID" => $dealId]],
+                ]);
+            }
         }
     } catch (\Throwable $e) {
         // ვადის გასუფთავების შეცდომამ დილის შენახვა არ უნდა შეაჩეროს
@@ -208,6 +238,10 @@ function monolithContractDeadlineAgent()
         $done = 0;
         foreach (contractDeadlineDeals() as $deal) {
             if ($deal["DEADLINE"] > $now) {
+                continue;
+            }
+            // გაგრძელების მოთხოვნა ნუკის პასუხს ელოდება - დილს არ ვაბრუნებთ; უარყოფისას მომდევნო გაშვება დააბრუნებს
+            if (contractDeadlineRequestPending($deal["ID"])) {
                 continue;
             }
             contractDeadlineReturnDeal($deal["ID"], $deal);
