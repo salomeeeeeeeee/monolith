@@ -323,6 +323,10 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
             div.insertAdjacentHTML("beforeend",
                 '<div onclick="(function(){if(typeof BX!==\'undefined\'&&BX.SidePanel){BX.SidePanel.Instance.open(location.origin+\'/crm/deal/docs-generation.php?dealid=<?php echo (int)$dealId2; ?>\',{width:650,cacheable:false,allowChangeHistory:false,title:\'დოკუმენტები\'});}})();" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;margin-left:8px;background:linear-gradient(135deg,#e67700,#f08c00);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(230,119,0,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(230,119,0,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(230,119,0,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="#fff" stroke-width="1.4"/><line x1="4.5" y1="5" x2="11.5" y2="5" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/><line x1="4.5" y1="7.5" x2="11.5" y2="7.5" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/><line x1="4.5" y1="10" x2="8.5" y2="10" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/></svg>დოკუმენტები</div>'
             );
+            // ხელშეკრულების ვადის გაგრძელება (5 სამუშაო დღე; ნუკის დასტურით, კომენტარი სავალდებულო)
+            div.insertAdjacentHTML("beforeend",
+                '<div onclick="openExtendContractPopup();" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;margin-left:8px;background:linear-gradient(135deg,#3b5bdb,#7048e8);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(59,91,219,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(59,91,219,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(59,91,219,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#fff" stroke-width="1.4"/><path d="M8 4.5V8l2.5 1.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>ვადის გაგრძელება</div>'
+            );
         }
 
         if (isWon) {
@@ -352,6 +356,20 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
                     cacheable: false,
                     allowChangeHistory: false,
                     title: 'რეზერვაციის ვადის ცვლილება'
+                }
+            );
+        }
+    };
+
+    window.openExtendContractPopup = function() {
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(
+                location.origin + '/rest/local/api/projects/extendContract.php?deal_id=' + dealId2,
+                {
+                    width: 800,
+                    cacheable: false,
+                    allowChangeHistory: false,
+                    title: 'ხელშეკრულების ვადის გაგრძელება'
                 }
             );
         }
