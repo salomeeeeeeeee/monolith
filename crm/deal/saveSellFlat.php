@@ -527,7 +527,7 @@ ob_end_clean();
   </div>
 <?php endforeach; ?>
 
-    <div class="section-label">ხელშეკრულება</div>
+    <div class="section-label">ხელშეკრულება (არასავალდებულო)</div>
 
     <div class="field">
       <div class="drop-zone" id="dropZone" onclick="document.getElementById('passportFile').click()">
@@ -673,7 +673,8 @@ function saveSell() {
     });
   });
 
-  if (!allValid || !selectedFile) {
+  // ხელშეკრულების ფაილი არასავალდებულოა
+  if (!allValid) {
     setStatus('error', 'გთხოვთ შეავსოთ ყველა სავალდებულო ველი');
     return;
   }
@@ -686,7 +687,9 @@ function saveSell() {
   fd.append('contr_date', contr_date);
   fd.append('payment_method', paymentMethod);
   fd.append('clients',    JSON.stringify(clients));
-  fd.append('passport',   selectedFile, selectedFile.name);
+  if (selectedFile) {
+    fd.append('passport', selectedFile, selectedFile.name);
+  }
 
   fetch(location.origin + '/rest/local/api/projects/saveSellFlatAction.php', {
     method: 'POST',
