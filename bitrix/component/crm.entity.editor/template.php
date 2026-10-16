@@ -1928,21 +1928,23 @@ var paymentsArr = <?php echo json_encode($paymentsArr ?? [], JSON_UNESCAPED_UNIC
 </script>
 
 <?php
-// ASSIGNED_BY_ID (პასუხისმგებელი) - editable only by users 1 and 9
-$canEditAssigned = in_array((int)$userID, [1, 3, 9], true);
-if ($isDealEntity && !$canEditAssigned):
+// ASSIGNED_BY_ID (პასუხისმგებელი) - editable by users 1, 3, 9 and by the deal's current responsible
+$assignedEditorUsers = [1, 3, 9];
+$canEditAssignedAlways = in_array((int)$userID, $assignedEditorUsers, true);
+$assignedLockInitialId = isset($deal['ASSIGNED_BY_ID']) ? (int)$deal['ASSIGNED_BY_ID'] : 0;
+if ($isDealEntity && $dealId > 0 && !$canEditAssignedAlways):
 ?>
 <style>
-[data-cid="ASSIGNED_BY_ID"] {
+.dmg-assigned-locked [data-cid="ASSIGNED_BY_ID"] {
     pointer-events: none !important;
     user-select: none !important;
     cursor: not-allowed;
 }
 
-[data-cid="ASSIGNED_BY_ID"] .crm-widget-employee-change,
-[data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-field-edit,
-[data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-field-edit-button,
-[data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-block-context-menu {
+.dmg-assigned-locked [data-cid="ASSIGNED_BY_ID"] .crm-widget-employee-change,
+.dmg-assigned-locked [data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-field-edit,
+.dmg-assigned-locked [data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-field-edit-button,
+.dmg-assigned-locked [data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-block-context-menu {
     display: none !important;
 }
 </style>
@@ -1953,14 +1955,36 @@ if ($isDealEntity && !$canEditAssigned):
     }
     window.__dmgAssignedLockBound = true;
 
+    var currentUserId = <?= (int)$userID ?>;
+    var initialAssignedId = <?= $assignedLockInitialId ?>;
+
+    function currentAssignedId() {
+        var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
+        var model = editor && editor.getModel && editor.getModel();
+        var value = model && model.getField('ASSIGNED_BY_ID');
+        return parseInt(value, 10) || initialAssignedId;
+    }
+
+    function syncAssignedLock() {
+        // locked only when someone else is responsible
+        var locked = currentAssignedId() !== currentUserId;
+        document.documentElement.classList.toggle('dmg-assigned-locked', locked);
+    }
+
     // Capture-phase block in case the pointer-events lock is bypassed
     document.addEventListener('click', function(e) {
+        if (!document.documentElement.classList.contains('dmg-assigned-locked')) {
+            return;
+        }
         if (e.target && e.target.closest && e.target.closest('[data-cid="ASSIGNED_BY_ID"]')) {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
         }
     }, true);
+
+    syncAssignedLock();
+    setInterval(syncAssignedLock, 300);
 })();
 </script>
 <?php endif; ?>
