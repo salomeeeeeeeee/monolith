@@ -14,6 +14,9 @@ date_default_timezone_set('Asia/Tbilisi');
 // გაყიდვის BP შაბლონი — იგივე ID გამოიყენება pending-შემოწმებისთვისაც
 $sellTemplateId = 26;
 
+// ხელშეკრულებების სია
+$agreementIblockId = 18;
+
 /** Absolute public URL with encoded filename (spaces, (), etc.) */
 function buildPassportFileLink($fileId) {
     $path = CFile::GetPath($fileId);
@@ -124,13 +127,21 @@ $firstPaymentRaw  = !empty($scheduleRows) ? (float)explode("|", $scheduleRows[0]
 $firstPayment     = !empty($scheduleRows) ? number_format($firstPaymentRaw, 2, '.', ',') : '';
 $firstPaymentDate = !empty($scheduleRows) ? ($scheduleRows[0]["TARIGI"] ?? '') : '';
 
-// ── Passport file upload (single shared file for all clients) ─────────
+// ── Uploaded file (form field "passport" = ხელშეკრულება, optional) ─────
 $passportFileId   = null;
 $passportFilePath = null;
 $passportFileLink = '';
 $passportFileName = '';
 
-if (!empty($_FILES['passport']['tmp_name'])) {
+if (!empty($_FILES['passport']) && $_FILES['passport']['error'] !== UPLOAD_ERR_NO_FILE) {
+
+    if ($_FILES['passport']['error'] !== UPLOAD_ERR_OK || empty($_FILES['passport']['tmp_name'])) {
+        sendJsonAndExit([
+            "status"  => 500,
+            "message" => "ფაილის ატვირთვა ვერ მოხერხდა (კოდი " . (int)$_FILES['passport']['error'] . ")",
+        ]);
+    }
+
     $file     = $_FILES['passport'];
     $origName = $file['name'];
     $tmpPath  = $file['tmp_name'];
@@ -146,6 +157,44 @@ if (!empty($_FILES['passport']['tmp_name'])) {
         $passportFilePath = $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath($savedId);
         $passportFileLink = buildPassportFileLink($savedId);
         $passportFileName = $origName ?: (CFile::GetFileArray($savedId)['ORIGINAL_NAME'] ?? 'file.pdf');
+    }
+}
+
+// ── ხელშეკრულება → სია 18 ────────────────────────────────────────────
+// Runs before any contact/deal update, so a failure here leaves nothing half-saved.
+$agreementElementId = 0;
+$agreementError     = '';
+
+if ($passportFileId && $passportFilePath) {
+    $agreementFile = CFile::MakeFileArray($passportFilePath);
+    $agreementFile['name']      = $passportFileName;
+    $agreementFile['MODULE_ID'] = 'iblock';
+
+    $agreementEl = new CIBlockElement;
+    $agreementElementId = $agreementEl->Add([
+        'IBLOCK_ID'       => $agreementIblockId,
+        'NAME'            => 'ხელშეკრულება — Deal #' . $dealId,
+        'ACTIVE'          => 'Y',
+        'PROPERTY_VALUES' => [
+            // CRM binding: plain ID if only "Deals" is allowed in the field settings,
+            // otherwise use 'D_' . $dealId
+            'DEAL_ID'   => (string)$dealId,
+            'AGREEMENT' => $agreementFile,
+        ],
+    ]);
+
+    if (!$agreementElementId) {
+        $agreementError = $agreementEl->LAST_ERROR;
+        CFile::Delete($passportFileId);   // don't leave an orphan file behind
+
+        file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/savesell_errors.txt",
+            "dealId: $dealId\nagreement add failed: $agreementError\nFILES: " . print_r($_FILES, true) . "\n"
+        );
+
+        sendJsonAndExit([
+            "status"  => 500,
+            "message" => "ხელშეკრულება ვერ შეინახა: " . $agreementError,
+        ]);
     }
 }
 
@@ -219,7 +268,7 @@ foreach ($clients as $client) {
     if ($lastName  !== '') $contactFields['LAST_NAME'] = $lastName;
     if ($idNumber  !== '') $contactFields['UF_CRM_1781244744534'] = $idNumber;
 
-    // Same uploaded passport file attached to every contact on the deal
+    // Same uploaded file attached to every contact on the deal
     if ($passportFileId && $passportFilePath) {
         $contactFields['UF_CRM_1779873020955'] = CFile::MakeFileArray($passportFilePath);
     }
@@ -291,6 +340,7 @@ file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/savesell_errors.txt",
     "clients: " . print_r($clients, true) . "\n" .
     "contrDate: $contrDate → $contrDateForBitrix\n" .
     "paymentMethod: " . $paymentMethod . "\n" .
+    "agreementElementId (list 18): " . var_export($agreementElementId, true) . "\n" .
     "receiptFileId: " . var_export($receiptFileId, true) . "\n" .
     "wfId: " . var_export($wfId, true) . "\n" .
     $contactUpdateLog .
@@ -305,6 +355,9 @@ $resArr = [
     "status"  => 200,
     "message" => "Sent successfully",
 ];
+if ($agreementElementId) {
+    $resArr["agreement_element_id"] = $agreementElementId;
+}
 if (!$wfId) {
     $resArr["wf_warning"] = "Workflow may not have started";
     $resArr["wf_errors"]  = $arErrorsTmp;

@@ -1927,6 +1927,44 @@ var paymentsArr = <?php echo json_encode($paymentsArr ?? [], JSON_UNESCAPED_UNIC
 })();
 </script>
 
+<?php
+// ASSIGNED_BY_ID (პასუხისმგებელი) - editable only by users 1 and 9
+$canEditAssigned = in_array((int)$userID, [1, 3, 9], true);
+if ($isDealEntity && !$canEditAssigned):
+?>
+<style>
+[data-cid="ASSIGNED_BY_ID"] {
+    pointer-events: none !important;
+    user-select: none !important;
+    cursor: not-allowed;
+}
+
+[data-cid="ASSIGNED_BY_ID"] .crm-widget-employee-change,
+[data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-field-edit,
+[data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-field-edit-button,
+[data-cid="ASSIGNED_BY_ID"] .ui-entity-editor-block-context-menu {
+    display: none !important;
+}
+</style>
+<script>
+(function() {
+    if (window.__dmgAssignedLockBound) {
+        return;
+    }
+    window.__dmgAssignedLockBound = true;
+
+    // Capture-phase block in case the pointer-events lock is bypassed
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.closest && e.target.closest('[data-cid="ASSIGNED_BY_ID"]')) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+})();
+</script>
+<?php endif; ?>
+
 <script>
 BX.ready(function() {
     setInterval(function() {
@@ -2586,5 +2624,72 @@ $wonLockInitialStage = isset($deal['STAGE_ID']) ? (string)$deal['STAGE_ID'] : ''
 
 	run();
 	setInterval(run, 500);
+})();
+</script>
+
+<?php
+// Stage change - only the deal's responsible person, plus users 1, 3 and 9
+$stageEditorUsers = [1, 3, 9];
+$dealAssignedId = isset($deal['ASSIGNED_BY_ID']) ? (int)$deal['ASSIGNED_BY_ID'] : 0;
+$canChangeStageAlways = $dealId <= 0 || in_array((int)$userID, $stageEditorUsers, true);
+?>
+<style>
+.dmg-stage-owner-locked {
+    cursor: not-allowed;
+}
+
+.dmg-stage-owner-locked .crm-entity-section-status-step {
+    pointer-events: none !important;
+}
+</style>
+<script>
+(function() {
+    if (window.__dmgStageOwnerLockBound) {
+        return;
+    }
+    window.__dmgStageOwnerLockBound = true;
+
+    var canChangeAlways = <?= $canChangeStageAlways ? 'true' : 'false' ?>;
+    if (canChangeAlways) {
+        return;
+    }
+
+    var currentUserId = <?= (int)$userID ?>;
+    var initialAssignedId = <?= $dealAssignedId ?>;
+    var LOCK_TITLE = 'სთეიჯის შეცვლა შეუძლია მხოლოდ პასუხისმგებელს';
+
+    function currentAssignedId() {
+        var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
+        var model = editor && editor.getModel && editor.getModel();
+        var value = model && model.getField('ASSIGNED_BY_ID');
+        return parseInt(value, 10) || initialAssignedId;
+    }
+
+    function syncStageOwnerLock() {
+        var locked = currentAssignedId() !== currentUserId;
+        document.querySelectorAll('.crm-entity-section-status-wrap').forEach(function(wrap) {
+            wrap.classList.toggle('dmg-stage-owner-locked', locked);
+            if (locked) {
+                // don't overwrite the WON lock's title if it's already set
+                if (!wrap.hasAttribute('title')) {
+                    wrap.setAttribute('title', LOCK_TITLE);
+                }
+            } else if (wrap.getAttribute('title') === LOCK_TITLE) {
+                wrap.removeAttribute('title');
+            }
+        });
+    }
+
+    // Capture-phase block in case the pointer-events lock is bypassed
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.closest && e.target.closest('.dmg-stage-owner-locked')) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
+    }, true);
+
+    syncStageOwnerLock();
+    setInterval(syncStageOwnerLock, 300);
 })();
 </script>
