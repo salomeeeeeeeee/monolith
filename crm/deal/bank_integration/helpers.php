@@ -1221,6 +1221,7 @@ if (!function_exists('bankBogBuildMergeModels')) {
 
             $reason = trim((string)($list['REASON'] ?? ''));
             if ($reason !== '') {
+                $manual = bankBogIsManualSkip($reason);
                 $amounts = bankBogStatementAmounts($list);
                 $date = explode('T', (string)($list['EntryDate'] ?? ''))[0];
                 $name = trim((string)($list['SenderDetails_Name'] ?? ($list['DocumentPayerName'] ?? '')));
@@ -1239,7 +1240,9 @@ if (!function_exists('bankBogBuildMergeModels')) {
                     'AMOUNT_USD' => $amounts['USD'],
                     'COMMENT' => $list['EntryComment'] ?? '',
                     'REASON' => $reason,
-                    'REASON_CODE' => 'stored_reason',
+                    // ფილტრში ავტომატური მიზეზი თავისი ტექსტით ჩანს, ხელით გამოტოვებულები ერთად
+                    'REASON_CODE' => $manual ? 'manual' : $reason,
+                    'MANUAL' => $manual,
                 ];
                 continue;
             }
@@ -1577,5 +1580,72 @@ if (!function_exists('bankBogProcessMergePost')) {
         }
 
         return $results;
+    }
+}
+
+/** ხელით გამოტოვებული ამონაწერის მიზეზი BANK_BOG_MANUAL_SKIP_PREFIX-ით იწყება. */
+if (!function_exists('bankBogIsManualSkip')) {
+    function bankBogIsManualSkip($reason)
+    {
+        return strpos((string)$reason, BANK_BOG_MANUAL_SKIP_PREFIX) === 0;
+    }
+}
+
+if (!function_exists('bankBogLoadStatement')) {
+    function bankBogLoadStatement($statementId)
+    {
+        $statementId = (int)$statementId;
+        $iblockId = bankBogStatementIblockId();
+        if ($statementId <= 0 || $iblockId <= 0) {
+            return null;
+        }
+        $rows = bankBogGetElements(['IBLOCK_ID' => $iblockId, 'ID' => $statementId], null, ['ID' => 'DESC'], 1);
+        return $rows[0] ?? null;
+    }
+}
+
+/**
+ * ამონაწერი "დამუშავებას არ საჭიროებს": გადადის გამოტოვებულებში, მიზეზში იწერება
+ * კომენტარი, ვინ და როდის გადაყარა. მიბმული ან უკვე გამოტოვებული ამონაწერი არ იცვლება.
+ */
+if (!function_exists('bankBogManualSkip')) {
+    function bankBogManualSkip($statementId, $comment, $userName)
+    {
+        $list = bankBogLoadStatement($statementId);
+        if (!$list) {
+            return ['ok' => false, 'error' => 'statement_not_found'];
+        }
+        if (trim((string)($list['REASON'] ?? '')) !== '') {
+            return ['ok' => false, 'error' => 'already_skipped'];
+        }
+        $merged = bankBogGetElements([
+            'IBLOCK_ID' => BANK_BOG_PAYMENT_IBLOCK,
+            'PROPERTY_BANK_PAYMENT_ID' => (int)$list['ID'],
+        ], ['ID'], ['ID' => 'DESC'], 1);
+        if (!empty($merged)) {
+            return ['ok' => false, 'error' => 'already_merged'];
+        }
+
+        $comment = trim((string)preg_replace('/\s+/u', ' ', (string)$comment));
+        $reason = BANK_BOG_MANUAL_SKIP_PREFIX . ($comment !== '' ? $comment : 'კომენტარის გარეშე')
+            . ' (' . trim((string)$userName) . ', ' . date('d/m/Y H:i') . ')';
+        CIBlockElement::SetPropertyValuesEx((int)$list['ID'], bankBogStatementIblockId(), ['REASON' => $reason]);
+        return ['ok' => true];
+    }
+}
+
+/** ხელით გამოტოვებული ამონაწერი ბრუნდება მერჯზე; ავტომატურად გამოტოვებული - არა. */
+if (!function_exists('bankBogRestoreSkipped')) {
+    function bankBogRestoreSkipped($statementId)
+    {
+        $list = bankBogLoadStatement($statementId);
+        if (!$list) {
+            return ['ok' => false, 'error' => 'statement_not_found'];
+        }
+        if (!bankBogIsManualSkip($list['REASON'] ?? '')) {
+            return ['ok' => false, 'error' => 'not_manual'];
+        }
+        CIBlockElement::SetPropertyValuesEx((int)$list['ID'], bankBogStatementIblockId(), ['REASON' => '']);
+        return ['ok' => true];
     }
 }

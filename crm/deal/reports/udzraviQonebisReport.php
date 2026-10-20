@@ -44,6 +44,17 @@ $filterOptions = [
 ];
 $filteredProducts = reportFilterProducts($products, $filters);
 
+// Excel: the accountants' register columns first; deal columns only for sold and reserved units.
+$units = [];
+foreach ($filteredProducts as $id => $product) {
+    $hasDeal = in_array($product[F_STATUS] ?? '', ['გაყიდული', REPORT_RESERVED_STATUS], true);
+    $units[$id] = ['deal' => $hasDeal ? reportExtractProductOwnerDealId($product) : '', 'product' => $product];
+}
+$exportProducts = [];
+foreach (reportBuildRegister($units) as $id => $register) {
+    $exportProducts[] = array_merge($filteredProducts[$id], reportRegisterExcelRow($register));
+}
+
 $resArray = [];
 foreach ($filteredProducts as $product) {
     $prodType = reportResolveProductType($product);
@@ -245,7 +256,8 @@ $reportPct = static function ($value, $total): string {
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-const productsData = <?= json_encode(array_values($filteredProducts)) ?>;
+const productsData = <?= json_encode($exportProducts) ?>;
+const registerColumns = <?= json_encode(reportRegisterColumns($lang), JSON_UNESCAPED_UNICODE) ?>;
 const prodTypeMap = <?= json_encode($t['prod_types']) ?>;
 
 function translateType(name) { return prodTypeMap[name] || name; }
@@ -274,12 +286,10 @@ function exportToExcel() {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Status Summary');
 
-    const fields = [
+    const fields = Object.keys(registerColumns).map(function(key) { return { key: key, label: registerColumns[key] }; }).concat([
         { key: '', label: '#' },
-        { key: '<?= F_PROJECT ?>', label: 'Project' },
         { key: '<?= F_BLOCK ?>', label: 'Block' },
         { key: 'NAME', label: 'Unit Name' },
-        { key: '<?= F_CONTRACT_NO ?>', label: 'Contract No.' },
         { key: '<?= F_STATUS ?>', label: 'Status' },
         { key: '<?= F_TYPE ?>', label: 'Product Type' },
         { key: '<?= F_BEDROOMS ?>', label: 'Bedrooms' },
@@ -287,8 +297,7 @@ function exportToExcel() {
         { key: 'PRICE', label: 'Price ($)' },
         { key: 'PRICE_GEL', label: 'Price (GEL)' },
         { key: 'DEAL_RESPONSIBLE_NAME', label: 'Responsible' },
-        { key: 'OWNER_CONTACT_NAME', label: 'Owner' },
-    ];
+    ]);
     let counter = 1;
     const rows = productsData.map(function(p) {
         const row = {};

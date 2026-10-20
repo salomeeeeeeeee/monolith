@@ -16,9 +16,13 @@ if (!defined('BANK_BOG_STATEMENT_IBLOCK_CODE')) {
 if (!defined('BANK_BOG_PAYMENT_IBLOCK')) {
     define('BANK_BOG_PAYMENT_IBLOCK', 23);
 }
-/** გადახდის ტიპი (pay_type): "BOG integration" - ასე ჩანს, რომ გადახდა ბანკის ამონაწერიდან შეიქმნა */
+/** გადახდის ტიპი (pay_type): "ბანკი" (ადრე "BOG integration") - ბანკის ამონაწერიდან შექმნილი გადახდა. სხვა ტიპები: სალარო, ბარტერი */
 if (!defined('BANK_BOG_PAY_TYPE_BOG')) {
     define('BANK_BOG_PAY_TYPE_BOG', 122);
+}
+/** ხელით გამოტოვებული ამონაწერის მიზეზი (REASON) ამით იწყება - ასეთი ამონაწერი მერჯზე შეიძლება დაბრუნდეს */
+if (!defined('BANK_BOG_MANUAL_SKIP_PREFIX')) {
+    define('BANK_BOG_MANUAL_SKIP_PREFIX', 'ხელით: ');
 }
 /** გადახდის გრაფიკი (დარიცხვები) */
 if (!defined('BANK_BOG_SCHEDULE_IBLOCK')) {

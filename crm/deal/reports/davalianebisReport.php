@@ -15,9 +15,6 @@ $t = array_merge($t, [
     'col_paid' => $lang === 'eng' ? 'Total Paid ($)' : 'ჯამური გადახდა ($)',
     'col_debt' => $lang === 'eng' ? 'Current Debt ($)' : 'მიმდინარე დავალიანება ($)',
     'no_data' => $lang === 'eng' ? 'No data available' : 'მონაცემი არ მოიძებნა',
-    'xls_deal' => $lang === 'eng' ? 'Deal#' : 'გარიგება#',
-    'xls_client' => $lang === 'eng' ? 'Client' : 'კლიენტი',
-    'xls_contract_no' => $lang === 'eng' ? 'Contract No.' : 'ხელშეკრულების ნომერი',
     'xls_type' => $lang === 'eng' ? 'Product Type' : 'პროდუქტის ტიპი',
     'xls_total_price' => $lang === 'eng' ? 'Total Sale Amount ($)' : 'სრული გაყიდვების თანხა ($)',
     'xls_scheduled' => $lang === 'eng' ? 'Total Scheduled ($)' : 'ჯამური დარიცხვა ($)',
@@ -31,7 +28,7 @@ $filterResponsible = reportGetFilterValues('responsible');
 
 // All won deals: filter options come from them, the report from the filtered subset.
 $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_WON_STAGE], [
-    'ID', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_BLOCK, D_TYPE, D_BEDROOMS, 'ASSIGNED_BY_ID', D_CONTRACT_NO,
+    'ID', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_BLOCK, D_TYPE, D_BEDROOMS, 'ASSIGNED_BY_ID',
 ]);
 $deals = array_filter($allDeals, static function ($deal) use ($filterProject, $filterBlock, $filterResponsible) {
     return reportValueMatches($deal[D_PROJECT] ?? '', $filterProject)
@@ -55,7 +52,6 @@ foreach (reportGetProductsForDeals($dealsIds) as $row) {
 foreach ($deals as $dealId => &$deal) {
     $deal['jamuriDaricxvaUpToToday'] = 0;
     $deal['jamuriGadaxdaUpToToday'] = 0;
-    $deal['CONTRACT_NO'] = trim((string)($deal[D_CONTRACT_NO] ?? '')) ?: ($productsByDeal[$dealId][F_CONTRACT_NO] ?? '');
 }
 unset($deal);
 
@@ -75,6 +71,11 @@ foreach ($deals as &$deal) {
     $deal['mimdinareDavalianeba'] = $deal['jamuriDaricxvaUpToToday'] - $deal['jamuriGadaxdaUpToToday'];
 }
 unset($deal);
+
+// Excel: the accountants' register columns first.
+foreach (reportDealRegister($dealsIds) as $dealId => $register) {
+    $deals[$dealId] = array_merge($deals[$dealId], reportRegisterExcelRow($register));
+}
 
 $resArray = [];
 foreach ($deals as $deal) {
@@ -222,6 +223,7 @@ reportRenderFilterForm(
 <script>
 const dealsData = <?= json_encode(array_values($deals)) ?>;
 const t = <?= json_encode($t) ?>;
+const registerColumns = <?= json_encode(reportRegisterColumns($lang), JSON_UNESCAPED_UNICODE) ?>;
 const prodTypeMap = <?= json_encode($t['prod_types']) ?>;
 function translateType(name) { return prodTypeMap[name] || name; }
 
@@ -243,16 +245,13 @@ function exportToExcel() {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Debt Summary');
 
-    const fields = [
-        { key: 'ID', label: t.xls_deal },
-        { key: 'CONTACT_FULL_NAME', label: t.xls_client },
-        { key: 'CONTRACT_NO', label: t.xls_contract_no },
+    const fields = Object.keys(registerColumns).map(function(key) { return { key: key, label: registerColumns[key] }; }).concat([
         { key: '<?= D_TYPE ?>', label: t.xls_type },
         { key: 'OPPORTUNITY', label: t.xls_total_price },
         { key: 'jamuriDaricxvaUpToToday', label: t.xls_scheduled },
         { key: 'jamuriGadaxdaUpToToday', label: t.xls_paid },
         { key: 'mimdinareDavalianeba', label: t.xls_debt },
-    ];
+    ]);
     const rows = dealsData.map(function(p) {
         const row = {};
         fields.forEach(function(f) {

@@ -29,7 +29,7 @@ if (!empty($fromDate) && !empty($toDate)) {
 
 // All cashflow-stage deals: project options come from them, the report from the filtered subset.
 $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_CASHFLOW_STAGES], [
-    'ID', 'TITLE', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_CONTRACT_DATE, D_BLOCK, D_TYPE, D_BEDROOMS, D_CONTRACT_NO,
+    'ID', 'TITLE', 'CONTACT_FULL_NAME', 'OPPORTUNITY', D_PROJECT, D_CONTRACT_DATE, D_BLOCK, D_TYPE, D_BEDROOMS,
 ]);
 $deals = array_filter($allDeals, static function ($deal) use ($project) {
     return reportValueMatches($deal[D_PROJECT] ?? '', $project);
@@ -196,7 +196,6 @@ foreach ($dealsForExcel as $dealId => &$dealRow) {
         $prodType = 'სხვა';
     }
     $dealRow['_type'] = $prodType;
-    $dealRow['_contract_no'] = trim((string)($dealRow[D_CONTRACT_NO] ?? '')) ?: ($productsByDeal[$dealId][F_CONTRACT_NO] ?? '');
 
     $rowNames = [$prodType];
     if ($prodType === 'ბინა') {
@@ -219,6 +218,11 @@ foreach ($dealsForExcel as $dealId => &$dealRow) {
 }
 unset($dealRow);
 $typeRows = reportSortProductTypes($typeRows);
+
+// Excel: the accountants' register columns first.
+foreach (reportDealRegister(array_keys($dealsForExcel)) as $dealId => $register) {
+    $dealsForExcel[$dealId] = array_merge($dealsForExcel[$dealId], reportRegisterExcelRow($register));
+}
 
 $projects = reportGetUniqueValues($allDeals, D_PROJECT);
 
@@ -307,6 +311,7 @@ reportRenderCashflowFilterForm($period, $fromDate, $toDate, $project, $projects)
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 let statistika = <?php echo json_encode($dealsForExcel, JSON_UNESCAPED_UNICODE); ?>;
+const registerColumns = <?= json_encode(reportRegisterColumns('ge'), JSON_UNESCAPED_UNICODE) ?>;
 
 function exportTableToExcel() {
     const allDatesSet = new Set();
@@ -316,16 +321,14 @@ function exportTableToExcel() {
     const allDates = Array.from(allDatesSet).sort((a,b) => new Date(a) - new Date(b));
     const data = [];
     Object.values(statistika).forEach(deal => {
-        const row = {
-            'კლიენტი': deal.CONTACT_FULL_NAME || '',
-            'ხელშეკრულება': deal.TITLE || '',
-            'ხელშეკრულების ნომერი': deal._contract_no || '',
+        const row = {};
+        Object.keys(registerColumns).forEach(key => { row[registerColumns[key]] = deal[key] ?? ''; });
+        Object.assign(row, {
             'ქონების ტიპი': deal._type || '',
-            'გაფორმების თარიღი': deal['<?= D_CONTRACT_DATE ?>'] || '',
             'კონტრ. ღირებულება ($)': deal.OPPORTUNITY || 0,
             'გადაიხადა ($)': deal.payment || 0,
             'დარჩენილი ($)': (deal.OPPORTUNITY || 0) - (deal.payment || 0),
-        };
+        });
         allDates.forEach(date => {
             row[`დარიცხვა ${date} ($)`] = deal.gadaxdebi_and_daricxvebi_by_dates?.[date]?.daricxva || 0;
             row[`გადახდა ${date} ($)`] = deal.gadaxdebi_and_daricxvebi_by_dates?.[date]?.gadaxda || 0;

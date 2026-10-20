@@ -25,15 +25,7 @@ $t = array_merge($t, [
 ]);
 
 // Sales sheets of the Excel: the accountants' contract register first, then the report's own columns.
-$exportColumns = [
-    'BUX_ID' => $lang === 'eng' ? 'Accounting Code' : 'ბუღ. კოდი',
-    'DEAL_ID' => $lang === 'eng' ? 'Deal ID' : 'დილის ID',
-    F_PROJECT => $lang === 'eng' ? 'Project Name' : 'პროექტის დასახელება',
-    'PROJECT_CODE' => $lang === 'eng' ? 'Project Code' : 'პროექტის კოდი',
-    'CONTRACT_NO' => $lang === 'eng' ? 'Contract No.' : 'ხელშეკრულების ნომერი',
-    'CONTRACT_DATE' => $lang === 'eng' ? 'Contract Date' : 'ხელშ.თარიღი',
-    'BUYER' => $lang === 'eng' ? 'Buyer' : 'მყიდველი',
-    'BUYER_ID' => $lang === 'eng' ? 'Personal ID / Company Code' : 'პირადი ნომერი/ საიდენტ. კოდი',
+$exportColumns = reportRegisterColumns($lang) + [
     'BUYER_PHONE' => $lang === 'eng' ? 'Contact Phone' : 'საკონტაქტო ტელ. ნომერი',
     'CONTRACT_STATUS' => $lang === 'eng' ? 'Contract Status' : 'ხელშეკრულების სტატუსი',
     F_TYPE => $lang === 'eng' ? 'Property Type' : 'უძ. ქონების სახე',
@@ -98,7 +90,6 @@ if (($_GET['export'] ?? '') === 'rows') {
     $numeric = ['BUX_ID', 'DEAL_ID', F_FLOOR, F_UNIT_NO, F_TOTAL_AREA, 'INNER_AREA', 'BEDROOMS'];
     $rows = [];
     foreach (reportEnrichSoldExport($filteredProducts, $lang) as $product) {
-        $product[F_PROJECT] = reportFilterLabel($product[F_PROJECT] ?? '');
         $product[F_TYPE] = reportTranslateProdType($product[F_TYPE] ?? '', $t);
         $product['BEDROOMS'] = ($product[D_BEDROOMS] ?? '') !== '' ? $product[D_BEDROOMS] : ($product[F_BEDROOMS] ?? '');
         $product['BARTER'] = ($product[D_BARTER] ?? '') === D_BARTER_YES ? $t['barter_yes'] : $t['barter_no'];

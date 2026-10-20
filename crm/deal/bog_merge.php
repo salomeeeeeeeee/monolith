@@ -12,9 +12,33 @@ bankBogEnsureModules();
 $statementIblockId = bankBogStatementIblockId();
 
 $saveResult = null;
+$skipResult = null;
 if ($statementIblockId > 0 && !empty($_POST)) {
-    $saveResult = bankBogProcessMergePost($_POST);
+    // "არ საჭიროებს დამუშავებას" / "დაბრუნება" - ცალკე ფორმიდან, შემდეგ გვერდი თავიდან იტვირთება
+    $skipAction = (string)($_POST['skip_action'] ?? '');
+    if ($skipAction !== '') {
+        if (!check_bitrix_sessid()) {
+            $skipResult = ['ok' => false, 'error' => 'session_expired'];
+        } elseif ($skipAction === 'skip') {
+            $skipResult = bankBogManualSkip($_POST['statement_id'] ?? 0, $_POST['comment'] ?? '', trim($USER->GetFullName()) ?: $USER->GetLogin());
+        } elseif ($skipAction === 'restore') {
+            $skipResult = bankBogRestoreSkipped($_POST['statement_id'] ?? 0);
+        }
+        if (!empty($skipResult['ok'])) {
+            LocalRedirect($APPLICATION->GetCurPage() . '?done=' . ($skipAction === 'skip' ? 'skip' : 'restore'));
+        }
+    } else {
+        $saveResult = bankBogProcessMergePost($_POST);
+    }
 }
+$skipErrors = [
+    'session_expired' => 'სესია ამოიწურა - განაახლე გვერდი და სცადე თავიდან',
+    'statement_not_found' => 'ამონაწერი ვერ მოიძებნა',
+    'already_skipped' => 'ამონაწერი უკვე გამოტოვებულია',
+    'already_merged' => 'ამონაწერი უკვე მიბმულია გადახდაზე',
+    'not_manual' => 'ავტომატურად გამოტოვებული ამონაწერი ვერ დაბრუნდება',
+];
+$done = (string)($_GET['done'] ?? '');
 
 list($listModel, $errorDeals, $skippedStatements) = $statementIblockId > 0
     ? bankBogBuildMergeModels()
@@ -232,6 +256,14 @@ ob_end_clean();
             background: #fff7e0; color: #7a5a00;
             font-size: 12px; font-weight: 700; line-height: 1.35;
         }
+        .project-summary { max-height: none; margin-bottom: 4px; }
+        .project-summary tbody tr { cursor: pointer; }
+        .project-summary tbody tr:hover { background: #f3f7fa; }
+        .project-summary tbody tr.active { background: var(--green); box-shadow: inset 5px 0 0 var(--accent); }
+        .project-summary tr.total-row td { font-weight: 700; background: #f7f9fb; cursor: default; }
+        .skip-btn { margin-top: 8px; color: var(--muted); }
+        .skip-btn:hover { color: var(--err); border-color: #e8bcb8; }
+        .restore-btn { margin-top: 6px; display: block; }
         .setup-note {
             background: var(--surface); border: 1px solid var(--line);
             border-radius: 4px; padding: 20px; box-shadow: 0 10px 28px rgba(0, 51, 91, 0.06);
@@ -287,6 +319,15 @@ ob_end_clean();
         exit;
     }
     ?>
+
+    <?php if ($done === 'skip'): ?>
+        <div class="flash ok">ოპერაცია გადავიდა "გამოტოვებულ ამონაწერებში" (ხელით გამოტოვებული)</div>
+    <?php elseif ($done === 'restore'): ?>
+        <div class="flash ok">ოპერაცია დაბრუნდა დასამუშავებლებში</div>
+    <?php endif; ?>
+    <?php if ($skipResult && empty($skipResult['ok'])): ?>
+        <div class="flash err"><?= htmlspecialchars($skipErrors[$skipResult['error'] ?? ''] ?? ('შეცდომა: ' . ($skipResult['error'] ?? ''))) ?></div>
+    <?php endif; ?>
 
     <?php if ($saveResult): ?>
         <?php if (!empty($saveResult['saved'])): ?>
@@ -345,6 +386,33 @@ ob_end_clean();
             </select>
         </div>
     </div>
+
+    <div class="section-title" style="margin-top:4px;">
+        დასამუშავებელი ოპერაციები პროექტების მიხედვით
+        <span class="sub">ითვლება ზემოთ არჩეული ძებნის, თარიღისა და ვალუტის მიხედვით · პროექტზე დაჭერა ქვემოთ მხოლოდ მას დატოვებს</span>
+    </div>
+    <div class="table-card project-summary">
+        <table>
+            <thead>
+            <tr>
+                <th>პროექტი</th>
+                <th>ოპერაციები</th>
+                <th>დილი მოიძებნა</th>
+                <th>დილი ვერ მოიძებნა</th>
+                <th>ჯამი $</th>
+                <th>ჯამი ₾</th>
+            </tr>
+            </thead>
+            <tbody id="tbody_projects"></tbody>
+        </table>
+    </div>
+
+    <form method="post" id="skipForm" style="display:none;">
+        <?= bitrix_sessid_post() ?>
+        <input type="hidden" name="skip_action" value="">
+        <input type="hidden" name="statement_id" value="">
+        <input type="hidden" name="comment" value="">
+    </form>
 
     <div class="section-title">
         ამონაწერის მიხედვით მოიძებნა დილები
@@ -667,11 +735,14 @@ function renderMatched() {
         ].join(' ').toLowerCase();
         tr.dataset.currency = (row.CURRENCY || '').toUpperCase();
         tr.dataset.project = row.PROJECT || '';
+        tr.dataset.kind = 'matched';
+        tr.dataset.usd = String(row.BANK_AMOUNT_USD || 0);
+        tr.dataset.gel = String(row.BANK_AMOUNT_GEL || 0);
         // INN-ის გარეშე გადამხდელი გამგზავნის ანგარიშით ამოიცნობა - ის ჩანს INN-ის ადგილას
         const clientMeta = [row.STATUS, row.PAYER || row.INN].filter(Boolean);
         const badge = row.RECOGNIZED ? '<div><span class="recognized-badge">წინა მიბმით</span></div>' : '';
         tr.innerHTML = `
-            <td><b>${esc(row.CLIENT_NAME || row.NAME)}</b><div class="deal-meta">${esc(clientMeta.join(' · '))}</div>${badge}</td>
+            <td><b>${esc(row.CLIENT_NAME || row.NAME)}</b><div class="deal-meta">${esc(clientMeta.join(' · '))}</div>${badge}${skipButton(row.list_id)}</td>
             <td class="nowrap">${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
             <td>${esc(row.BENEFICIARY)}${accountMeta(row)}</td>
@@ -704,8 +775,11 @@ function renderErrors() {
         tr.dataset.search = [row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY, row.PROJECT, row.ACCOUNT].join(' ').toLowerCase();
         tr.dataset.currency = (row.CURRENCY || '').toUpperCase();
         tr.dataset.project = row.PROJECT || '';
+        tr.dataset.kind = 'errors';
+        tr.dataset.usd = String(usd);
+        tr.dataset.gel = String(row.AMOUNT_GEL || row.BANK_AMOUNT_GEL || 0);
         tr.innerHTML = `
-            <td><b>${esc(row.NAME)}</b></td>
+            <td><b>${esc(row.NAME)}</b>${skipButton(row.PAYMENT || row.list_id)}</td>
             <td>${esc(row.INN)}</td>
             <td class="nowrap">${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
@@ -725,19 +799,89 @@ function renderErrors() {
     checkRowTotals('myForm_er');
 }
 
+/** ზედა ციფრები ფილტრის მიხედვით: მხოლოდ ხილული რიგები */
 function refreshStats() {
-    document.getElementById('statMatched').textContent = (data || []).length;
-    document.getElementById('statErrors').textContent = (errors || []).length;
-    document.getElementById('pillMatched').textContent = (data || []).length;
-    document.getElementById('pillErrors').textContent = (errors || []).length;
-    document.getElementById('pillSkipped').textContent = (skipped || []).length;
-    let usd = 0, gel = 0;
-    [...(data || []), ...(errors || [])].forEach(r => {
-        usd += Number(r.BANK_AMOUNT_USD || r.AMOUNT_USD || 0);
-        gel += Number(r.BANK_AMOUNT_GEL || r.AMOUNT_GEL || 0);
+    let matched = 0, errorsCount = 0, usd = 0, gel = 0;
+    document.querySelectorAll('tr.filtertr:not(.hidden-row)').forEach(tr => {
+        if (tr.dataset.kind === 'matched') matched++;
+        else errorsCount++;
+        usd += Number(tr.dataset.usd || 0);
+        gel += Number(tr.dataset.gel || 0);
     });
+    document.getElementById('statMatched').textContent = matched;
+    document.getElementById('statErrors').textContent = errorsCount;
+    document.getElementById('pillMatched').textContent = matched;
+    document.getElementById('pillErrors').textContent = errorsCount;
+    document.getElementById('pillSkipped').textContent = (skipped || []).length;
     document.getElementById('statUsd').textContent = money(usd);
     document.getElementById('statGel').textContent = money(gel);
+}
+
+/** პროექტების ცხრილი: ოპერაციების რაოდენობა და თანხა, პროექტის ფილტრის გარდა ყველა ფილტრით */
+function renderProjectSummary(passesOtherFilters) {
+    const selected = document.getElementById('projectFilter').value || '';
+    const byProject = new Map();
+    const total = { count: 0, matched: 0, errors: 0, usd: 0, gel: 0 };
+    document.querySelectorAll('tr.filtertr').forEach(tr => {
+        if (!passesOtherFilters(tr)) return;
+        const key = tr.dataset.project || '';
+        const bucket = byProject.get(key) || { count: 0, matched: 0, errors: 0, usd: 0, gel: 0 };
+        [bucket, total].forEach(b => {
+            b.count++;
+            if (tr.dataset.kind === 'matched') b.matched++;
+            else b.errors++;
+            b.usd += Number(tr.dataset.usd || 0);
+            b.gel += Number(tr.dataset.gel || 0);
+        });
+        byProject.set(key, bucket);
+    });
+
+    const tbody = document.getElementById('tbody_projects');
+    tbody.innerHTML = '';
+    if (!byProject.size) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">დასამუშავებელი ოპერაცია არ არის</td></tr>';
+        return;
+    }
+    [...byProject.entries()].sort((a, b) => a[0].localeCompare(b[0], 'ka')).forEach(([project, b]) => {
+        const tr = document.createElement('tr');
+        tr.className = project === selected && selected !== '' ? 'active' : '';
+        tr.innerHTML = `<td><b>${esc(project || 'პროექტის გარეშე')}</b></td><td>${b.count}</td><td>${b.matched}</td><td>${b.errors}</td>
+            <td class="amount">${money(b.usd)}</td><td class="amount">${money(b.gel)}</td>`;
+        tr.addEventListener('click', () => {
+            const select = document.getElementById('projectFilter');
+            select.value = select.value === project ? '' : project;
+            applyFilters();
+        });
+        tbody.appendChild(tr);
+    });
+    const tr = document.createElement('tr');
+    tr.className = 'total-row';
+    tr.innerHTML = `<td>სულ</td><td>${total.count}</td><td>${total.matched}</td><td>${total.errors}</td>
+        <td class="amount">${money(total.usd)}</td><td class="amount">${money(total.gel)}</td>`;
+    tbody.appendChild(tr);
+}
+
+function skipButton(statementId) {
+    return `<div><button type="button" class="mini-btn skip-btn" onclick="skipStatement('${esc(statementId)}')" title="ოპერაცია გადავა გამოტოვებულებში; იქიდან შეიძლება დაბრუნება">არ საჭიროებს დამუშავებას</button></div>`;
+}
+
+function submitSkipForm(action, statementId, comment) {
+    const form = document.getElementById('skipForm');
+    form.elements.skip_action.value = action;
+    form.elements.statement_id.value = statementId;
+    form.elements.comment.value = comment || '';
+    form.submit();
+}
+
+function skipStatement(statementId) {
+    const comment = prompt('ოპერაცია არ საჭიროებს დამუშავებას და გადავა გამოტოვებულებში.\nმიუთითე მიზეზი (არასავალდებულო):', '');
+    if (comment === null) return;
+    submitSkipForm('skip', statementId, comment);
+}
+
+function restoreStatement(statementId) {
+    if (!confirm('ოპერაცია დაბრუნდეს დასამუშავებლებში?')) return;
+    submitSkipForm('restore', statementId, '');
 }
 
 function renderSkipped() {
@@ -746,7 +890,7 @@ function renderSkipped() {
     const reasons = new Map();
     (skipped || []).forEach(r => {
         const code = r.REASON_CODE || 'other';
-        const label = r.REASON || code;
+        const label = code === 'manual' ? 'ხელით გამოტოვებული (არ საჭიროებს დამუშავებას)' : (r.REASON || code);
         if (!reasons.has(code)) reasons.set(code, label);
     });
     const current = reasonSelect.value;
@@ -779,7 +923,7 @@ function renderSkipped() {
             <td class="nowrap">${currencyCell(row)}</td>
             <td class="amount">${money(row.AMOUNT_GEL)}</td>
             <td class="amount">${money(row.AMOUNT_USD)}</td>
-            <td><span class="reason-badge">${esc(row.REASON)}</span></td>
+            <td><span class="reason-badge">${esc(row.REASON)}</span>${row.MANUAL ? `<button type="button" class="mini-btn restore-btn" onclick="restoreStatement('${esc(row.list_id)}')">დაბრუნება</button>` : ''}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -802,20 +946,26 @@ function applyFilters() {
     const from = document.getElementById('dateFrom').value || '';
     const to = document.getElementById('dateTo').value || '';
 
-    document.querySelectorAll('tr.filtertr').forEach(tr => {
+    // ძებნა, ვალუტა და თარიღი; პროექტი ცალკე - პროექტების ცხრილი ყველა პროექტს აჩვენებს
+    const passesOtherFilters = tr => {
         const hay = tr.dataset.search || '';
         const rowCur = tr.dataset.currency || '';
         const rowDate = tr.dataset.date || '';
         const okQ = !q || hay.includes(q);
         const okC = !cur || rowCur === cur;
-        const okP = !project || tr.dataset.project === project;
         let okD = true;
         if (from && rowDate && rowDate < from) okD = false;
         if (to && rowDate && rowDate > to) okD = false;
-        tr.classList.toggle('hidden-row', !(okQ && okC && okP && okD));
+        return okQ && okC && okD;
+    };
+    document.querySelectorAll('tr.filtertr').forEach(tr => {
+        const okP = !project || tr.dataset.project === project;
+        tr.classList.toggle('hidden-row', !(passesOtherFilters(tr) && okP));
     });
     checkRowTotals('myForm');
     checkRowTotals('myForm_er');
+    refreshStats();
+    renderProjectSummary(passesOtherFilters);
 }
 
 function fillProjectFilter() {
@@ -832,8 +982,8 @@ function fillProjectFilter() {
 renderMatched();
 renderErrors();
 renderSkipped();
-refreshStats();
 fillProjectFilter();
+applyFilters();
 document.getElementById('searchBox').addEventListener('input', applyFilters);
 document.getElementById('currencyFilter').addEventListener('change', applyFilters);
 document.getElementById('projectFilter').addEventListener('change', applyFilters);

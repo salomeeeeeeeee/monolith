@@ -509,6 +509,15 @@ usort($filteredIssues, static function ($a, $b) use ($issueMeta, $severityOrder)
     return (int)$a['deal_id'] <=> (int)$b['deal_id'];
 });
 
+// Excel: the accountants' register columns first.
+$units = [];
+foreach ($filteredIssues as $i => $issue) {
+    $units[$i] = ['deal' => $issue['deal_id'], 'product' => $products[$issue['product_id']] ?? null];
+}
+foreach (reportBuildRegister($units) as $i => $register) {
+    $filteredIssues[$i]['register'] = reportRegisterExcelRow($register);
+}
+
 ob_end_clean();
 reportPageBegin(
     $eng ? 'Reconcile Report' : 'შედარების რეპორტი',
@@ -672,6 +681,7 @@ const issuesData = <?= json_encode($filteredIssues, JSON_UNESCAPED_UNICODE) ?>;
 const issueLabels = <?= json_encode(array_map(static function ($m) { return $m[0]; }, $issueMeta), JSON_UNESCAPED_UNICODE) ?>;
 const summaryData = <?= json_encode(array_values($summary), JSON_UNESCAPED_UNICODE) ?>;
 const t = <?= json_encode($t, JSON_UNESCAPED_UNICODE) ?>;
+const registerColumns = <?= json_encode(reportRegisterColumns($lang), JSON_UNESCAPED_UNICODE) ?>;
 
 function exportToExcel() {
     const wb = XLSX.utils.book_new();
@@ -682,13 +692,13 @@ function exportToExcel() {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Summary');
 
-    const header = [t.col_issue, t.col_deal, 'Deal ID', t.col_stage, t.col_deal_project, t.col_amount,
-        t.col_product, 'Product ID', t.col_unit, t.col_prod_project, t.col_status, t.col_note];
+    const registerKeys = Object.keys(registerColumns);
+    const header = registerKeys.map(function (key) { return registerColumns[key]; }).concat([
+        t.col_issue, t.col_stage, t.col_deal_project, t.col_amount,
+        t.col_product, 'Product ID', t.col_unit, t.col_prod_project, t.col_status, t.col_note]);
     const rows = issuesData.map(function (r) {
-        return [
+        return registerKeys.map(function (key) { return r.register[key] ?? ''; }).concat([
             issueLabels[r.issue] || r.issue,
-            r.deal_contact || r.deal_title || '',
-            r.deal_id ? Number(r.deal_id) : '',
             r.deal_stage || '',
             r.deal_project || '',
             r.deal_id ? Number(r.deal_amount) : '',
@@ -698,7 +708,7 @@ function exportToExcel() {
             r.product_project || '',
             r.product_status || '',
             r.note || '',
-        ];
+        ]);
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header].concat(rows)), 'Mismatches');
     XLSX.writeFile(wb, 'reconcile_report_' + new Date().toISOString().slice(0, 10) + '.xlsx');

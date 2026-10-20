@@ -361,7 +361,8 @@ function reportGetProducts($arFilter = [])
     // v2: load CRM-bind props via GetProperties (ownerDeal was empty with PROPERTY_* GetNext)
     // v4: + cadastral code, inner area, project code
     // v5: + contract number (xelshNum)
-    $cacheKey = 'products_v5_' . md5(serialize($filter));
+    // v6: + DEAL_FROM_ROWS (won deal of a sold unit that has no deal link)
+    $cacheKey = 'products_v6_' . md5(serialize($filter));
     if (isset($runtime[$cacheKey])) {
         return $runtime[$cacheKey];
     }
@@ -429,6 +430,19 @@ function reportGetProducts($arFilter = [])
         $elements[$id] = $row;
     }
 
+    // Sold units with neither deal link: the won deal that has the unit on its Products tab.
+    $unlinked = [];
+    foreach ($elements as $id => $row) {
+        if (($row[F_STATUS] ?? '') === 'გაყიდული'
+            && reportExtractDealId($row['ownerDeal'] ?? '') === ''
+            && reportExtractDealId($row['OWNER_DEAL'] ?? '') === '') {
+            $unlinked[] = $id;
+        }
+    }
+    foreach (reportWonDealsByProductRows($unlinked) as $id => $dealId) {
+        $elements[$id]['DEAL_FROM_ROWS'] = $dealId;
+    }
+
     reportCacheSet($cacheKey, $elements);
     return $runtime[$cacheKey] = $elements;
 }
@@ -453,7 +467,46 @@ function reportGetReservedProducts()
 }
 
 /**
- * Products linked to the given deal IDs via OWNER_DEAL (uses cached catalog).
+ * Catalog product ID => won deal ID, for units on a won deal's Products tab (the latest deal wins).
+ */
+function reportWonDealsByProductRows(array $productIds)
+{
+    $dealsOf = [];
+    foreach (array_chunk(array_values(array_filter(array_map('intval', $productIds))), 500) as $chunk) {
+        $res = CCrmProductRow::GetList(['ID' => 'ASC'], ['OWNER_TYPE' => 'D', 'PRODUCT_ID' => $chunk]);
+        while ($row = $res->Fetch()) {
+            $dealsOf[(int)$row['PRODUCT_ID']][] = (int)$row['OWNER_ID'];
+        }
+    }
+    if (empty($dealsOf)) {
+        return [];
+    }
+
+    $won = [];
+    $res = CCrmDeal::GetList(
+        ['ID' => 'ASC'],
+        ['ID' => array_values(array_unique(array_merge(...array_values($dealsOf)))), 'STAGE_ID' => REPORT_WON_STAGE, 'CHECK_PERMISSIONS' => 'N'],
+        ['ID']
+    );
+    while ($row = $res->Fetch()) {
+        $won[(int)$row['ID']] = true;
+    }
+
+    $result = [];
+    foreach ($dealsOf as $productId => $dealIds) {
+        $wonIds = array_filter($dealIds, static function ($dealId) use ($won) {
+            return isset($won[$dealId]);
+        });
+        if ($wonIds) {
+            $result[$productId] = (string)max($wonIds);
+        }
+    }
+    return $result;
+}
+
+/**
+ * Products linked to the given deal IDs via OWNER_DEAL, else DEAL_FROM_ROWS (uses cached catalog).
+ * OWNER_DEAL of the returned rows carries the deal they matched.
  */
 function reportGetProductsForDeals(array $dealIds)
 {
@@ -465,6 +518,10 @@ function reportGetProductsForDeals(array $dealIds)
     $matched = [];
     foreach (reportGetProducts() as $id => $row) {
         $ownerDealId = reportExtractDealId($row['OWNER_DEAL'] ?? '');
+        if ($ownerDealId === '') {
+            $ownerDealId = reportExtractDealId($row['DEAL_FROM_ROWS'] ?? '');
+            $row['OWNER_DEAL'] = $ownerDealId;
+        }
         if ($ownerDealId !== '' && isset($dealIdSet[$ownerDealId])) {
             $matched[$id] = $row;
         }
@@ -594,53 +651,168 @@ function reportSplitSchedule(array $rows)
     return [$first, $last, $installments];
 }
 
+/** The accountants' contract register: the columns every report's Excel starts with. */
+function reportRegisterColumns($lang = 'ge')
+{
+    $eng = $lang === 'eng';
+    return [
+        'BUX_ID' => $eng ? 'Accounting Code' : 'ბუღ. კოდი',
+        'DEAL_ID' => $eng ? 'Deal ID' : 'დილის ID',
+        'PROJECT_NAME' => $eng ? 'Project Name' : 'პროექტის დასახელება',
+        'PROJECT_CODE' => $eng ? 'Project Code' : 'პროექტის კოდი',
+        'CONTRACT_NO' => $eng ? 'Contract No.' : 'ხელშეკრულების ნომერი',
+        'CONTRACT_DATE' => $eng ? 'Contract Date' : 'ხელშ.თარიღი',
+        'BUYER' => $eng ? 'Buyer' : 'მყიდველი',
+        'BUYER_ID' => $eng ? 'Personal ID / Company Code' : 'პირადი ნომერი/ საიდენტ. კოდი',
+    ];
+}
+
+/** Deal ID => accounting code (list 30 "ბუღალტერიის აიდი"). */
+function reportGetBuxIds()
+{
+    static $buxIds = null;
+    if ($buxIds !== null) {
+        return $buxIds;
+    }
+    $buxIds = [];
+    foreach (reportLoadAllIblockPropertyRows(REPORT_BUX_IBLOCK) as $row) {
+        $dealId = reportExtractDealId($row['Deal'] ?? '');
+        if ($dealId !== '' && !isset($buxIds[$dealId])) {
+            $buxIds[$dealId] = $row['BuxalteriisId'] ?? '';
+        }
+    }
+    return $buxIds;
+}
+
 /**
- * Contract and payment columns of the sales report Excel: accounting ID (list 30), deal ID, buyer,
- * contract number, date and status, first/last payment and installment period (list 22),
- * planned vs paid (list 23) and debt. Expects rows from reportEnrichDealBedrooms().
- * Amounts are USD; percentages are of the contract value (DEAL_PRICE).
+ * Register values (reportRegisterColumns() keys) of report rows.
+ * $units: [row key => ['deal' => deal ID or '', 'product' => catalog row or null]].
+ * Project, project code and contract number come from the unit, else the deal. The buyer is the
+ * deal's contact, else the unit's owner contact, else the old-base name on the deal.
+ * Rows also carry BUYER_PHONE, STAGE_ID and BARTER (bool) for the reports that show them.
  */
-function reportEnrichSoldExport(array $products, $lang = 'ge')
+function reportBuildRegister(array $units)
 {
     $dealIds = [];
-    foreach ($products as $product) {
-        $dealId = reportExtractProductOwnerDealId($product);
+    foreach ($units as $unit) {
+        $dealId = reportExtractDealId($unit['deal'] ?? '');
         if ($dealId !== '') {
             $dealIds[$dealId] = true;
         }
     }
-    $dealIds = array_keys($dealIds);
-
     $deals = [];
-    if (!empty($dealIds)) {
+    foreach (array_chunk(array_keys($dealIds), 1000) as $chunk) {
         $res = CCrmDeal::GetList(
             ['ID' => 'ASC'],
-            ['ID' => $dealIds, 'CHECK_PERMISSIONS' => 'N'],
-            ['ID', 'STAGE_ID', 'CONTACT_ID', D_CONTRACT_DATE, D_PHASE, D_CADASTRAL, D_INNER_AREA, D_OLD_BUYER, D_CONTRACT_NO]
+            ['ID' => $chunk, 'CHECK_PERMISSIONS' => 'N'],
+            ['ID', 'STAGE_ID', 'CONTACT_ID', D_PROJECT, D_CONTRACT_DATE, D_CONTRACT_NO, D_OLD_BUYER, D_BARTER]
         );
         while ($row = $res->Fetch()) {
             $deals[(string)$row['ID']] = $row;
         }
     }
 
-    // Buyer: the deal's contact, else the product's owner contact, else the old-base name on the deal.
     $contactOf = [];
-    foreach ($products as $id => $product) {
-        $dealId = reportExtractProductOwnerDealId($product);
-        $contactId = (int)($deals[$dealId]['CONTACT_ID'] ?? 0);
-        if ($contactId <= 0) {
-            $ownerContact = ($product['OWNER_PERSONAL_CONTACT'] ?? '') ?: ($product['OWNER_CONTACT'] ?? '');
+    foreach ($units as $key => $unit) {
+        $contactId = (int)($deals[reportExtractDealId($unit['deal'] ?? '')]['CONTACT_ID'] ?? 0);
+        if ($contactId <= 0 && !empty($unit['product'])) {
+            $ownerContact = ($unit['product']['OWNER_PERSONAL_CONTACT'] ?? '') ?: ($unit['product']['OWNER_CONTACT'] ?? '');
             $contactId = (int)reportExtractDealId($ownerContact);
         }
-        $contactOf[$id] = $contactId;
+        $contactOf[$key] = $contactId;
     }
     $contacts = reportBatchContactDetails(array_unique(array_values($contactOf)));
+    $buxIds = reportGetBuxIds();
 
-    $buxIds = [];
-    foreach (reportLoadAllIblockPropertyRows(REPORT_BUX_IBLOCK) as $row) {
-        $dealId = reportExtractDealId($row['Deal'] ?? '');
-        if ($dealId !== '' && !isset($buxIds[$dealId])) {
-            $buxIds[$dealId] = $row['BuxalteriisId'] ?? '';
+    $register = [];
+    foreach ($units as $key => $unit) {
+        $dealId = reportExtractDealId($unit['deal'] ?? '');
+        $deal = $deals[$dealId] ?? [];
+        $product = $unit['product'] ?: [];
+        $contact = $contacts[$contactOf[$key]] ?? [];
+        $project = trim((string)reportScalarProp($product[F_PROJECT] ?? ''));
+        if ($project === '') {
+            $project = trim((string)reportScalarProp($deal[D_PROJECT] ?? ''));
+        }
+        $contractNo = trim((string)($product[F_CONTRACT_NO] ?? ''));
+        if ($contractNo === '') {
+            $contractNo = trim((string)($deal[D_CONTRACT_NO] ?? ''));
+        }
+
+        $register[$key] = [
+            'BUX_ID' => $buxIds[$dealId] ?? '',
+            'DEAL_ID' => $dealId,
+            'PROJECT_NAME' => reportFilterLabel($project),
+            'PROJECT_CODE' => trim((string)($product[F_PROJECT_CODE] ?? '')),
+            'CONTRACT_NO' => $contractNo,
+            'CONTRACT_DATE' => (string)($deal[D_CONTRACT_DATE] ?? ''),
+            'BUYER' => ($contact['NAME'] ?? '') !== '' ? $contact['NAME'] : trim((string)($deal[D_OLD_BUYER] ?? '')),
+            'BUYER_ID' => $contact['PERSONAL_ID'] ?? '',
+            'BUYER_PHONE' => $contact['PHONE'] ?? '',
+            'STAGE_ID' => (string)($deal['STAGE_ID'] ?? ''),
+            'BARTER' => (string)reportScalarProp($deal[D_BARTER] ?? '') === D_BARTER_YES,
+        ];
+    }
+    return $register;
+}
+
+/** reportBuildRegister() rows by deal ID; the unit is the deal's catalog product. */
+function reportDealRegister(array $dealIds)
+{
+    $productsByDeal = [];
+    foreach (reportGetProductsForDeals($dealIds) as $row) {
+        $productsByDeal[reportExtractDealId($row['OWNER_DEAL'] ?? '')] = $row;
+    }
+    $units = [];
+    foreach ($dealIds as $dealId) {
+        $dealId = reportExtractDealId($dealId);
+        if ($dealId !== '') {
+            $units[$dealId] = ['deal' => $dealId, 'product' => $productsByDeal[$dealId] ?? null];
+        }
+    }
+    return reportBuildRegister($units);
+}
+
+/** Register columns of one row as Excel values: accounting code and deal ID as numbers. */
+function reportRegisterExcelRow(array $register)
+{
+    $row = [];
+    foreach (array_keys(reportRegisterColumns()) as $key) {
+        $value = $register[$key] ?? '';
+        $row[$key] = in_array($key, ['BUX_ID', 'DEAL_ID'], true) && is_numeric($value) ? $value + 0 : $value;
+    }
+    return $row;
+}
+
+/**
+ * Contract and payment columns of the sales report Excel: the register (reportBuildRegister()),
+ * contract status, first/last payment and installment period (list 22), planned vs paid (list 23)
+ * and debt. Expects rows from reportEnrichDealBedrooms().
+ * Amounts are USD; percentages are of the contract value (DEAL_PRICE).
+ */
+function reportEnrichSoldExport(array $products, $lang = 'ge')
+{
+    $units = [];
+    $dealIds = [];
+    foreach ($products as $id => $product) {
+        $dealId = reportExtractProductOwnerDealId($product);
+        $units[$id] = ['deal' => $dealId, 'product' => $product];
+        if ($dealId !== '') {
+            $dealIds[$dealId] = true;
+        }
+    }
+    $dealIds = array_keys($dealIds);
+    $register = reportBuildRegister($units);
+
+    $deals = [];
+    if (!empty($dealIds)) {
+        $res = CCrmDeal::GetList(
+            ['ID' => 'ASC'],
+            ['ID' => $dealIds, 'CHECK_PERMISSIONS' => 'N'],
+            ['ID', D_PHASE, D_CADASTRAL, D_INNER_AREA]
+        );
+        while ($row = $res->Fetch()) {
+            $deals[(string)$row['ID']] = $row;
         }
     }
 
@@ -665,6 +837,7 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
     $statusLabels = $lang === 'eng'
         ? ['WON' => 'Active', 'LOSE' => 'Cancelled']
         : ['WON' => 'აქტიური', 'LOSE' => 'გაუქმებული'];
+    $barterLabel = $lang === 'eng' ? 'Barter' : 'ბარტერი';
     $stageNames = CCrmStatus::GetStatusList('DEAL_STAGE');
     $formatDate = static function ($row) {
         return ($row && $row['date']) ? $row['date']->format('d/m/Y') : '';
@@ -673,7 +846,6 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
     foreach ($products as $id => $product) {
         $dealId = reportExtractProductOwnerDealId($product);
         $deal = $deals[$dealId] ?? [];
-        $contact = $contacts[$contactOf[$id]] ?? [];
         $contract = (float)($product['DEAL_PRICE'] ?? 0);
         $percent = static function ($amount) use ($contract) {
             return $contract > 0 ? round($amount / $contract * 100, 2) : '';
@@ -702,23 +874,15 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
         list($first, $last, $installments) = reportSplitSchedule($schedules[$dealId] ?? []);
         $installmentDates = array_values(array_filter(array_map($formatDate, $installments)));
 
-        $stage = (string)($deal['STAGE_ID'] ?? '');
+        $stage = $register[$id]['STAGE_ID'];
         $cadastral = trim((string)($product[F_CADASTRAL] ?? ''));
         $innerArea = trim((string)($product[F_INNER_AREA] ?? ''));
-        $contractNo = trim((string)($product[F_CONTRACT_NO] ?? ''));
 
-        $products[$id] = array_merge($product, [
-            'BUX_ID' => $buxIds[$dealId] ?? '',
-            'DEAL_ID' => $dealId,
-            'PROJECT_CODE' => trim((string)($product[F_PROJECT_CODE] ?? '')),
-            'CONTRACT_NO' => $contractNo !== '' ? $contractNo : trim((string)($deal[D_CONTRACT_NO] ?? '')),
-            'CONTRACT_DATE' => (string)($deal[D_CONTRACT_DATE] ?? ''),
-            'BUYER' => ($contact['NAME'] ?? '') !== ''
-                ? $contact['NAME']
-                : trim((string)($deal[D_OLD_BUYER] ?? '')),
-            'BUYER_ID' => $contact['PERSONAL_ID'] ?? '',
-            'BUYER_PHONE' => $contact['PHONE'] ?? '',
-            'CONTRACT_STATUS' => $statusLabels[$stage] ?? ($stageNames[$stage] ?? $stage),
+        $products[$id] = array_merge($product, $register[$id], [
+            // a barter contract stays "barter" unless it was cancelled
+            'CONTRACT_STATUS' => $register[$id]['BARTER'] && $stage !== 'LOSE'
+                ? $barterLabel
+                : ($statusLabels[$stage] ?? ($stageNames[$stage] ?? $stage)),
             'CADASTRAL' => $cadastral !== '' ? $cadastral : trim((string)($deal[D_CADASTRAL] ?? '')),
             'PHASE' => trim((string)($deal[D_PHASE] ?? '')),
             'INNER_AREA' => $innerArea !== '' ? $innerArea : trim((string)($deal[D_INNER_AREA] ?? '')),
@@ -811,9 +975,16 @@ function reportParseAmount($value)
     return is_numeric($text) ? round((float)$text, 2) : 0;
 }
 
+/** The unit's deal: ownerDeal, else the older OWNER_DEAL link, else DEAL_FROM_ROWS. */
 function reportExtractProductOwnerDealId(array $product)
 {
-    return reportExtractDealId($product['ownerDeal'] ?? '');
+    foreach (['ownerDeal', 'OWNER_DEAL', 'DEAL_FROM_ROWS'] as $key) {
+        $dealId = reportExtractDealId($product[$key] ?? '');
+        if ($dealId !== '') {
+            return $dealId;
+        }
+    }
+    return '';
 }
 
 /**

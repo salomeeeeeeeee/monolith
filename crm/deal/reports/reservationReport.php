@@ -24,13 +24,9 @@ $t = array_merge($t, [
     'col_area' => $lang === 'eng' ? 'Total Area (m²)' : 'ჯამური ფართი (m²)',
     'col_price' => $lang === 'eng' ? 'Amount ($)' : 'თანხა ($)',
     'no_data' => $lang === 'eng' ? 'No reserved deals found.' : 'დაჯავშნილი დილები არ მოიძებნა.',
-    'xls_deal' => $lang === 'eng' ? 'Deal#' : 'გარიგება#',
-    'xls_client' => $lang === 'eng' ? 'Client Name' : 'კლიენტის სახელი',
-    'xls_project' => $lang === 'eng' ? 'Project' : 'პროექტი',
     'xls_block' => $lang === 'eng' ? 'Block' : 'ბლოკი',
     'xls_unit' => $lang === 'eng' ? 'Unit Name' : 'დასახელება',
     'xls_unit_no' => $lang === 'eng' ? 'Apartment №' : 'ბინის №',
-    'xls_contract_no' => $lang === 'eng' ? 'Contract No.' : 'ხელშეკრულების ნომერი',
     'xls_type' => $lang === 'eng' ? 'Property Type' : 'ქონების ტიპი',
     'xls_bedrooms' => $lang === 'eng' ? 'Bedrooms' : 'საძინებლები',
     'xls_area' => $lang === 'eng' ? 'Total Area (sqm)' : 'სრული ფართი (კვ.მ)',
@@ -61,7 +57,6 @@ $allDeals = reportGetDealsByFilter(['STAGE_ID' => REPORT_RESERVATION_STAGES], [
     D_BEDROOMS,
     D_RESERVATION_START,
     D_RESERVATION_DATE,
-    D_CONTRACT_NO,
 ]);
 $deals = array_filter($allDeals, static function ($deal) use ($filterProject, $filterBlock, $filterResponsible) {
     return reportValueMatches($deal[D_PROJECT] ?? '', $filterProject)
@@ -103,7 +98,6 @@ foreach ($deals as &$deal) {
     $deal['TOTAL_AREA'] = $product ? (float)($product[F_TOTAL_AREA] ?? 0) : 0;
     $deal['UNIT_NAME'] = $product['NAME'] ?? '';
     $deal['UNIT_NO'] = $product[F_UNIT_NO] ?? '';
-    $deal['CONTRACT_NO'] = trim((string)($deal[D_CONTRACT_NO] ?? '')) ?: ($product[F_CONTRACT_NO] ?? '');
     $deal['BEDROOMS'] = ($deal[D_BEDROOMS] ?? '') !== ''
         ? $deal[D_BEDROOMS]
         : ($product[F_BEDROOMS] ?? '');
@@ -115,6 +109,11 @@ foreach ($deals as &$deal) {
     }
 }
 unset($deal);
+
+// Excel: the accountants' register columns first.
+foreach (reportDealRegister(array_keys($deals)) as $dealId => $register) {
+    $deals[$dealId] = array_merge($deals[$dealId], reportRegisterExcelRow($register));
+}
 
 $resArray = [];
 foreach ($deals as $deal) {
@@ -244,8 +243,8 @@ reportRenderFilterForm(
 const dealsData = <?= json_encode(array_values($deals), JSON_UNESCAPED_UNICODE) ?>;
 const t = <?= json_encode($t, JSON_UNESCAPED_UNICODE) ?>;
 const prodTypeMap = <?= json_encode($t['prod_types'], JSON_UNESCAPED_UNICODE) ?>;
+const registerColumns = <?= json_encode(reportRegisterColumns($lang), JSON_UNESCAPED_UNICODE) ?>;
 const typeField = <?= json_encode(D_TYPE) ?>;
-const projectField = <?= json_encode(D_PROJECT) ?>;
 const blockField = <?= json_encode(D_BLOCK) ?>;
 const startField = <?= json_encode(D_RESERVATION_START) ?>;
 const dateField = <?= json_encode(D_RESERVATION_DATE) ?>;
@@ -281,16 +280,12 @@ function exportToExcel() {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Reservation Summary');
 
-    const fields = [
-        { key: 'ID', label: t.xls_deal },
-        { key: 'CONTACT_FULL_NAME', label: t.xls_client },
-        { key: projectField, label: t.xls_project },
+    const fields = Object.keys(registerColumns).map(function(key) { return { key: key, label: registerColumns[key] }; }).concat([
         { key: typeField, label: t.xls_type },
         { key: 'BEDROOMS', label: t.xls_bedrooms },
         { key: blockField, label: t.xls_block },
         { key: 'UNIT_NAME', label: t.xls_unit },
         { key: 'UNIT_NO', label: t.xls_unit_no },
-        { key: 'CONTRACT_NO', label: t.xls_contract_no },
         { key: 'TOTAL_AREA', label: t.xls_area },
         { key: 'KVM_PRICE', label: t.xls_price_sqm },
         { key: 'AMOUNT', label: t.xls_price },
@@ -298,7 +293,7 @@ function exportToExcel() {
         { key: startField, label: t.xls_reserved_on },
         { key: dateField, label: t.xls_reserved_until },
         { key: 'STAGE_LABEL', label: t.xls_stage },
-    ];
+    ]);
     const rows = dealsData.map(function(d) {
         const row = {};
         fields.forEach(function(f) {
