@@ -2717,3 +2717,15 @@ $canChangeStageAlways = $dealId <= 0 || in_array((int)$userID, $stageEditorUsers
     setInterval(syncStageOwnerLock, 300);
 })();
 </script>
+
+<?php
+// user_irhcfh47 — hide the section "Edit" link for everyone except users 1 and 3
+if (!in_array((int)$userID, [1, 3], true)):
+?>
+<style>
+[data-cid="user_irhcfh47"] .ui-entity-editor-header-actions,
+[data-cid="user_irhcfh47"] .ui-entity-editor-header-edit-lnk {
+    display: none !important;
+}
+</style>
+<?php endif; ?>
