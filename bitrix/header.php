@@ -233,6 +233,20 @@ if(pathname[1] == "crm"){
 
         // ვერ შეცვალონ ეტაპი გარე ხედვით
         if (urlTest[0] == "crm" && urlTest[1] == "deal"){
+
+                // კანბანში "Quick Deal" (+) ღილაკის და სწრაფი ფორმის დამალვა
+                if (!document.getElementById("hideKanbanQuickAddStyle")) {
+                    const hideQuickAddStyle = document.createElement("style");
+                    hideQuickAddStyle.id = "hideKanbanQuickAddStyle";
+                    hideQuickAddStyle.textContent = `
+                        .crm-kanban-column-add-item-button,
+                        .crm-kanban-quick-form {
+                            display: none !important;
+                        }
+                    `;
+                    document.head.appendChild(hideQuickAddStyle);
+                }
+
                 setInterval(() => {
                     // ლისტ ხედვა
                     stageCvlileba=document.querySelectorAll('.crm-list-stage-bar-table');
