@@ -1170,7 +1170,7 @@ BX.ready(function() {
 
 
 		// Restricted stages for user group 17
-var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'UC_NSTB3H', 'UC_NJ7A78'];
+var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'UC_NSTB3H', 'UC_NJ7A78', 'PREPAYMENT_INVOICE', 'EXECUTING'];
 var isGroup17 = <?php echo in_array(17, $userGroups) ? 'true' : 'false'; ?>;
 var isAdmin = (userID == 1 || userID == 3);
 
@@ -1352,7 +1352,7 @@ if (eventTab) eventTab.style.display = '';
 
 
      // more_button
-var hideMoreStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78'];
+var hideMoreStages = ['NEW', 'UC_WX29F1', 'PREPARATION', 'PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78','WON'];
 var moreBtn = document.getElementById('crm_scope_detail_c_deal__more_button');
 if (moreBtn) {
     var isAdminForMoreBtn = (userID == 1 || userID == 3);
