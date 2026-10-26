@@ -91,13 +91,34 @@ if (!function_exists('sellFormMoneyFormat')) {
     }
 }
 
+// ── ცარიელი მნიშვნელობის შემოწმება (სტრიქონი ან მრავლობითი ველის მასივი) ──
+if (!function_exists('sellFormIsEmptyValue')) {
+    function sellFormIsEmptyValue($v) {
+        if (is_array($v)) {
+            foreach ($v as $item) {
+                if (!sellFormIsEmptyValue($item)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        $v = trim((string)$v);
+        return $v === '' || $v === '0';
+    }
+}
+
 $dealRow = CCrmDeal::GetListEx(
     [],
     ['ID' => $deal_id, 'CHECK_PERMISSIONS' => 'N'],
     false,
     false,
-    ['ID', 'OPPORTUNITY', 'CURRENCY_ID']
+    ['ID', 'OPPORTUNITY', 'CURRENCY_ID', 'SOURCE_ID', 'UF_CRM_1785491867']
 )->Fetch();
+
+// ── წყარო "სააგენტო/აგენტი" → ბროკერის ველი (UF_CRM_1785491867) სავალდებულოა ──
+$agencySourceId = 'UC_HN9W32';
+$brokerMissing  = ($dealRow['SOURCE_ID'] ?? '') === $agencySourceId
+    && sellFormIsEmptyValue($dealRow['UF_CRM_1785491867'] ?? '');
 
 $isGel       = !empty($dealRow['CURRENCY_ID']) && $dealRow['CURRENCY_ID'] === 'GEL';
 $opportunity = round(sellFormMoneyToNum($dealRow['OPPORTUNITY'] ?? 0), 2);
@@ -212,23 +233,33 @@ ob_end_clean();
     padding: 28px 32px 32px;
   }
 
-  /* pending request notice */
-  .pending-note {
+  /* pending request / missing broker notices */
+  .pending-note,
+  .broker-note {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    background: #fffbeb;
-    border: 1px solid #fde68a;
     border-radius: 10px;
     padding: 14px 16px;
     margin-bottom: 24px;
-    color: #92400e;
     font-size: 13px;
     font-weight: 500;
     line-height: 1.5;
   }
-  .pending-note svg { flex-shrink: 0; margin-top: 2px; }
-  .pending-note + .section-label { margin-top: 0; }
+  .pending-note {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+  }
+  .broker-note {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    color: #be123c;
+  }
+  .pending-note svg,
+  .broker-note svg { flex-shrink: 0; margin-top: 2px; }
+  .pending-note + .section-label,
+  .broker-note + .section-label { margin-top: 0; }
 
   /* section label */
   .section-label {
@@ -485,6 +516,16 @@ ob_end_clean();
     </div>
     <?php endif; ?>
 
+    <?php if ($brokerMissing): ?>
+    <div class="broker-note">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>დილის წყაროა „სააგენტო/აგენტი“, მაგრამ დილის ველი "სააგენტო/აგენტი" შევსებული არ არის. გაყიდვის მოთხოვნის გასაგზავნად ჯერ შეავსეთ აღნიშნული ველი დილზე.</span>
+    </div>
+    <?php endif; ?>
+
     <div class="section-label">ხელშეკრულება</div>
 
     <div class="field">
@@ -554,7 +595,7 @@ ob_end_clean();
   <div id="status"></div>
 
   <div class="panel-footer">
-    <button class="btn-save" id="saveBtn" onclick="saveSell()"<?= $sellPending ? ' disabled' : '' ?>>
+    <button class="btn-save" id="saveBtn" onclick="saveSell()"<?= ($sellPending || $brokerMissing) ? ' disabled' : '' ?>>
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
         <path d="M2 8l4 4 8-9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -589,6 +630,7 @@ ob_end_clean();
 var selectedFile = null;
 var planCheck = <?= json_encode($planCheck, JSON_UNESCAPED_UNICODE) ?>;
 var sellPending = <?= $sellPending ? 'true' : 'false' ?>;
+var brokerMissing = <?= $brokerMissing ? 'true' : 'false' ?>;
 
 (function(){
   var dz = document.getElementById('dropZone');
@@ -639,6 +681,12 @@ function saveSell() {
   // მიმდინარე მოთხოვნა ჯერ არ არის უარყოფილი → ახალს ვერ გავაგზავნით
   if (sellPending) {
     setStatus('error', 'გაყიდვის მოთხოვნა უკვე გაგზავნილია და ელოდება დადასტურებას');
+    return;
+  }
+
+  // წყარო "სააგენტო/აგენტი" და ბროკერი ცარიელია → არაფერი იგზავნება
+  if (brokerMissing) {
+    setStatus('error', 'გთხოვთ შეავსოთ ველი "სააგენტო/აგენტი" დილზე');
     return;
   }
 

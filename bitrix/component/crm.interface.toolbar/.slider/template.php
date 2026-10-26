@@ -27,6 +27,7 @@ CJSCore::RegisterExt('popup_menu', [
 Extension::load('crm.client-selector');
 Extension::load('ui.buttons');
 Extension::load('ui.buttons.icons');
+Extension::load('main.popup');
 
 $toolbarID = $arParams['TOOLBAR_ID'];
 $prefix =  $toolbarID.'_';
@@ -310,6 +311,10 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
             div.insertAdjacentHTML("beforeend",
                 '<div onclick="openJavshnisVadaPopup();" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:linear-gradient(135deg,#3b5bdb,#7048e8);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(59,91,219,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(59,91,219,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(59,91,219,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#fff" stroke-width="1.4"/><path d="M8 5v3.5M8 11v.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>რეზერვაციის ცვლილება</div>'
             );
+            // ხელშეკრულების ეტაპი — ბიზნეს-პროცესი #98
+            div.insertAdjacentHTML("beforeend",
+                '<div onclick="openContractStagePopup();" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;margin-left:8px;background:linear-gradient(135deg,#0b7285,#1098ad);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(11,114,133,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(11,114,133,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(11,114,133,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7l3 3v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M5 10.5c1-1.5 1.8-1.5 2.3-.4.4.9 1 .9 1.7-.1" stroke="#fff" stroke-width="1.2" stroke-linecap="round" fill="none"/><line x1="5" y1="6.5" x2="9" y2="6.5" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/></svg>ხელშეკრულების ეტაპი</div>'
+            );
         }
 
         if (stage2 === "EXECUTING") {
@@ -373,6 +378,100 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
                 }
             );
         }
+    };
+
+    // ── ხელშეკრულების ეტაპი: დადასტურების popup → ბიზნეს-პროცესი #98 ──
+    window.openContractStagePopup = function() {
+        if (typeof BX === 'undefined' || !BX.PopupWindow) {
+            alert('Popup library is not loaded');
+            return;
+        }
+
+        var popupId = 'contractStagePopup_' + dealId2;
+        if (BX.PopupWindowManager && BX.PopupWindowManager.getPopupById) {
+            var old = BX.PopupWindowManager.getPopupById(popupId);
+            if (old) old.destroy();
+        }
+
+        var content = document.createElement('div');
+        content.style.cssText = 'padding:6px 4px 2px;max-width:360px;font-family:\'Noto Sans Georgian\',sans-serif;';
+        content.innerHTML =
+            '<div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;background:#fff4e6;border:1px solid #ffd8a8;border-radius:10px;color:#a14a00;font-size:13px;line-height:1.55;">' +
+                '<svg width="18" height="18" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;margin-top:1px;"><path d="M8 1.8l6.5 11.4H1.5L8 1.8z" stroke="#e67700" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6.5v3M8 11.3v.4" stroke="#e67700" stroke-width="1.5" stroke-linecap="round"/></svg>' +
+                '<span>პროცესის გაშვებით დილი გადავა ხელშეკრულების ეტაპზე</span>' +
+            '</div>' +
+            '<div id="contractStageError_' + dealId2 + '" style="display:none;margin-top:10px;padding:8px 12px;background:#fff5f5;border:1px solid #ffc9c9;border-radius:8px;color:#c92a2a;font-size:12px;"></div>';
+
+        var popup = new BX.PopupWindow(popupId, null, {
+            content: content,
+            titleBar: 'ხელშეკრულების ეტაპი',
+            closeIcon: true,
+            closeByEsc: true,
+            autoHide: false,
+            draggable: true,
+            overlay: { opacity: 30 },
+            minWidth: 380,
+            events: {
+                onPopupClose: function() { this.destroy(); }
+            },
+            buttons: [
+                new BX.PopupWindowButton({
+                    text: 'პროცესის გაშვება',
+                    className: 'ui-btn ui-btn-success',
+                    events: {
+                        click: function() {
+                            var btn = this;
+                            var node = btn.buttonNode;
+                            if (node.dataset.busy) return;
+                            node.dataset.busy = '1';
+                            BX.addClass(node, 'ui-btn-wait');
+
+                            var errBox = document.getElementById('contractStageError_' + dealId2);
+                            errBox.style.display = 'none';
+
+                            BX.ajax({
+                                url: '/rest/local/api/projects/startContractStageWorkflow.php',
+                                method: 'POST',
+                                dataType: 'json',
+                                data: {
+                                    deal_id: dealId2,
+                                    sessid: BX.bitrix_sessid()
+                                },
+                                onsuccess: function(res) {
+                                    if (res && res.status === 'success') {
+                                        btn.popupWindow.close();
+                                        if (BX.UI && BX.UI.Notification) {
+                                            BX.UI.Notification.Center.notify({ content: 'პროცესი წარმატებით გაეშვა', autoHideDelay: 2500 });
+                                        }
+                                        setTimeout(function() { location.reload(); }, 1200);
+                                    } else {
+                                        delete node.dataset.busy;
+                                        BX.removeClass(node, 'ui-btn-wait');
+                                        errBox.textContent = (res && res.message) ? res.message : 'შეცდომა პროცესის გაშვებისას';
+                                        errBox.style.display = 'block';
+                                    }
+                                },
+                                onfailure: function() {
+                                    delete node.dataset.busy;
+                                    BX.removeClass(node, 'ui-btn-wait');
+                                    errBox.textContent = 'სერვერთან კავშირის შეცდომა';
+                                    errBox.style.display = 'block';
+                                }
+                            });
+                        }
+                    }
+                }),
+                new BX.PopupWindowButtonLink({
+                    text: 'გაუქმება',
+                    className: 'popup-window-button-link-cancel',
+                    events: {
+                        click: function() { this.popupWindow.close(); }
+                    }
+                })
+            ]
+        });
+
+        popup.show();
     };
 
     window.openCalculatorPopup = function() {

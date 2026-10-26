@@ -17,6 +17,10 @@ $sellTemplateId = 26;
 // ხელშეკრულებების სია
 $agreementIblockId = 18;
 
+// წყარო "სააგენტო/აგენტი" → ბროკერის ველი სავალდებულოა
+$agencySourceId = 'UC_HN9W32';
+$brokerFieldId  = 'UF_CRM_1785491867';
+
 /** Absolute public URL with encoded filename (spaces, (), etc.) */
 function buildPassportFileLink($fileId) {
     $path = CFile::GetPath($fileId);
@@ -79,6 +83,22 @@ if (!function_exists('hasPendingSellRequest')) {
     }
 }
 
+// ── Helper: empty value check (string or multiple-field array) ──
+if (!function_exists('sellActionIsEmptyValue')) {
+    function sellActionIsEmptyValue($v) {
+        if (is_array($v)) {
+            foreach ($v as $item) {
+                if (!sellActionIsEmptyValue($item)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        $v = trim((string)$v);
+        return $v === '' || $v === '0';
+    }
+}
+
 function sendJsonAndExit($resArr) {
     ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
@@ -100,6 +120,28 @@ if (hasPendingSellRequest($dealId, $sellTemplateId)) {
     sendJsonAndExit([
         "status"  => 409,
         "message" => "გაყიდვის მოთხოვნა უკვე გაგზავნილია და ელოდება დადასტურებას",
+    ]);
+}
+
+// ── Agency source requires a broker: nothing is uploaded or updated without it ──
+$dealCheckRow = CCrmDeal::GetListEx(
+    [],
+    ['ID' => $dealId, 'CHECK_PERMISSIONS' => 'N'],
+    false,
+    false,
+    ['ID', 'SOURCE_ID', $brokerFieldId]
+)->Fetch();
+
+if (!$dealCheckRow) {
+    sendJsonAndExit(["status" => 404, "message" => "დილი ვერ მოიძებნა"]);
+}
+
+if (($dealCheckRow['SOURCE_ID'] ?? '') === $agencySourceId
+    && sellActionIsEmptyValue($dealCheckRow[$brokerFieldId] ?? '')
+) {
+    sendJsonAndExit([
+        "status"  => 422,
+        "message" => "დილის წყაროა „სააგენტო/აგენტი“ — შეავსეთ ველი „ბროკერი“",
     ]);
 }
 

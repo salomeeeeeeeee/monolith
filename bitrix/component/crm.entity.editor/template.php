@@ -1166,51 +1166,65 @@ button.ui-btn.ui-btn-icon-setting {
 BX.ready(function() {
     var lastStage = null;
 
-	setInterval(function() {
+    // Restricted stages for non-admins (group 17 included) - no exceptions
+    var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'UC_NSTB3H', 'UC_NJ7A78', 'PREPAYMENT_INVOICE', 'EXECUTING'];
+    var isAdminForStages = (userID == 1 || userID == 3);
 
+    function isStageCellBlocked(cellStageId) {
+        return restrictedStagesForGroup17.indexOf(cellStageId) !== -1;
+    }
 
-		// Restricted stages for user group 17
-var restrictedStagesForGroup17 = ['FINAL_INVOICE', 'UC_NSTB3H', 'UC_NJ7A78', 'PREPAYMENT_INVOICE', 'EXECUTING'];
-var isGroup17 = <?php echo in_array(17, $userGroups) ? 'true' : 'false'; ?>;
-var isAdmin = (userID == 1 || userID == 3);
+    // Re-evaluated every tick, so the lock follows the deal's current stage
+    function syncRestrictedStageCells() {
+        document.querySelectorAll('[data-id]').forEach(function(cell) {
+            var cellStageId = cell.getAttribute('data-id');
+            if (restrictedStagesForGroup17.indexOf(cellStageId) === -1) {
+                return;
+            }
 
-if (!isAdmin) {
-    // Bitrix24 renders the stage/phase bar with cells carrying data-id = stage code.
-    // Common containers: .crm-entity-widget-status, .crm-entity-stream-section-status
-    var stageCells = document.querySelectorAll('[data-id]');
-    stageCells.forEach(function(cell) {
-        var cellStageId = cell.getAttribute('data-id');
-        if (restrictedStagesForGroup17.indexOf(cellStageId) !== -1) {
-            if (!cell.hasAttribute('data-dmg-stage-locked')) {
+            if (isStageCellBlocked(cellStageId)) {
                 cell.setAttribute('data-dmg-stage-locked', 'true');
                 cell.style.pointerEvents = 'none';
                 cell.style.cursor = 'not-allowed';
+            } else if (cell.hasAttribute('data-dmg-stage-locked')) {
+                cell.removeAttribute('data-dmg-stage-locked');
+                cell.style.pointerEvents = '';
+                cell.style.cursor = '';
+            }
+        });
+    }
 
-                // Belt-and-suspenders: block the click itself in capture phase
-                cell.addEventListener('click', function(e) {
+    if (!isAdminForStages) {
+        // Capture-phase block in case the pointer-events lock is bypassed (bound once)
+        if (!window.__dmgRestrictedStageClickBound) {
+            window.__dmgRestrictedStageClickBound = true;
+            document.addEventListener('click', function(e) {
+                var cell = e.target && e.target.closest && e.target.closest('[data-id]');
+                if (cell && isStageCellBlocked(cell.getAttribute('data-id'))) {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
-                }, true);
-            }
-        }
-    });
-
-
-setInterval(() => {
-                saveGilaki=document.querySelector('.webform-small-button.webform-small-button-accept');
-        
-                if(saveGilaki){    
-                    saveGilaki.style.display = "none";        
                 }
+            }, true);
+        }
 
-            },100);
-			
-}
+        // Save button hide - started once (previously a new interval was created every 500ms)
+        if (!window.__dmgSaveBtnHideBound) {
+            window.__dmgSaveBtnHideBound = true;
+            setInterval(function() {
+                var saveGilaki = document.querySelector('.webform-small-button.webform-small-button-accept');
+                if (saveGilaki) {
+                    saveGilaki.style.display = 'none';
+                }
+            }, 100);
+        }
+    }
 
+	setInterval(function() {
 
-
-
+        if (!isAdminForStages) {
+            syncRestrictedStageCells();
+        }
 
     var editor = BX.Crm && BX.Crm.EntityEditor && BX.Crm.EntityEditor.getDefault && BX.Crm.EntityEditor.getDefault();
     var model = editor && editor.getModel && editor.getModel();
