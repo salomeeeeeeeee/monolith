@@ -569,7 +569,8 @@ function reportEnrichReservationMeta(array $products)
 
 /**
  * Attach bedroom count, barter and deal-side pricing from linked OWNER_DEAL onto product rows.
- * Adds DEAL_PRICE (deal amount, OPPORTUNITY) and DEAL_KVM_PRICE (deal price per sqm).
+ * Adds DEAL_PRICE (deal amount, OPPORTUNITY), DEAL_KVM_PRICE (deal price per sqm) and
+ * DEAL_CONTRACT_DATE (the deal's contract date, as stored).
  * DEAL_RESPONSIBLE_NAME falls back to the deal's responsible: most products carry none.
  */
 function reportEnrichDealBedrooms(array $products)
@@ -588,7 +589,7 @@ function reportEnrichDealBedrooms(array $products)
         $res = CCrmDeal::GetList(
             ['ID' => 'ASC'],
             ['ID' => array_keys($dealIds), 'CHECK_PERMISSIONS' => 'N'],
-            ['ID', 'OPPORTUNITY', 'ASSIGNED_BY_ID', D_BEDROOMS, D_BARTER, D_KVM_PRICE]
+            ['ID', 'OPPORTUNITY', 'ASSIGNED_BY_ID', D_BEDROOMS, D_BARTER, D_KVM_PRICE, D_CONTRACT_DATE]
         );
         while ($row = $res->Fetch()) {
             $dealMeta[(string)$row['ID']] = $row;
@@ -604,6 +605,7 @@ function reportEnrichDealBedrooms(array $products)
         $products[$id][D_BARTER] = $meta ? (string)($meta[D_BARTER] ?? '') : '';
         $products[$id]['DEAL_PRICE'] = $meta ? reportParseAmount($meta['OPPORTUNITY'] ?? '') : 0;
         $products[$id]['DEAL_KVM_PRICE'] = $meta ? reportParseAmount($meta[D_KVM_PRICE] ?? '') : 0;
+        $products[$id]['DEAL_CONTRACT_DATE'] = $meta ? (string)($meta[D_CONTRACT_DATE] ?? '') : '';
         if (($product['DEAL_RESPONSIBLE_NAME'] ?? '') === '' && $meta) {
             $products[$id]['DEAL_RESPONSIBLE_NAME'] = $userNames[(int)$meta['ASSIGNED_BY_ID']] ?? '';
         }
@@ -1515,6 +1517,33 @@ function reportFilterProducts(array $products, array $filters)
     return $filtered;
 }
 
+/** Y-m-d date from GET, or null when it is missing or malformed. */
+function reportGetDateFilter($name)
+{
+    $value = trim((string)($_GET[$name] ?? ''));
+    $date = DateTime::createFromFormat('!Y-m-d', $value);
+    return $date && $date->format('Y-m-d') === $value ? $value : null;
+}
+
+/**
+ * Rows whose $dateKey date is within $fromDate..$toDate (Y-m-d, inclusive; null = open end).
+ * Once a bound is set, rows without a date are left out.
+ */
+function reportFilterByDateRange(array $rows, $dateKey, $fromDate, $toDate)
+{
+    if ($fromDate === null && $toDate === null) {
+        return $rows;
+    }
+    return array_filter($rows, static function ($row) use ($dateKey, $fromDate, $toDate) {
+        $date = reportParseDate($row[$dateKey] ?? '');
+        if (!$date) {
+            return false;
+        }
+        $day = $date->format('Y-m-d');
+        return ($fromDate === null || $day >= $fromDate) && ($toDate === null || $day <= $toDate);
+    });
+}
+
 /**
  * <select multiple> that reportPageEnd() turns into a checkbox dropdown.
  * Nothing selected means "all" ($allLabel is shown then).
@@ -1575,6 +1604,16 @@ function reportRenderFilterForm($filters, $options, $labels, $lang, $schema = 'i
                         <?php reportRenderMultiSelect($field['name'], $field['id'], $field['all'], $field['options'], (array)$field['value'], !empty($field['assoc'])); ?>
                     </div>
                 <?php endforeach; ?>
+                <?php if (array_key_exists('from_date', $filters)): ?>
+                    <div class="report-field">
+                        <label for="from_date"><?= $labels['filter_from_date'] ?></label>
+                        <input type="date" name="from_date" id="from_date" value="<?= htmlspecialchars($filters['from_date'] ?? '') ?>">
+                    </div>
+                    <div class="report-field">
+                        <label for="to_date"><?= $labels['filter_to_date'] ?></label>
+                        <input type="date" name="to_date" id="to_date" value="<?= htmlspecialchars($filters['to_date'] ?? '') ?>">
+                    </div>
+                <?php endif; ?>
             </div>
             <div class="report-filter__actions">
                 <button type="submit" class="btn btn-primary"><?= $labels['apply'] ?></button>

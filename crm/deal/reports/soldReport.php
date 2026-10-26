@@ -9,6 +9,8 @@ $APPLICATION->SetTitle('Sold Report');
 $lang = $_GET['lang'] ?? 'ge';
 $t = reportGetProductLabels($lang);
 $t = array_merge($t, [
+    'filter_from_date' => $lang === 'eng' ? 'Contract date from:' : 'ხელშ. თარიღიდან:',
+    'filter_to_date' => $lang === 'eng' ? 'Contract date to:' : 'ხელშ. თარიღამდე:',
     'h2_summary' => $lang === 'eng' ? 'Sales Summary' : 'გაყიდვების შეჯამება',
     'col_count' => $lang === 'eng' ? 'Count' : 'რაოდენობა',
     'col_area' => $lang === 'eng' ? 'Total Area (m²)' : 'ჯამური ფართი (m²)',
@@ -69,6 +71,9 @@ $filters = [
     'block' => reportGetFilterValues('block'),
     'barter' => reportGetFilterValues('barter'),
     'responsible' => reportGetFilterValues('responsible'),
+    // Period: the deal's contract date.
+    'from_date' => reportGetDateFilter('from_date'),
+    'to_date' => reportGetDateFilter('to_date'),
 ];
 
 $products = reportGetSoldProducts();
@@ -84,6 +89,7 @@ $filterOptions = [
     'responsibles' => reportGetUniqueValues($products, 'DEAL_RESPONSIBLE_NAME'),
 ];
 $filteredProducts = reportFilterProducts($products, $filters);
+$filteredProducts = reportFilterByDateRange($filteredProducts, 'DEAL_CONTRACT_DATE', $filters['from_date'], $filters['to_date']);
 
 // Excel button: rows of the sales sheets, fetched on demand (the payment lists are slow to read).
 if (($_GET['export'] ?? '') === 'rows') {

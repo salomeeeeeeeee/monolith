@@ -3,3 +3,6 @@ crm/deal/bank_integration/credentials.php
 
 # site webhook secret (X-Webhook-Secret) - only on the server
 local/php_interface/site_webhook_secret.php
+
+# agents module REST webhook URL - only on the server
+custom/agents/credentials.php
