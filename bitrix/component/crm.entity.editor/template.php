@@ -2743,3 +2743,94 @@ if (!in_array((int)$userID, [1, 3], true)):
 }
 </style>
 <?php endif; ?>
+
+<?php
+// Deal list grid (Deals tab on contact/company card) - stage bar frozen for everyone except users 1 and 3
+$canChangeStageFromGrid = in_array((int)$userID, [1, 3], true);
+if (!$canChangeStageFromGrid):
+?>
+<style>
+/* Wrapper keeps receiving the mouse, so it can show the "not allowed" cursor and the title */
+.main-grid .crm-list-stage-bar {
+    cursor: not-allowed !important;
+}
+
+/* The clickable segments get no mouse/touch events at all - Bitrix's handlers never fire */
+.main-grid .crm-list-stage-bar-table,
+.main-grid .crm-list-stage-bar-table * {
+    pointer-events: none !important;
+}
+</style>
+<script>
+(function() {
+    if (window.__dmgGridStageBarLockBound) {
+        return;
+    }
+    window.__dmgGridStageBarLockBound = true;
+
+    var LOCK_TITLE = 'სთეიჯის შეცვლა აქედან შეზღუდულია';
+
+    // Backup block, in case some element is still reachable
+    function blockGridStageBar(e) {
+        if (e.target && e.target.closest && e.target.closest('.main-grid .crm-list-stage-bar')) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
+    }
+    ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'dblclick'].forEach(function(type) {
+        window.addEventListener(type, blockGridStageBar, true);
+    });
+
+    // Tooltip on the wrapper (grid rows are re-rendered by AJAX, so re-apply)
+    setInterval(function() {
+        document.querySelectorAll('.main-grid .crm-list-stage-bar:not([data-dmg-grid-locked])').forEach(function(bar) {
+            bar.setAttribute('data-dmg-grid-locked', 'true');
+            bar.setAttribute('title', LOCK_TITLE);
+        });
+    }, 500);
+})();
+</script>
+<?php endif; ?>
+
+<script>
+// Deal timeline - hide workflow (bizproc) cards: "Workflow Completed / started ..."
+(function() {
+    if (window.__dmgHideWorkflowCardsBound) {
+        return;
+    }
+    window.__dmgHideWorkflowCardsBound = true;
+
+    var pathname = window.location.pathname.split('/');
+    if (pathname[2] !== 'deal' || pathname[3] !== 'details') {
+        return;
+    }
+
+    // Card header title, in every UI language you use
+    var WORKFLOW_TITLES = ['workflow', 'бизнес-процесс', 'ბიზნეს-პროცესი'];
+
+    function isWorkflowCard(card) {
+        var titleEl = card.querySelector('.crm-timeline__card-title, [class*="card-title"]');
+        var title = titleEl ? (titleEl.textContent || '').trim().toLowerCase() : '';
+        return WORKFLOW_TITLES.indexOf(title) !== -1;
+    }
+
+    function hideWorkflowCards() {
+        document.querySelectorAll('.crm-timeline__card:not([data-dmg-wf-checked])').forEach(function(card) {
+            card.setAttribute('data-dmg-wf-checked', 'true');
+            if (!isWorkflowCard(card)) {
+                return;
+            }
+            // Hide the whole timeline row (card + the round icon on the left)
+            var row = card.closest('.crm-entity-stream-section') || card.parentElement || card;
+            row.style.display = 'none';
+        });
+    }
+
+    hideWorkflowCards();
+
+    // New entries arrive live (pull) and on "load more" - re-check on every timeline change
+    var observer = new MutationObserver(hideWorkflowCards);
+    observer.observe(document.body, { childList: true, subtree: true });
+})();
+</script>

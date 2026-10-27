@@ -265,20 +265,29 @@ $this->EndViewTarget();
 $url2        = explode('/', "//{$_SERVER['HTTP_HOST']}{$_SERVER['REQUEST_URI']}");
 $dealId2     = $url2[6] ?? 0;
 
-function getDealInfoByIDToolbar2($dealID) {
-    $res = CCrmDeal::GetList(["ID" => "ASC"], ["ID" => $dealID], []);
+// განაცხადის რეგ.ნომერი (სრეს) — სავალდებულო ველი ხელშეკრულების ეტაპისთვის
+$regNumberField2 = 'UF_CRM_1782206133733';
+
+function getDealInfoByIDToolbar2($dealID, $regField) {
+    $res = CCrmDeal::GetList(
+        ["ID" => "ASC"],
+        ["ID" => $dealID],
+        ["ID", "STAGE_ID", $regField]
+    );
     if ($arDeal = $res->Fetch()) return $arDeal;
     return [];
 }
 
-$deal2       = getDealInfoByIDToolbar2($dealId2);
+$deal2       = getDealInfoByIDToolbar2($dealId2, $regNumberField2);
 $newStageId2 = $deal2["STAGE_ID"] ?? "";
+$regNumber2  = trim((string)($deal2[$regNumberField2] ?? ""));
 ?>
 
 <script>
 (function(){
-    var dealId2 = <?php echo json_encode($dealId2); ?>;
-    var stage2  = <?php echo json_encode($newStageId2); ?>;
+    var dealId2    = <?php echo json_encode($dealId2); ?>;
+    var stage2     = <?php echo json_encode($newStageId2); ?>;
+    var regNumber2 = <?php echo json_encode($regNumber2, JSON_UNESCAPED_UNICODE); ?>;
 
     // WON in default pipeline, or C1:WON / C2:WON ... in other pipelines
     var isWon = /(^|:)WON$/.test(stage2 || '');
@@ -381,6 +390,7 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
     };
 
     // ── ხელშეკრულების ეტაპი: დადასტურების popup → ბიზნეს-პროცესი #98 ──
+    // სავალდებულო ველი: განაცხადის რეგ.ნომერი (სრეს) — UF_CRM_1782206133733
     window.openContractStagePopup = function() {
         if (typeof BX === 'undefined' || !BX.PopupWindow) {
             alert('Popup library is not loaded');
@@ -393,6 +403,9 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
             if (old) old.destroy();
         }
 
+        var inputId = 'contractStageRegNumber_' + dealId2;
+        var errId   = 'contractStageError_' + dealId2;
+
         var content = document.createElement('div');
         content.style.cssText = 'padding:6px 4px 2px;max-width:360px;font-family:\'Noto Sans Georgian\',sans-serif;';
         content.innerHTML =
@@ -400,7 +413,26 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
                 '<svg width="18" height="18" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;margin-top:1px;"><path d="M8 1.8l6.5 11.4H1.5L8 1.8z" stroke="#e67700" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6.5v3M8 11.3v.4" stroke="#e67700" stroke-width="1.5" stroke-linecap="round"/></svg>' +
                 '<span>პროცესის გაშვებით დილი გადავა ხელშეკრულების ეტაპზე</span>' +
             '</div>' +
-            '<div id="contractStageError_' + dealId2 + '" style="display:none;margin-top:10px;padding:8px 12px;background:#fff5f5;border:1px solid #ffc9c9;border-radius:8px;color:#c92a2a;font-size:12px;"></div>';
+            '<div style="margin-top:14px;">' +
+                '<label for="' + inputId + '" style="display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:#333;">' +
+                    'განაცხადის რეგ.ნომერი (სრეს) <span style="color:#e03131;">*</span>' +
+                '</label>' +
+                '<input type="text" id="' + inputId + '" autocomplete="off" ' +
+                    'style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ced4da;border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s;" ' +
+                    'placeholder="შეიყვანეთ რეგისტრაციის ნომერი">' +
+            '</div>' +
+            '<div id="' + errId + '" style="display:none;margin-top:10px;padding:8px 12px;background:#fff5f5;border:1px solid #ffc9c9;border-radius:8px;color:#c92a2a;font-size:12px;"></div>';
+
+        // value set via DOM (not innerHTML) so it is never interpreted as HTML
+        var regInput = content.querySelector('#' + inputId);
+        regInput.value = regNumber2 || '';
+        regInput.addEventListener('input', function() {
+            regInput.style.borderColor = '#ced4da';
+            var e = document.getElementById(errId);
+            if (e) e.style.display = 'none';
+        });
+        regInput.addEventListener('focus', function() { regInput.style.borderColor = '#1098ad'; });
+        regInput.addEventListener('blur',  function() { regInput.style.borderColor = '#ced4da'; });
 
         var popup = new BX.PopupWindow(popupId, null, {
             content: content,
@@ -412,6 +444,9 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
             overlay: { opacity: 30 },
             minWidth: 380,
             events: {
+                onPopupShow: function() {
+                    setTimeout(function() { if (!regInput.value) regInput.focus(); }, 50);
+                },
                 onPopupClose: function() { this.destroy(); }
             },
             buttons: [
@@ -423,11 +458,22 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
                             var btn = this;
                             var node = btn.buttonNode;
                             if (node.dataset.busy) return;
+
+                            var errBox = document.getElementById(errId);
+                            errBox.style.display = 'none';
+
+                            // ── სავალდებულო ველის შემოწმება ──
+                            var regValue = (regInput.value || '').trim();
+                            if (regValue === '') {
+                                regInput.style.borderColor = '#e03131';
+                                regInput.focus();
+                                errBox.textContent = 'გთხოვთ შეავსოთ ველი „განაცხადის რეგ.ნომერი (სრეს)"';
+                                errBox.style.display = 'block';
+                                return;
+                            }
+
                             node.dataset.busy = '1';
                             BX.addClass(node, 'ui-btn-wait');
-
-                            var errBox = document.getElementById('contractStageError_' + dealId2);
-                            errBox.style.display = 'none';
 
                             BX.ajax({
                                 url: '/rest/local/api/projects/startContractStageWorkflow.php',
@@ -435,6 +481,7 @@ $newStageId2 = $deal2["STAGE_ID"] ?? "";
                                 dataType: 'json',
                                 data: {
                                     deal_id: dealId2,
+                                    reg_number: regValue,
                                     sessid: BX.bitrix_sessid()
                                 },
                                 onsuccess: function(res) {

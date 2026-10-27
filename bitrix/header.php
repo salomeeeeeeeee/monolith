@@ -65,6 +65,60 @@ $futureDate = $currentDate->format('Ymd');
 ?>
 
 
+<?php
+// Contact / company / deal lists - row checkboxes + group action panel hidden for everyone except users 1 and 3
+$hdrPath = explode('/', trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/'));
+$isCrmListPage = ($hdrPath[0] ?? '') === 'crm'
+    && in_array($hdrPath[1] ?? '', ['contact', 'company', 'deal'], true)
+    && ($hdrPath[2] ?? '') !== 'details';
+
+if ($isCrmListPage && !in_array((int)$userID, [1, 3], true)):
+?>
+<style>
+/* Checkboxes: rows + "select all" in the header (incl. sticky header copy).
+   visibility instead of display, so the column keeps its width and the grid doesn't shift */
+.main-grid .main-grid-cell-checkbox .main-grid-cell-content,
+.main-grid .main-grid-cell-checkbox .main-grid-cell-head-container,
+.main-grid .main-grid-row-checkbox,
+.main-grid .main-grid-check-all,
+.main-grid label.main-grid-checkbox {
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* Bottom action panel (EDIT / START DIALING / SELECT ACTION / FOR ALL) */
+.main-grid-action-panel,
+[id$="_action_panel"] {
+    display: none !important;
+}
+
+/* A single click on a row also selects it - remove the green "selected" highlight */
+.main-grid .main-grid-row-checked > td,
+.main-grid .main-grid-row-checked:hover > td {
+    background-color: inherit !important;
+}
+ /* Kanban - card checkboxes */
+.crm-kanban-item-checkbox,
+.crm-kanban-item .crm-kanban-item-checkbox,
+.crm-kanban-item [class*="kanban-item-checkbox"] {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+/* Kanban - top action panel (Selected / DELETE / CHANGE PIPELINE / ASSIGN / ...) */
+.ui-action-panel,
+.ui-action-panel-wrapper {
+    display: none !important;
+}
+
+/* Selected card highlight */
+.crm-kanban-item.crm-kanban-item-selected {
+    background: #fff !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+</style>
+<?php endif; ?>
 <script>
 
 urlTest = <? echo json_encode($urlTest); ?>;
