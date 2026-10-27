@@ -12,7 +12,8 @@ $deals = [];
 
 if ($USER->IsAuthorized()) {
     $currentUserId = (int)$USER->GetID();
-    $showAllDeals = $currentUserId === 1 || $USER->IsAdmin();
+    // 9 - ნუკი პაიჭაძე (სეილს ჰედი): ყველა დილს ხედავს, როგორც ადმინი
+    $showAllDeals = in_array($currentUserId, [1, 9], true) || $USER->IsAdmin();
 
     $now = time();
     $expiring = [];
