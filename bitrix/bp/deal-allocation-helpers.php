@@ -2,7 +2,11 @@
 
 
 // from 85 bp deal-allocation-helpers.php
- 
+
+if (!defined('ALLOCATION_EXPIRY_TEMPLATE_ID')) {
+    // BP 99 "რეზერვაციის ვადა (დაშლილი დილი)" - BP 6-ის ვადის შემოწმება ასლისთვის
+    define('ALLOCATION_EXPIRY_TEMPLATE_ID', 99);
+}
 
 if (!function_exists('allocation_getProductDataByID')) {
     function allocation_getProductDataByID($ID)
@@ -150,7 +154,180 @@ if (!function_exists('allocation_reservationFields')) {
             "UF_CRM_1779278567041", // დარეზერვებულია თარიღამდე
             "UF_CRM_1658259058",    // ჯავშნის მოქმედების ვადა
             "UF_CRM_1781181993925", // რეზერვაციის კომენტარი
+            "UF_CRM_1775116974516", // რეზერვაციის თარიღი
+            "UF_CRM_1775214559",    // რეზერვაციის ვადა
+            "UF_CRM_1775214575",    // რეზერვაციის თანხა
+            "UF_CRM_1775315263480", // სასურველი გადახდის ტიპი
         );
+    }
+}
+
+if (!function_exists('allocation_productLabel')) {
+    /** "New Depo, ავტოსადგომი N7, ბლოკი ა, სართული 1" */
+    function allocation_productLabel($element)
+    {
+        $number = trim((string)($element["__6KWOWZ"] ?? ""));
+        $block  = trim((string)($element["_L24CUB"] ?? ""));
+        $floor  = trim((string)($element["_FTRIDL"] ?? ""));
+        $parts = array_filter(array(
+            trim((string)($element["__VO9RG4"] ?? "")),
+            trim(($element["__X1GCRZ"] ?? "") . ($number !== "" ? " N" . $number : "")),
+            $block !== "" ? "ბლოკი " . $block : "",
+            $floor !== "" ? "სართული " . $floor : "",
+        ), 'strlen');
+        return count($parts) ? implode(", ", $parts) : "ProdID " . ($element["ID"] ?? "");
+    }
+}
+
+if (!function_exists('allocation_addComment')) {
+    function allocation_addComment($dealId, $text, $authorId)
+    {
+        if (!class_exists('\Bitrix\Crm\Timeline\CommentEntry')) {
+            return 0;
+        }
+        try {
+            return (int)\Bitrix\Crm\Timeline\CommentEntry::create(array(
+                "TEXT"      => $text,
+                "AUTHOR_ID" => $authorId > 0 ? $authorId : 1,
+                "BINDINGS"  => array(array("ENTITY_TYPE_ID" => CCrmOwnerType::Deal, "ENTITY_ID" => intval($dealId))),
+            ));
+        } catch (\Throwable $e) {
+            // კომენტარის შეცდომამ დაშლა არ უნდა შეაჩეროს
+            allocation_debug("addComment FAILED deal=" . intval($dealId) . " err=" . $e->getMessage());
+            return 0;
+        }
+    }
+}
+
+if (!function_exists('allocation_debug')) {
+    function allocation_debug($text)
+    {
+        @file_put_contents(
+            $_SERVER["DOCUMENT_ROOT"] . "/debug_allocation.txt",
+            date("Y-m-d H:i:s") . " " . $text . "\n",
+            FILE_APPEND
+        );
+    }
+}
+
+if (!function_exists('allocation_isSplitComment')) {
+    /** წინა დაშლის კომენტარი (თუ წყარო თვითონ ასლია) ახალ ასლს არ ეხება */
+    function allocation_isSplitComment($text)
+    {
+        return mb_strpos($text, "დილი შეიქმნა რეზერვაციისას დილის") !== false
+            || mb_strpos($text, "რეზერვაციისას დილი დაიშალა") !== false;
+    }
+}
+
+if (!function_exists('allocation_copyComments')) {
+    /**
+     * წყარო დილის კომენტარები (სისტემურიც) ასლზე - იგივე ავტორით და დროით,
+     * რომ ყოველ დილზე ცალკე ჩანდეს ჯავშნის ისტორია. მიმაგრებული ფაილები არ გადადის.
+     */
+    function allocation_copyComments($sourceId, $newId)
+    {
+        $sourceId = intval($sourceId);
+        $newId    = intval($newId);
+        $copied   = 0;
+
+        $res = \Bitrix\Main\Application::getConnection()->query(
+            "SELECT t.ID, t.COMMENT, t.AUTHOR_ID, t.CREATED FROM b_crm_timeline t"
+            . " JOIN b_crm_timeline_bind b ON b.OWNER_ID = t.ID"
+            . " WHERE b.ENTITY_TYPE_ID = " . CCrmOwnerType::Deal . " AND b.ENTITY_ID = " . $sourceId
+            . " AND t.TYPE_ID = " . \Bitrix\Crm\Timeline\TimelineType::COMMENT
+            . " ORDER BY t.ID"
+        );
+        while ($row = $res->fetch()) {
+            if (trim((string)$row["COMMENT"]) === "" || allocation_isSplitComment($row["COMMENT"])) {
+                continue;
+            }
+            $id = allocation_addComment($newId, $row["COMMENT"], intval($row["AUTHOR_ID"]));
+            if ($id <= 0) {
+                continue;
+            }
+            $copied++;
+            if ($row["CREATED"]) {
+                try {
+                    \Bitrix\Crm\Timeline\Entity\TimelineTable::update($id, array("CREATED" => $row["CREATED"]));
+                } catch (\Throwable $e) {
+                    allocation_debug("copyComments CREATED not kept comment={$id} err=" . $e->getMessage());
+                }
+            }
+        }
+        return $copied;
+    }
+}
+
+if (!function_exists('allocation_startCopyExpiry')) {
+    /**
+     * ასლის ჯავშნის ვადა: ორიგინალზე მას BP 6-ის პაუზა ითვლის, ასლზე - BP 99 (იგივე შემოწმება).
+     * ეშვება მხოლოდ თუ ორიგინალზე BP 6 მიმდინარეობს, ანუ ჯავშანი saveReservation-ით გაკეთდა.
+     */
+    function allocation_startCopyExpiry($sourceId, $copyIds)
+    {
+        $sourceId = intval($sourceId);
+        if (!count($copyIds) || !CModule::IncludeModule('bizproc')) {
+            return;
+        }
+
+        $running = \Bitrix\Main\Application::getConnection()->query(
+            "SELECT ID FROM b_bp_workflow_state WHERE WORKFLOW_TEMPLATE_ID = 6 AND DOCUMENT_ID = 'DEAL_" . $sourceId . "'"
+            . " AND (STATE IS NULL OR STATE NOT IN ('Completed', 'Terminated')) LIMIT 1"
+        )->fetch();
+        if (!$running) {
+            allocation_debug("expiry skipped source={$sourceId}: BP 6 არ მიმდინარეობს");
+            return;
+        }
+
+        $row = CCrmDeal::GetListEx(
+            array(),
+            array("=ID" => $sourceId, "CHECK_PERMISSIONS" => "N"),
+            false,
+            false,
+            array("ID", "UF_CRM_1779278640735", "UF_CRM_1779278567041")
+        )->Fetch();
+        $onlyDate = $row ? trim((string)$row["UF_CRM_1779278567041"]) : "";
+        if ($onlyDate === "") {
+            allocation_debug("expiry skipped source={$sourceId}: ჯავშნის თარიღი ცარიელია");
+            return;
+        }
+
+        foreach ($copyIds as $copyId) {
+            $errors = array();
+            $wfId = "";
+            try {
+                $wfId = CBPDocument::StartWorkflow(
+                    ALLOCATION_EXPIRY_TEMPLATE_ID,
+                    array("crm", "CCrmDocumentDeal", "DEAL_" . intval($copyId)),
+                    array(
+                        "type"      => (string)$row["UF_CRM_1779278640735"],
+                        "onlyDate"  => $onlyDate,
+                        "startTime" => ConvertTimeStamp(time(), "FULL"),
+                    ),
+                    $errors
+                );
+            } catch (\Throwable $e) {
+                $errors[] = $e->getMessage();
+            }
+            allocation_debug("expiry copy=" . intval($copyId) . " source={$sourceId} wf=" . $wfId
+                . (count($errors) ? " err=" . json_encode($errors, JSON_UNESCAPED_UNICODE) : ""));
+        }
+    }
+}
+
+if (!function_exists('allocation_refreshAmountWords')) {
+    /** ჯამური ფასი სიტყვიერად (BP 25) თავიდან - დაშლამდე ის ყველა ბინის ჯამს აჩვენებს */
+    function allocation_refreshAmountWords($dealId)
+    {
+        if (!CModule::IncludeModule('bizproc')) {
+            return;
+        }
+        $errors = array();
+        try {
+            CBPDocument::StartWorkflow(25, array("crm", "CCrmDocumentDeal", "DEAL_" . intval($dealId)), array(), $errors);
+        } catch (\Throwable $e) {
+            allocation_debug("amountWords FAILED deal=" . intval($dealId) . " err=" . $e->getMessage());
+        }
     }
 }
 
@@ -303,6 +480,8 @@ if (!function_exists('allocation_distributeProducts')) {
 
         $logLines = array();
         $index = 0;
+        $copies = array();      // ასლის ID => ბინა
+        $originalLabel = "";
 
         foreach ($arProducts as $product) {
             $index++;
@@ -322,6 +501,7 @@ if (!function_exists('allocation_distributeProducts')) {
             if ($isLast) {
                 // ორიგინალი დილი — ერთი პროდუქტი რჩება
                 allocation_assignProductToDeal($deal, $element);
+                $originalLabel = allocation_productLabel($element);
                 $logLines[] = "Deal {$dealID} ← ProdID {$productId} (ორიგინალი)";
             } else {
                 $newDealId = allocation_copyDeal($deal);
@@ -335,8 +515,47 @@ if (!function_exists('allocation_distributeProducts')) {
                     continue;
                 }
                 allocation_assignProductToDeal($newDeal, $element);
-                $logLines[] = "Deal {$newDealId} ← ProdID {$productId} (ასლი წყაროდან {$dealID})";
+                $copiedComments = allocation_copyComments($dealID, $newDealId);
+                $copies[$newDealId] = allocation_productLabel($element);
+                $logLines[] = "Deal {$newDealId} ← ProdID {$productId} (ასლი წყაროდან {$dealID}, კომენტარი: {$copiedComments})";
             }
+        }
+
+        // სისტემური კომენტარი ყველა დილზე: საიდან შეიქმნა / რად დაიშალა
+        $authorId = intval($deal["ASSIGNED_BY_ID"] ?? 0);
+        $dealLink = function ($id) {
+            return "[url=/crm/deal/details/{$id}/]#{$id}[/url]";
+        };
+        if (count($copies)) {
+            $lines = array();
+            foreach ($copies as $copyId => $label) {
+                $lines[] = "- " . $dealLink($copyId) . ": " . $label;
+            }
+            if ($originalLabel !== "") {
+                $lines[] = "- " . $dealLink($dealID) . " (ეს დილი): " . $originalLabel;
+            }
+            allocation_addComment(
+                $dealID,
+                "სისტემური კომენტარი:\nრეზერვაციისას დილი დაიშალა, თითო უძრავ ქონებაზე ცალკე დილი:\n" . implode("\n", $lines),
+                $authorId
+            );
+            foreach ($copies as $copyId => $label) {
+                allocation_addComment(
+                    $copyId,
+                    "სისტემური კომენტარი:\nდილი შეიქმნა რეზერვაციისას დილის " . $dealLink($dealID) . " დაშლით.\n"
+                        . "უძრავი ქონება: " . $label . "\n"
+                        . "დაშლამდე დაწერილი კომენტარები გადმოტანილია დილიდან #" . $dealID . ".",
+                    $authorId
+                );
+            }
+        }
+
+        allocation_startCopyExpiry($dealID, array_keys($copies));
+
+        // ჯამური ფასი სიტყვიერად - თითო დილის ახალი ფასით
+        allocation_refreshAmountWords($dealID);
+        foreach (array_keys($copies) as $copyId) {
+            allocation_refreshAmountWords($copyId);
         }
 
         $logText = "დილის დაშლა:\n" . implode("\n", $logLines);

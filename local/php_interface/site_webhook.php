@@ -271,9 +271,13 @@ class MonolithSiteWebhook
                 return;
             }
 
-            // BP-ის დილი; თუ BP არ არის - პროდუქტის მფლობელი დილი (გათავისუფლებისას ძველი)
-            $dealId = $change['bpDeal'] ?: ($change['product']['deal'] ?: $change['deal']);
+            // პროდუქტის ახალი მფლობელი დილი; გათავისუფლებისას - BP-ის დილი ან ძველი მფლობელი.
+            // დილის დაშლისას BP ორიგინალზე ეშვება, ბინა კი ასლზე ხვდება - ჩაიწერება ასლი.
+            $dealId = $change['product']['deal'] ?: ($change['bpDeal'] ?: $change['deal']);
             $cause = $change['cause'];
+            if ($change['bpDeal'] > 0 && $change['bpDeal'] !== $dealId) {
+                $cause .= ', გაეშვა დილზე #' . $change['bpDeal'];
+            }
             if ($change['bpDeal'] > 0 && ($stage = self::dealStageName($change['bpDeal'])) !== '') {
                 $cause .= ', დილის სტადია: ' . $stage;
             }
