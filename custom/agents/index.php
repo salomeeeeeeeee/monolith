@@ -557,9 +557,11 @@ if (!agentsModuleCanAccess()) {
     .deal-amt-ok .val { color: #15803d; font-weight: 600; }
     .deal-amt-due .val { color: #b91c1c; font-weight: 600; }
     .report-table tbody td.col-r-client,
+    .report-table tbody td.col-r-resp,
     .report-table tbody td.col-r-project,
     .report-table tbody td.col-r-comment,
     .report-table thead th.col-r-client,
+    .report-table thead th.col-r-resp,
     .report-table thead th.col-r-project,
     .report-table thead th.col-r-comment {
       white-space: normal;
@@ -630,7 +632,10 @@ if (!agentsModuleCanAccess()) {
       min-width: 9.5rem;
       width: auto;
     }
-    .report-table .col-r-resp { width: 7%; white-space: normal; word-break: break-word; line-height: 1.35; }
+    .report-table .col-r-resp {
+      min-width: 9rem;
+      width: auto;
+    }
     .report-table .col-r-date { width: 6.5%; white-space: nowrap; }
     .report-table .col-r-project {
       min-width: 10.5rem;
