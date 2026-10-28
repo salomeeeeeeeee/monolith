@@ -11,6 +11,8 @@ define('DisableEventsCheck', true);
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_before.php');
 require_once __DIR__ . '/config.php';
 
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\HttpClient;
 
 // მხოლოდ ის მეთოდები, რასაც მოდული იძახებს
@@ -32,6 +34,8 @@ const AGENTS_MODULE_ADMIN_METHODS = ['lists.element.delete'];
 // სიები: 24 სააგენტოები (წერაც), 23 გადახდები და 25 აგენტზე გადახდილი საკომისიო (მხოლოდ კითხვა)
 const AGENTS_MODULE_READ_IBLOCKS  = [23, 24, 25];
 const AGENTS_MODULE_WRITE_IBLOCKS = [24];
+// პროექტების სია ყველა მომხმარებლისთვის საერთოა და b_option-ში ინახება (ადრე თითო ბრაუზრის localStorage-ში იყო)
+const AGENTS_MODULE_PROJECTS_OPTION = 'agents_module_projects';
 
 function agentsModuleRespond(array $payload, $httpCode = 200)
 {
@@ -44,6 +48,51 @@ function agentsModuleRespond(array $payload, $httpCode = 200)
 function agentsModuleError($code, $description, $httpCode)
 {
     agentsModuleRespond(['error' => $code, 'error_description' => $description], $httpCode);
+}
+
+function agentsModuleText($value, $maxLength)
+{
+    return is_scalar($value) ? mb_substr(trim((string)$value), 0, $maxLength) : '';
+}
+
+/** პროექტების სია ბრაუზრიდან: მხოლოდ ცნობილი ველები, სახელი სავალდებულოა და არ მეორდება. */
+function agentsModuleCleanProjects($list)
+{
+    if (!is_array($list)) {
+        return null;
+    }
+    $result = [];
+    $names = [];
+    foreach ($list as $p) {
+        if (!is_array($p)) {
+            continue;
+        }
+        $name = agentsModuleText($p['name'] ?? '', 200);
+        if ($name === '' || isset($names[$name])) {
+            continue;
+        }
+        $names[$name] = true;
+        $history = [];
+        foreach (is_array($p['activeHistory'] ?? null) ? $p['activeHistory'] : [] as $h) {
+            if (!is_array($h)) {
+                continue;
+            }
+            $history[] = [
+                'active'    => !empty($h['active']) && $h['active'] !== 'false',
+                'comment'   => agentsModuleText($h['comment'] ?? '', 1000),
+                'changedAt' => agentsModuleText($h['changedAt'] ?? '', 40),
+            ];
+        }
+        $result[] = [
+            'id'            => agentsModuleText($p['id'] ?? '', 64),
+            'name'          => $name,
+            'idCode'        => agentsModuleText($p['idCode'] ?? '', 50),
+            'director'      => agentsModuleText($p['director'] ?? '', 200),
+            'active'        => !(isset($p['active']) && ($p['active'] === false || $p['active'] === 'false')),
+            'activeHistory' => $history,
+        ];
+    }
+    return $result;
 }
 
 global $USER;
@@ -60,6 +109,35 @@ session_write_close();
 $input = json_decode(file_get_contents('php://input'), true);
 $method = is_array($input) ? (string)($input['method'] ?? '') : '';
 $params = is_array($input) && is_array($input['params'] ?? null) ? $input['params'] : [];
+
+if ($method === 'agents.projects.get') {
+    $stored = json_decode(Option::get('main', AGENTS_MODULE_PROJECTS_OPTION, ''), true);
+    agentsModuleRespond(['result' => is_array($stored) ? $stored : []]);
+}
+if ($method === 'agents.projects.save') {
+    $projects = agentsModuleCleanProjects($params['projects'] ?? null);
+    if (!$projects) {
+        agentsModuleError('INVALID_PROJECTS', 'პროექტების სია ცარიელია ან არასწორია', 400);
+    }
+    Option::set('main', AGENTS_MODULE_PROJECTS_OPTION, json_encode($projects, JSON_UNESCAPED_UNICODE));
+    agentsModuleRespond(['result' => $projects]);
+}
+// დილების პასუხისმგებლების სახელები რეპორტისთვის: {ids: [..]} -> {id: "სახელი გვარი"}
+if ($method === 'agents.users.names') {
+    $ids = array_values(array_unique(array_filter(array_map('intval', (array)($params['ids'] ?? [])))));
+    $names = [];
+    if ($ids) {
+        $users = UserTable::getList([
+            'select' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN'],
+            'filter' => ['@ID' => $ids],
+        ]);
+        while ($u = $users->fetch()) {
+            $name = trim($u['NAME'] . ' ' . $u['LAST_NAME']);
+            $names[(string)$u['ID']] = $name !== '' ? $name : $u['LOGIN'];
+        }
+    }
+    agentsModuleRespond(['result' => $names]);
+}
 
 if (!in_array($method, AGENTS_MODULE_METHODS, true)) {
     agentsModuleError('METHOD_NOT_ALLOWED', 'მეთოდი დაშვებული არ არის: ' . $method, 400);

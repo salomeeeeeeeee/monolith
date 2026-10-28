@@ -630,6 +630,7 @@ if (!agentsModuleCanAccess()) {
       min-width: 9.5rem;
       width: auto;
     }
+    .report-table .col-r-resp { width: 7%; white-space: normal; word-break: break-word; line-height: 1.35; }
     .report-table .col-r-date { width: 6.5%; white-space: nowrap; }
     .report-table .col-r-project {
       min-width: 10.5rem;
@@ -1589,6 +1590,7 @@ if (!agentsModuleCanAccess()) {
                 <th class="col-r-num report-totals-empty"></th>
                 <th class="col-r-id cell-id report-totals-empty"></th>
                 <th class="report-totals-empty col-r-client"></th>
+                <th class="report-totals-empty col-r-resp"></th>
                 <th class="report-totals-empty col-r-date"></th>
                 <th class="report-totals-empty col-r-project"></th>
                 <th class="report-totals-empty"></th>
@@ -1609,6 +1611,7 @@ if (!agentsModuleCanAccess()) {
                 <th class="col-r-num" title="რიგითობა">#</th>
                 <th class="col-r-id sortable" data-sort="leadId" data-sort-type="number" title="ლიდის ID">ID</th>
                 <th class="col-r-client sortable" data-sort="client" data-sort-type="string" title="კლიენტი">კლიენტი</th>
+                <th class="col-r-resp sortable" data-sort="responsible" data-sort-type="string" title="დილის პასუხისმგებელი">პასუხისმგებელი</th>
                 <th class="col-r-date sortable" data-sort="signedDate" data-sort-type="date" title="ხელშეკრულების გაფორმების თარიღი">გაფორმება</th>
                 <th class="col-r-project sortable" data-sort="project" data-sort-type="string" title="პროექტი">პროექტი</th>
                 <th class="col-r-type sortable" data-sort="propertyType" data-sort-type="string" title="უძრავი ქონების ტიპი">უძ. ტიპი</th>
@@ -2159,7 +2162,7 @@ if (!agentsModuleCanAccess()) {
         commissionSettled: '',
       },
       select: [
-        'ID', 'OPPORTUNITY', 'CONTACT_ID', 'COMPANY_ID', 'STAGE_ID', 'SOURCE_ID', 'COMMENTS',
+        'ID', 'OPPORTUNITY', 'CONTACT_ID', 'COMPANY_ID', 'STAGE_ID', 'SOURCE_ID', 'COMMENTS', 'ASSIGNED_BY_ID',
         'UF_CRM_1779277729207',
         'UF_CRM_1779277898205',
         'UF_CRM_1779277613798',
@@ -2719,6 +2722,9 @@ if (!agentsModuleCanAccess()) {
       }
       if (runtimeWarning) runtimeWarning.classList.remove('show');
       purgeLegacyLocalContracts();
+      const projectsPromise = loadSharedProjects().catch(error => {
+        console.warn('Projects load failed:', error);
+      });
       try {
         await bitrixInit();
         const remoteContracts = await bitrixLoadContracts();
@@ -2734,26 +2740,32 @@ if (!agentsModuleCanAccess()) {
         reportDeals = [];
         setBitrixStatus('err', error.message || 'Bitrix24 კავშირი ვერ დამყარდა');
       }
+      await projectsPromise;
       currentUserIsAdmin = await adminPromise;
       refresh();
       initTabs();
       setAppLoading(false);
     }
 
+    function normalizeProjects(list) {
+      return list.map(p => ({
+        id: p.id || uid(),
+        name: (p.name || '').trim(),
+        idCode: (p.idCode || '').trim(),
+        director: (p.director || '').trim(),
+        active: p.active === false || p.active === 'false' ? false : true,
+        activeHistory: Array.isArray(p.activeHistory) ? p.activeHistory : [],
+      })).filter(p => p.name && !REMOVED_PROJECT_NAMES.has(p.name));
+    }
+
+    // localStorage აქ მხოლოდ ქეშია, სანამ სერვერის საერთო სია ჩაიტვირთება (loadSharedProjects)
     function loadProjects() {
       try {
         const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
         if (!raw) return buildDefaultProjects();
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed) || !parsed.length) return buildDefaultProjects();
-        const list = parsed.map(p => ({
-          id: p.id || uid(),
-          name: (p.name || '').trim(),
-          idCode: (p.idCode || '').trim(),
-          director: (p.director || '').trim(),
-          active: p.active === false || p.active === 'false' ? false : true,
-          activeHistory: Array.isArray(p.activeHistory) ? p.activeHistory : [],
-        })).filter(p => p.name && !REMOVED_PROJECT_NAMES.has(p.name));
+        const list = normalizeProjects(parsed);
         if (list.length !== parsed.length) {
           try { localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(list)); } catch { /* ignore */ }
         }
@@ -2763,10 +2775,42 @@ if (!agentsModuleCanAccess()) {
       }
     }
 
-    function saveProjects() {
+    function cacheProjects() {
       try {
         localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
       } catch { /* ignore */ }
+    }
+
+    // პროექტების სია ყველა მომხმარებლისთვის საერთოა და სერვერზე ინახება (api.php, agents.projects.save)
+    function saveProjects() {
+      cacheProjects();
+      if (location.protocol === 'file:') return Promise.resolve();
+      return bitrixCall('agents.projects.save', { projects }).catch(error => {
+        console.warn('Projects save failed:', error);
+        toast(`პროექტების სია სერვერზე ვერ შეინახა: ${error.message || ''}`, 'error');
+      });
+    }
+
+    async function loadSharedProjects() {
+      const remote = normalizeProjects(await bitrixCall('agents.projects.get') || []);
+      // სერვერზე ჯერ არაფერია - ვრჩებით ქეშზე, პირველი ცვლილება ატვირთავს
+      if (!remote.length) return;
+      // ძველი ქეშიდან (იგივე სახელით) ვავსებთ მხოლოდ იმას, რაც სერვერზე ცარიელია
+      const cached = new Map(projects.map(p => [p.name, p]));
+      let filled = false;
+      remote.forEach(p => {
+        const local = cached.get(p.name);
+        if (!local) return;
+        ['idCode', 'director'].forEach(key => {
+          if (!p[key] && local[key]) {
+            p[key] = local[key];
+            filled = true;
+          }
+        });
+      });
+      projects = remote;
+      if (filled) await saveProjects();
+      else cacheProjects();
     }
 
     function getProjectNames() {
@@ -3751,17 +3795,33 @@ if (!agentsModuleCanAccess()) {
       const contactIds = items.map(d => d.CONTACT_ID).filter(Boolean);
       const companyIds = items.map(d => d.COMPANY_ID).filter(Boolean);
       const dealIds = items.map(d => d.ID).filter(Boolean);
-      const [contactMap, companyMap, paymentTotals, agentCommissionPaid] = await Promise.all([
+      const assignedIds = items.map(d => d.ASSIGNED_BY_ID).filter(Boolean);
+      const [contactMap, companyMap, paymentTotals, agentCommissionPaid, userMap] = await Promise.all([
         bitrixFetchContacts(contactIds),
         bitrixFetchCompanies(companyIds),
         bitrixLoadDealPaymentTotals(dealIds),
         bitrixLoadDealAgentCommissionPaid(dealIds),
+        fetchUserNames(assignedIds),
       ]);
       await migrateLocalSettledToBitrix(dealIds);
       const agentLookup = buildAgentLookup();
-      return items.map(deal =>
-        bitrixDealToReportDeal(deal, contactMap, agentLookup, paymentTotals, agentCommissionPaid, companyMap)
-      );
+      return items.map(deal => ({
+        ...bitrixDealToReportDeal(deal, contactMap, agentLookup, paymentTotals, agentCommissionPaid, companyMap),
+        responsible: userMap[String(deal.ASSIGNED_BY_ID)] || '',
+      }));
+    }
+
+    // პასუხისმგებლის სახელი api.php-დან (agents.users.names); შეცდომისას რეპორტი სახელების გარეშე იტვირთება
+    async function fetchUserNames(ids) {
+      const unique = [...new Set(ids.map(String).filter(Boolean))];
+      if (!unique.length) return {};
+      try {
+        const names = await bitrixCall('agents.users.names', { ids: unique });
+        return names && typeof names === 'object' && !Array.isArray(names) ? names : {};
+      } catch (error) {
+        console.warn('User names load failed:', error);
+        return {};
+      }
     }
 
     function esc(s) {
@@ -4207,6 +4267,7 @@ if (!agentsModuleCanAccess()) {
           <div class="record-detail-grid">
             <div class="detail-item"><span class="lbl">ID</span><span class="val">${esc(d.leadId)}</span></div>
             <div class="detail-item"><span class="lbl">კლიენტი</span><span class="val">${esc(d.client)}</span></div>
+            <div class="detail-item"><span class="lbl">პასუხისმგებელი</span><span class="val">${d.responsible ? esc(d.responsible) : '—'}</span></div>
             <div class="detail-item"><span class="lbl">გაფორმება</span><span class="val">${formatDate(d.signedDate)}</span></div>
             <div class="detail-item"><span class="lbl">პროექტი</span><span class="val">${esc(d.project)}</span></div>
             <div class="detail-item"><span class="lbl">უძ. ტიპი</span><span class="val">${esc(d.propertyType)}</span></div>
@@ -4252,7 +4313,7 @@ if (!agentsModuleCanAccess()) {
       renderReportTotals(rows);
 
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="18" style="text-align:center;color:var(--muted);padding:24px">ჩანაწერი ვერ მოიძებნა</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:var(--muted);padding:24px">ჩანაწერი ვერ მოიძებნა</td></tr>';
         clearReportRowHighlight();
         return;
       }
@@ -4266,6 +4327,7 @@ if (!agentsModuleCanAccess()) {
           <td class="col-r-client">${d.client && d.client !== '—'
             ? `<a class="deal-client-link" href="${esc(getDealBitrixUrl(d.leadId))}" target="_blank" rel="noopener noreferrer">${esc(d.client)}</a>`
             : '—'}</td>
+          <td class="col-r-resp">${d.responsible ? esc(d.responsible) : '—'}</td>
           <td class="col-r-date">${formatDate(d.signedDate)}</td>
           <td class="col-r-project">${esc(d.project)}</td>
           <td>${esc(d.propertyType)}</td>
@@ -4373,16 +4435,16 @@ ${dataRows}
 
     function exportReportExcel() {
       const headers = [
-        '#', 'ლიდის ID', 'კლიენტი', 'ხელშ. გაფორმების თარიღი', 'პროექტი', 'უძ.ქონების ტიპი', 'უძ.ქონების #',
+        '#', 'ლიდის ID', 'კლიენტი', 'პასუხისმგებელი', 'ხელშ. გაფორმების თარიღი', 'პროექტი', 'უძ.ქონების ტიპი', 'უძ.ქონების #',
         'ღირებულება $', 'გადახდილი $', 'გადახდილი %', 'სააგენტო', 'სააგენტო / აგენტი (ფორმიდან)', 'საკომისიო', 'ჩასარიცხი %',
         'გადასახ. $', 'გადახ. საკ. $', 'სხვაობა $', 'გადახდილი/დახურული', 'კომენტარი',
       ];
       const rows = sortReportRows(getReportFiltered()).map((d, index) => [
-        index + 1, d.leadId, d.client, formatDate(d.signedDate), d.project, d.propertyType, d.propertyNo,
+        index + 1, d.leadId, d.client, d.responsible || '', formatDate(d.signedDate), d.project, d.propertyType, d.propertyNo,
         d.propertyValue, d.paidUsd, d.paidPct, d.agency, d.formAgency || '', formatCommissionLabel(d, d.commissionType), getDealCreditPct(d),
         d.payable, d.paidCommission, d.difference, d.commissionSettled ? 'დიახ' : 'არა', d.commissionComment || '',
       ]);
-      downloadExcel(`agents-report-${new Date().toISOString().slice(0, 10)}.xls`, headers, rows, [7, 8, 9, 13, 14, 15, 16]);
+      downloadExcel(`agents-report-${new Date().toISOString().slice(0, 10)}.xls`, headers, rows, [8, 9, 10, 14, 15, 16, 17]);
       toast('Excel ფაილი ჩამოიტვირთა');
     }
 
@@ -5725,7 +5787,7 @@ ${dataRows}
       }
     });
 
-    $('project-register-form').addEventListener('submit', e => {
+    $('project-register-form').addEventListener('submit', async e => {
       e.preventDefault();
       const data = validateProjectRegister();
       if (!data) return;
@@ -5737,10 +5799,10 @@ ${dataRows}
         p.name = data.name;
         p.idCode = data.idCode;
         p.director = data.director;
+        let renamed = [];
         if (oldName !== data.name) {
-          contracts.forEach(c => {
-            if (c.project === oldName) c.project = data.name;
-          });
+          renamed = contracts.filter(c => c.project === oldName);
+          renamed.forEach(c => { c.project = data.name; });
           reportDeals.forEach(d => {
             if (d.project === oldName) d.project = data.name;
           });
@@ -5750,6 +5812,12 @@ ${dataRows}
         resetProjectForm();
         refresh();
         toast(`პროექტი „${data.name}" განახლდა`);
+        // სააგენტოების სიაშიც (24) ახალი სახელი, თორემ ჩანაწერები ძველ სახელზე რჩება
+        const results = await Promise.allSettled(
+          renamed.filter(c => c.bitrixId).map(c => syncContractToBitrix(c, false))
+        );
+        const failed = results.filter(r => r.status === 'rejected').length;
+        if (failed) toast(`${failed} სააგენტოს ჩანაწერში პროექტის სახელი ვერ განახლდა`, 'error');
         return;
       }
 
