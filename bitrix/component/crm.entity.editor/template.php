@@ -1353,12 +1353,27 @@ BX.ready(function() {
 				}
 			});
 		}
-		// tab_lists_21 and tab_lists_22 — visible only on EXECUTING, UC_NSTB3H, UC_NJ7A78
-var allowedTabStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
-['crm_scope_detail_c_deal__tab_lists_21', 'crm_scope_detail_c_deal__tab_lists_22', 'crm_scope_detail_c_deal__tab_lists_23'].forEach(function(tabId) {
-    var tab = document.getElementById(tabId);
-    if (tab) tab.style.display = allowedTabStages.indexOf(stage) !== -1 ? '' : 'none';
-});
+		// tab_lists_21, 22, 23 — visible on EXECUTING, UC_NSTB3H, UC_NJ7A78, WON
+		// tab_lists_23 (გადახდები) — also visible on UC_QFL99J for users 1, 3 and group 22
+		var allowedTabStages = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
+		var canSeePaymentsOnFailStage = <?= (
+			in_array((int)$userID, [1, 3], true)
+			|| in_array(22, array_map('intval', (array)$userGroups), true)
+		) ? 'true' : 'false' ?>;
+
+		['crm_scope_detail_c_deal__tab_lists_21', 'crm_scope_detail_c_deal__tab_lists_22', 'crm_scope_detail_c_deal__tab_lists_23'].forEach(function(tabId) {
+			var tab = document.getElementById(tabId);
+			if (!tab) return;
+
+			var visible = allowedTabStages.indexOf(stage) !== -1
+				|| (
+					tabId === 'crm_scope_detail_c_deal__tab_lists_23'
+					&& stage === 'UC_QFL99J'
+					&& canSeePaymentsOnFailStage
+				);
+
+			tab.style.display = visible ? '' : 'none';
+		});
 
 // tab_event — always visible regardless of stage
 var eventTab = document.getElementById('crm_scope_detail_c_deal__tab_event');
