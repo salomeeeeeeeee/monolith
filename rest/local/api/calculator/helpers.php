@@ -702,7 +702,29 @@ if (!function_exists('calcUpdateDealFinalPrice')) {
             'UF_CRM_1779277671391' => $kvmPrice,
         ];
 
-        return (bool)$dealUpdate->Update($dealId, $arDealFields);
+        $updated = (bool)$dealUpdate->Update($dealId, $arDealFields);
+        if ($updated) {
+            calcRefreshDealAmountWords($dealId);
+        }
+        return $updated;
+    }
+}
+
+if (!function_exists('calcRefreshDealAmountWords')) {
+    /** ფასი სიტყვიერად (BP 25) - კოდიდან CCrmDeal::Update ცვლილებაზე BP-ს ავტომატურად არ უშვებს */
+    function calcRefreshDealAmountWords($dealId)
+    {
+        $dealId = intval($dealId);
+        if ($dealId <= 0 || !CModule::IncludeModule('bizproc')) {
+            return false;
+        }
+        $errors = [];
+        try {
+            CBPDocument::StartWorkflow(25, ['crm', 'CCrmDocumentDeal', 'DEAL_' . $dealId], [], $errors);
+        } catch (\Throwable $e) {
+            $errors[] = $e->getMessage();
+        }
+        return empty($errors);
     }
 }
 

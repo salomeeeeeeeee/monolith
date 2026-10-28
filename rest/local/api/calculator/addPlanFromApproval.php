@@ -151,6 +151,9 @@ if ($created > 0) {
         'UF_CRM_1779277671391' => $kvmPriceUSD,
     ];
     $dealUpdated = (bool)$dealUpdate->Update($dealId, $arDealFields);
+    if ($dealUpdated) {
+        calcRefreshDealAmountWords($dealId);
+    }
 
     $result = [
         'status' => 200,
