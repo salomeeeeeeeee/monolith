@@ -654,9 +654,27 @@ function reportSplitSchedule(array $rows)
 }
 
 /**
+ * True when payments cover the schedule's first installment (or its earliest row when the
+ * schedule has no first payment). Refunds are already left out of $paidAmount. A schedule
+ * with no rows counts as paid once anything was paid. One dollar of slack covers rounding.
+ *
+ * @param array $scheduleRows reportSplitSchedule() rows
+ */
+function reportIsFirstTranchePaid(array $scheduleRows, $paidAmount)
+{
+    $paidAmount = (float)$paidAmount;
+    if ($paidAmount <= 0) {
+        return false;
+    }
+    list($first, $last, $installments) = reportSplitSchedule($scheduleRows);
+    $first = $first ?: ($installments[0] ?? $last);
+    return $paidAmount + 1 >= ($first ? $first['amount'] : 0);
+}
+
+/**
  * Deal ID => true for deals whose first tranche is paid: the deal's payments (list 23, refunds
- * left out) cover the first payment of its schedule (list 22), or its earliest row when the
- * schedule has no first payment. A deal without a schedule counts once anything is paid.
+ * left out) cover the first payment of its schedule (list 22). A deal without a schedule counts
+ * once anything is paid.
  */
 function reportFirstTranchePaidDeals(array $dealIds)
 {
@@ -677,10 +695,7 @@ function reportFirstTranchePaidDeals(array $dealIds)
 
     $result = [];
     foreach ($paid as $dealId => $amount) {
-        list($first, $last, $installments) = reportSplitSchedule($schedules[$dealId] ?? []);
-        $first = $first ?: ($installments[0] ?? $last);
-        // a dollar of slack for rounding
-        if ($amount > 0 && $amount + 1 >= ($first ? $first['amount'] : 0)) {
+        if (reportIsFirstTranchePaid($schedules[$dealId] ?? [], $amount)) {
             $result[$dealId] = true;
         }
     }
@@ -823,7 +838,8 @@ function reportRegisterExcelRow(array $register)
 /**
  * Contract and payment columns of the sales report Excel: the register (reportBuildRegister()),
  * contract status, first/last payment and installment period (list 22), planned vs paid (list 23)
- * and debt. Expects rows from reportEnrichDealBedrooms().
+ * and debt. FIRST_TRANCHE_PAID is დიახ/Yes when reportIsFirstTranchePaid() holds (refunds left out).
+ * Expects rows from reportEnrichDealBedrooms().
  * Amounts are USD; percentages are of the contract value (DEAL_PRICE).
  */
 function reportEnrichSoldExport(array $products, $lang = 'ge')
@@ -861,11 +877,16 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
         ];
     }
     $payments = [];
+    $paidCovering = [];
     foreach (reportLoadIblockRowsForDeals(REPORT_PAYMENT_IBLOCK, $dealIds) as $row) {
+        $amount = reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0));
         $payments[$row['_DEAL_ID']][] = [
             'date' => reportParseDate($row['date'] ?? ($row['TARIGI'] ?? '')),
-            'amount' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
+            'amount' => $amount,
         ];
+        if (($row['refund'] ?? '') === '') {
+            $paidCovering[$row['_DEAL_ID']] = ($paidCovering[$row['_DEAL_ID']] ?? 0) + $amount;
+        }
     }
 
     $monthEnd = (new DateTime('today'))->modify('last day of this month');
@@ -874,6 +895,8 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
         ? ['WON' => 'Active', 'LOSE' => 'Cancelled']
         : ['WON' => 'აქტიური', 'LOSE' => 'გაუქმებული'];
     $barterLabel = $lang === 'eng' ? 'Barter' : 'ბარტერი';
+    $yesLabel = $lang === 'eng' ? 'Yes' : 'დიახ';
+    $noLabel = $lang === 'eng' ? 'No' : 'არა';
     $stageNames = CCrmStatus::GetStatusList('DEAL_STAGE');
     $formatDate = static function ($row) {
         return ($row && $row['date']) ? $row['date']->format('d/m/Y') : '';
@@ -925,6 +948,9 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
             'FIRST_PAY_DATE' => $formatDate($first),
             'FIRST_PAY_AMOUNT' => $first ? $first['amount'] : '',
             'FIRST_PAY_PCT' => $first ? $percent($first['amount']) : '',
+            'FIRST_TRANCHE_PAID' => reportIsFirstTranchePaid($schedules[$dealId] ?? [], $paidCovering[$dealId] ?? 0)
+                ? $yesLabel
+                : $noLabel,
             'PLAN_TO_MONTH' => round($planToMonth, 2),
             'PAID_TO_MONTH' => round($paidToMonth, 2),
             'DEBT' => round($planToMonth - $paidToMonth, 2),

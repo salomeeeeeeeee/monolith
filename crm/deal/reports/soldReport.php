@@ -14,6 +14,9 @@ $t = array_merge($t, [
     'h2_summary' => $lang === 'eng' ? 'Sales Summary' : 'გაყიდვების შეჯამება',
     'col_count' => $lang === 'eng' ? 'Count' : 'რაოდენობა',
     'col_first_paid' => $lang === 'eng' ? 'First Tranche Paid' : 'პირველი ტრანში ჩარიცხულია',
+    'col_first_paid_tip' => $lang === 'eng'
+        ? 'Counted when payments on the deal cover the first installment of the schedule. Refunds are not counted. If the deal has no schedule at all, it counts as paid once there is at least one payment.'
+        : 'ითვლება, თუ დილზე გადახდების თანხა ფარავს გრაფიკის პირველი შენატანის თანხას. დაბრუნებული თანხები (refund) არ ითვლება. თუ დილს გრაფიკი საერთოდ არ აქვს, ჩარიცხულად ითვლება, როცა მასზე ერთი გადახდა მაინც არის.',
     'col_area' => $lang === 'eng' ? 'Total Area (m²)' : 'ჯამური ფართი (m²)',
     'col_deal_price' => $lang === 'eng' ? 'Sale Total Price ($)' : 'გაყიდვის ჯამური ფასი ($)',
     'col_prod_price' => $lang === 'eng' ? 'Stock Price ($)' : 'Stock ფასი ($)',
@@ -46,6 +49,7 @@ $exportColumns = reportRegisterColumns($lang) + [
     'FIRST_PAY_DATE' => $lang === 'eng' ? 'First Payment Date' : 'პირველადი შენატანის თარიღი',
     'FIRST_PAY_AMOUNT' => $lang === 'eng' ? 'First Payment Amount' : 'პირველადი შენატანის თანხა',
     'FIRST_PAY_PCT' => $lang === 'eng' ? 'First Payment %' : 'პირველადი შენატანის %',
+    'FIRST_TRANCHE_PAID' => $lang === 'eng' ? 'First Tranche Paid' : 'პირველი ტრანში ჩარიცხულია',
     'PLAN_TO_MONTH' => $lang === 'eng' ? 'Planned (incl. current month)' : 'გეგმიური შემოსატანი (მიმდინარე თვის ჩათვლით)',
     'PAID_TO_MONTH' => $lang === 'eng' ? 'Paid (incl. current month)' : 'ფაქტიურად გადახდილი (მიმდინარე თვის ჩათვლით)',
     'DEBT' => $lang === 'eng' ? 'Current Debt (accumulated)' : 'მიმდინარე დავალიანება (აკუმულირებული)',
@@ -211,6 +215,29 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
     .diff--neg { color: #c0392b; }
     .diff--zero { color: #6b7a8a; }
     .diff--na { color: #b0bac4; font-weight: 500; }
+    .th-help {
+        cursor: help;
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+    }
+    .th-help-pop {
+        position: fixed;
+        z-index: 30;
+        max-width: 360px;
+        padding: 10px 12px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.45;
+        letter-spacing: normal;
+        text-transform: none;
+        color: #1d2b3a;
+        background: #fff;
+        border: 1px solid var(--rp-border, #d5dde6);
+        border-radius: 4px;
+        box-shadow: 0 8px 24px rgba(20, 40, 60, 0.14);
+    }
+    .th-help-pop[hidden] { display: none; }
 </style>
 
 <?php reportBlockOpen($t['h2_summary'], 'report-table--compare'); ?>
@@ -218,7 +245,7 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
         <tr>
             <th><?= $t['col_type'] ?></th>
             <th><?= $t['col_count'] ?></th>
-            <th><?= $t['col_first_paid'] ?></th>
+            <th class="th-help" data-tip="<?= htmlspecialchars($t['col_first_paid_tip'], ENT_QUOTES, 'UTF-8') ?>"><?= $t['col_first_paid'] ?></th>
             <th><?= $t['col_area'] ?></th>
             <th><?= $t['col_deal_price'] ?></th>
             <th><?= $t['col_prod_price'] ?></th>
@@ -265,6 +292,25 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
 const t = <?= json_encode($t, JSON_UNESCAPED_UNICODE) ?>;
 const exportColumns = <?= json_encode(array_values($exportColumns), JSON_UNESCAPED_UNICODE) ?>;
 const respColumn = <?= json_encode(array_search('DEAL_RESPONSIBLE_NAME', array_keys($exportColumns), true)) ?>;
+
+(function () {
+    const pop = document.createElement('div');
+    pop.className = 'th-help-pop';
+    pop.hidden = true;
+    document.body.appendChild(pop);
+    document.querySelectorAll('.th-help[data-tip]').forEach(function (el) {
+        el.addEventListener('mouseenter', function () {
+            pop.textContent = el.getAttribute('data-tip');
+            pop.hidden = false;
+            const rect = el.getBoundingClientRect();
+            const left = Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8));
+            pop.style.left = left + 'px';
+            pop.style.top = (rect.bottom + 8) + 'px';
+        });
+        el.addEventListener('mouseleave', function () { pop.hidden = true; });
+    });
+    document.addEventListener('scroll', function () { pop.hidden = true; }, true);
+})();
 
 async function exportToExcel() {
     const button = document.querySelector('.btn-export');
