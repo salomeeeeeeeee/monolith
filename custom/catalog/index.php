@@ -1369,6 +1369,16 @@ function renderByBlocks(allProducts, selectedBlocks, container, selectedSectors 
 // ══════════════════════════════════════════
 //  RENDER: SECTOR MODE
 // ══════════════════════════════════════════
+
+function aptNumCmp(a, b) {
+    const na = String(a["Number"] || a[F_NUMBER] || "").trim();
+    const nb = String(b["Number"] || b[F_NUMBER] || "").trim();
+    if (!na && !nb) return 0;
+    if (!na) return 1;
+    if (!nb) return -1;
+    return na.localeCompare(nb, undefined, { numeric: true, sensitivity: "base" });
+}
+
 function renderBySectors(allProducts, selectedBlocks, container, selectedSectors = []) {
     
     const seenIds  = new Set();
@@ -1377,10 +1387,10 @@ container.style.flexWrap = "";
 container.style.alignItems = "";
 container.style.overflowX = "";
 container.style.gap = "";
-    const products = allProducts.filter(p => {
+const products = allProducts.filter(p => {
         if (seenIds.has(p["ID"])) return false;
         seenIds.add(p["ID"]); return true;
-    });
+    }).sort(aptNumCmp);
 
     const apartments     = [];
     const nonAptBySector = {}; // [sector][block][floor] = [items]
