@@ -196,6 +196,13 @@ ob_end_clean();
             background: var(--blue-strong); color: #fff; font-size: 11px; font-weight: 700;
         }
         .history-note { color: var(--blue-strong); font-weight: 700; }
+        .cash-badge {
+            display: inline-block; margin-top: 5px; padding: 2px 8px; border-radius: 999px;
+            background: #7a5a00; color: #fff; font-size: 11px; font-weight: 700;
+        }
+        .unit-note { color: var(--ok); font-weight: 700; }
+        .unit-note.miss { color: #9a6700; }
+        .suggest-box { margin-top: 6px; display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; }
         tr.hidden-row { display: none; }
         input.form-control {
             width: 100%; min-width: 0; height: 36px; border-radius: 4px;
@@ -293,6 +300,7 @@ ob_end_clean();
             <h1>გადახდებთან მიბმა</h1>
             <p>დილები იძებნება სტეიჯებზე: <?= htmlspecialchars(implode(' · ', bankBogMergeStageLabels())) ?> — ამ დილის კონტაქტის პირადი/პასპორტის ნომრის ან კომპანიის საიდ. კოდის მიხედვით.</p>
             <p>თუ გადამხდელის ჩარიცხვა ადრე სხვა დილზე უკვე აქამდე არის მიბმული, შემდეგ ჯერზე ის დილი იქნება ნაჩვენები/შემოთავაზებული (ცისფერი რიგი) - ამოიცნობა INN-ით, INN-ის გარეშე კი გამგზავნის ანგარიშით.</p>
+            <p>სალაროს ექსელიდან ატვირთული ჩანაწერები "სალარო" ნიშნით აქვე ჩანს: დილი საფუძველში ჩაწერილი ფართის ნომრით წინასწარ ირჩევა, შექმნილ გადახდას ტიპი "სალარო" ეწერება.</p>
             <p>კურსი მოდის NBG-დან ამონაწერის თარიღის მიხედვით. "დარჩენილი" ნიშნავს დარჩენილ დავალიანებას $-ში დღემდე (გადახდის გრაფიკის თანხების ჯამს (დღემდე) − უკვე არსებული გადახდების ჯამი).</p>
         </div>
     </div>
@@ -305,6 +313,7 @@ ob_end_clean();
             მთავარი გვერდი
         </a>
         <a class="btn btn-ghost" href="/crm/deal/bog_import.php">← ამონაწერის იმპორტი</a>
+        <a class="btn btn-ghost" href="/crm/deal/cash_import.php">სალაროს ექსელი</a>
         <button class="btn btn-primary" type="submit" form="myForm" id="main_button" disabled>შენახვა</button>
     </div>
 </div>
@@ -538,6 +547,16 @@ function accountMeta(row) {
     const parts = [row.PROJECT, row.ACCOUNT].filter(Boolean);
     return parts.length ? `<div class="deal-meta">${esc(parts.join(' · '))}</div>` : '';
 }
+/** სალაროს ჩანაწერის ბეჯი და საფუძვლიდან ამოცნობილი ფართი; $matched - შეირჩა თუ არა დილი, $missText - რას ნიშნავს, თუ არა */
+function cashMeta(row, matched, missText) {
+    if (!row.CASH) return '';
+    const h = row.UNIT_HINT;
+    const label = h ? [h.BLOCK ? `ბლოკი ${h.BLOCK}` : '', `${h.TYPE || 'ფართი'} ${h.UNIT}`].filter(Boolean).join(' · ') : '';
+    const note = label
+        ? `<div class="deal-meta"><span class="unit-note${matched ? '' : ' miss'}">საფუძვლიდან: ${esc(label)}${matched ? '' : ' - ' + esc(missText)}</span></div>`
+        : '';
+    return `<div><span class="cash-badge">სალარო</span></div>${note}`;
+}
 /** EUR-ზე საწყისი თანხაც ჩანს - ცხრილში მხოლოდ ₾ და $ სვეტებია */
 function currencyCell(row) {
     const cur = esc(row.CURRENCY);
@@ -704,14 +723,18 @@ function renderMatched() {
     tbody.innerHTML = '';
     indexDeals = 0;
     (data || []).forEach((row) => {
-        const deals = row.MERGE_DEALS || [];
+        // სალაროს საფუძვლით შერჩეული დილი პირველია და მთელი თანხით ივსება
+        const suggested = Number(row.SUGGESTED_DEAL || 0);
+        const deals = [...(row.MERGE_DEALS || [])].sort((a, b) => (Number(b.ID) === suggested) - (Number(a.ID) === suggested));
+        // საფუძვლის ფართი კლიენტის დილებში არ არის: ერთადერთი დილიც ხელით უნდა დადასტურდეს
+        const hintMiss = row.CASH && row.UNIT_HINT && !suggested;
         // ცისფერი: INN-ით ვერნაპოვნი დილი წინა მიბმიდან
-        const tone = row.RECOGNIZED ? 'tone-blue' : (deals.length > 1 ? 'tone-yellow' : 'tone-green');
+        const tone = row.RECOGNIZED ? 'tone-blue' : ((deals.length > 1 && !suggested) || hintMiss ? 'tone-yellow' : 'tone-green');
         const allocParts = [];
         if (deals.length) {
             deals.forEach((d) => {
                 const idx = indexDeals++;
-                const prefill = deals.length === 1 ? Number(row.BANK_AMOUNT_USD || 0) : 0;
+                const prefill = Number(d.ID) === suggested || (deals.length === 1 && !hintMiss) ? Number(row.BANK_AMOUNT_USD || 0) : 0;
                 // პროექტი · უძრავი ქონების ტიპი · ბლოკი ნომერი
                 const info = [d.PROJECT || '-', d.TYPE, [d.BLOCK, d.UNIT].filter(Boolean).join(' ')].filter(Boolean);
                 // სხვის დილზე გადახდისას ჩანს, ვისი დილია
@@ -742,7 +765,7 @@ function renderMatched() {
         const clientMeta = [row.STATUS, row.PAYER || row.INN].filter(Boolean);
         const badge = row.RECOGNIZED ? '<div><span class="recognized-badge">წინა მიბმით</span></div>' : '';
         tr.innerHTML = `
-            <td><b>${esc(row.CLIENT_NAME || row.NAME)}</b><div class="deal-meta">${esc(clientMeta.join(' · '))}</div>${badge}${skipButton(row.list_id)}</td>
+            <td><b>${esc(row.CLIENT_NAME || row.NAME)}</b><div class="deal-meta">${esc(clientMeta.join(' · '))}</div>${badge}${cashMeta(row, suggested > 0, 'კლიენტს ამ ფართის დილი არ აქვს. მარჯვნივ მისი სხვა დილი(ები)ა, თანხა ჩაწერეთ მხოლოდ თუ სწორია')}${skipButton(row.list_id)}</td>
             <td class="nowrap">${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
             <td>${esc(row.BENEFICIARY)}${accountMeta(row)}</td>
@@ -778,8 +801,12 @@ function renderErrors() {
         tr.dataset.kind = 'errors';
         tr.dataset.usd = String(usd);
         tr.dataset.gel = String(row.AMOUNT_GEL || row.BANK_AMOUNT_GEL || 0);
+        // სალარო: გადამხდელი ვერ მოიძებნა, მაგრამ საფუძვლის ფართით დილი ჩანს - ივსება მხოლოდ "ჩასმით"
+        const s = row.SUGGESTED;
+        const suggestion = s ? `<div class="suggest-box"><div class="deal-meta">შემოთავაზება: <b>#${esc(s.ID)}</b> · ${esc([s.CLIENT_NAME, s.PROJECT, s.TYPE, [s.BLOCK, s.UNIT].filter(Boolean).join(' ')].filter(Boolean).join(' · '))}</div>
+            <button type="button" class="mini-btn" onclick="useSuggestedDeal(this, '${esc(s.ID)}')">ჩასმა</button></div>` : '';
         tr.innerHTML = `
-            <td><b>${esc(row.NAME)}</b>${skipButton(row.PAYMENT || row.list_id)}</td>
+            <td><b>${esc(row.NAME)}</b>${cashMeta(row, !!s, 'ამ ფართის დილი ვერ მოიძებნა')}${skipButton(row.PAYMENT || row.list_id)}</td>
             <td>${esc(row.INN)}</td>
             <td class="nowrap">${esc(row.DATE)}</td>
             <td>${esc(row.NOMINATION)}</td>
@@ -788,7 +815,7 @@ function renderErrors() {
             <td class="nowrap" title="NBG USD კურსი ამონაწერის თარიღზე">${esc(row.NBG_RATE)}</td>
             <td class="amount">${money(row.AMOUNT_GEL || row.BANK_AMOUNT_GEL)}</td>
             <td class="amount">${money(usd)}</td>
-            <td><div class="alloc-list">${buildAllocRow(idx, row.PAYMENT || row.list_id, '', '', usd)}</div><button type="button" class="mini-btn add-deal" onclick="addDealField(this,'myForm_er')">+ დილი</button></td>
+            <td><div class="alloc-list">${buildAllocRow(idx, row.PAYMENT || row.list_id, '', '', usd)}</div><button type="button" class="mini-btn add-deal" onclick="addDealField(this,'myForm_er')">+ დილი</button>${suggestion}</td>
         `;
         tbody.appendChild(tr);
         tr.querySelectorAll('input[name^="DEAL_"]').forEach(bindDealInput);
@@ -796,6 +823,14 @@ function renderErrors() {
             inp.addEventListener('input', () => checkRowTotals('myForm_er'));
         });
     });
+    checkRowTotals('myForm_er');
+}
+
+/** შემოთავაზებული დილი რიგის პირველ ველში */
+function useSuggestedDeal(btn, dealId) {
+    const input = btn.closest('tr').querySelector('input[name^="DEAL_"]');
+    input.value = dealId;
+    validateDealInput(input);
     checkRowTotals('myForm_er');
 }
 
@@ -978,6 +1013,13 @@ function fillProjectFilter() {
         select.appendChild(opt);
     });
 }
+
+// ინახება მხოლოდ ფილტრით ხილული რიგები - დამალულის ჯამი არ მოწმდება და ისინი არ იგზავნება
+['myForm', 'myForm_er'].forEach(formId => {
+    document.getElementById(formId).addEventListener('submit', function () {
+        this.querySelectorAll('tr.filtertr.hidden-row input').forEach(inp => { inp.disabled = true; });
+    });
+});
 
 renderMatched();
 renderErrors();

@@ -719,6 +719,346 @@ if (!function_exists('bankBogImportStatements')) {
     }
 }
 
+/** სალაროს ექსელიდან ატვირთული ჩანაწერია (და არა ბანკის ამონაწერი)? */
+if (!function_exists('bankBogIsCashStatement')) {
+    function bankBogIsCashStatement(array $list)
+    {
+        return trim((string)($list['ACCOUNT_NUMBER'] ?? '')) === BANK_BOG_CASH_ACCOUNT;
+    }
+}
+
+/**
+ * სალაროს ექსელის თარიღი → Y-m-d; ცარიელი, თუ ვერ წაიკითხა.
+ * ტექსტი დღე/თვე/წელი ფორმატშია (1/10/2026 = 1 ოქტომბერი), თარიღის უჯრას SimpleXLSX Y-m-d-ით აბრუნებს.
+ */
+if (!function_exists('bankBogCashParseDate')) {
+    function bankBogCashParseDate($value)
+    {
+        $text = trim((string)$value);
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $text, $m)) {
+            list(, $y, $mo, $d) = $m;
+        } elseif (preg_match('/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})$/', $text, $m)) {
+            list(, $d, $mo, $y) = $m;
+        } elseif (is_numeric($text) && $text > 20000 && $text < 80000) {
+            return gmdate('Y-m-d', (int)round(((float)$text - 25569) * 86400));
+        } else {
+            return '';
+        }
+        return checkdate((int)$mo, (int)$d, (int)$y) ? sprintf('%04d-%02d-%02d', $y, $mo, $d) : '';
+    }
+}
+
+/**
+ * "ლევან ეგრისელაშვილი 01019069506", "ნათია გაგუა პ/ნ 29001006514", "ფათემი მეჰრან P492170DP"
+ * → [სახელი, პირადი/პასპორტის ნომერი]. ნომრის გარეშე ნომერი ცარიელია.
+ */
+if (!function_exists('bankBogCashSplitPayer')) {
+    function bankBogCashSplitPayer($text)
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', (string)$text));
+        if (preg_match('/^(.*?)[\s,]*(?:პ\/ნ\s*)?([A-Za-z]*\d[\dA-Za-z ]*)$/u', $text, $m) && trim($m[1]) !== '') {
+            return [trim($m[1]), strtoupper(str_replace(' ', '', $m[2]))];
+        }
+        return [$text, ''];
+    }
+}
+
+/**
+ * სალაროს ექსელის სტრიქონები. სვეტები სათაურებით იძებნება:
+ * თარიღი, N, გადამხდელი, მიმღები, თანხა, ვალუტა, საფუძველი.
+ *
+ * @return array|null null = ფაილი ან სვეტები ვერ წაიკითხა ($error)
+ */
+if (!function_exists('bankBogCashReadExcel')) {
+    function bankBogCashReadExcel($filePath, &$error = null)
+    {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/custom/simplexlsx/src/SimpleXLSX.php';
+        $xlsx = \Shuchkin\SimpleXLSX::parse($filePath);
+        if (!$xlsx) {
+            $error = 'ფაილი ვერ წაიკითხა: ' . \Shuchkin\SimpleXLSX::parseError();
+            return null;
+        }
+
+        $headerMatchers = [
+            'date' => function ($h) { return mb_strpos($h, 'თარიღ') !== false; },
+            'n' => function ($h) { return in_array($h, ['n', '#', '№', 'n°'], true); },
+            'payer' => function ($h) { return mb_strpos($h, 'გადამხდ') !== false; },
+            'recipient' => function ($h) { return mb_strpos($h, 'მიმღებ') !== false; },
+            'amount' => function ($h) { return mb_strpos($h, 'თანხ') !== false; },
+            'currency' => function ($h) { return mb_strpos($h, 'ვალუტ') !== false; },
+            'basis' => function ($h) { return mb_strpos($h, 'საფუძ') !== false || mb_strpos($h, 'დანიშნ') !== false; },
+        ];
+
+        $cols = null;
+        $out = [];
+        foreach ($xlsx->rows() as $i => $cells) {
+            if ($cols === null) {
+                // სათაურის სტრიქონი: პირველი, სადაც თარიღი, გადამხდელი და თანხა ერთად წერია
+                $found = [];
+                foreach ($cells as $idx => $cell) {
+                    $h = mb_strtolower(trim((string)$cell));
+                    foreach ($headerMatchers as $key => $match) {
+                        if (!isset($found[$key]) && $h !== '' && $match($h)) {
+                            $found[$key] = $idx;
+                            break;
+                        }
+                    }
+                }
+                if (isset($found['date'], $found['payer'], $found['amount'])) {
+                    $cols = $found;
+                }
+                continue;
+            }
+
+            $get = function ($key) use ($cols, $cells) {
+                return isset($cols[$key]) ? trim((string)($cells[$cols[$key]] ?? '')) : '';
+            };
+            if ($get('date') === '' && $get('payer') === '' && $get('amount') === '') {
+                continue;
+            }
+            list($name, $personalId) = bankBogCashSplitPayer($get('payer'));
+            $out[] = [
+                'ROW' => $i + 1,
+                'DATE_RAW' => $get('date'),
+                'DATE' => bankBogCashParseDate($get('date')),
+                'N' => $get('n'),
+                'NAME' => $name,
+                'PERSONAL_ID' => $personalId,
+                'RECIPIENT' => $get('recipient'),
+                'AMOUNT' => bankBogMoney(bankBogParseAmount($get('amount'))),
+                'CURRENCY' => strtoupper($get('currency')) ?: 'GEL',
+                'BASIS' => trim(preg_replace('/\s+/u', ' ', $get('basis'))),
+            ];
+        }
+
+        if ($cols === null) {
+            $error = 'სათაურები ვერ მოიძებნა: საჭიროა სვეტები "თარიღი", "გადამხდელი" და "თანხა"';
+            return null;
+        }
+        return $out;
+    }
+}
+
+/**
+ * სალაროს ექსელის სტრიქონები ამონაწერების სიაში (ACCOUNT_NUMBER = სალარო), რომ მიბმის გვერდზე
+ * ბანკის ჩანაწერებთან ერთად გამოჩნდეს. განმეორებით ატვირთვისას იგივე სტრიქონი (თარიღი, N, თანხა,
+ * პირადი ნომერი) EntryId-ით გამოტოვდება; 0 თანხა არ იწერება.
+ *
+ * @return array{created:int,skipped_dup:int,skipped:array,errors:array}
+ */
+if (!function_exists('bankBogImportCashRows')) {
+    function bankBogImportCashRows(array $rows, $project)
+    {
+        $stats = ['created' => 0, 'skipped_dup' => 0, 'skipped' => [], 'errors' => []];
+        $iblockId = bankBogStatementIblockId();
+        $existingIds = bankBogLoadExistingKeys();
+
+        foreach ($rows as $row) {
+            if ($row['DATE'] === '') {
+                $stats['errors'][] = $row + ['REASON' => 'თარიღი ვერ წაიკითხა: ' . $row['DATE_RAW']];
+                continue;
+            }
+            if ($row['AMOUNT'] <= 0) {
+                $stats['skipped'][] = $row + ['REASON' => 'თანხა 0'];
+                continue;
+            }
+            if (!in_array($row['CURRENCY'], ['GEL', 'USD', 'EUR'], true)) {
+                $stats['errors'][] = $row + ['REASON' => 'უცნობი ვალუტა: ' . $row['CURRENCY']];
+                continue;
+            }
+
+            $entryId = 'CASH-' . $row['DATE'] . '-' . $row['N'] . '-' . number_format($row['AMOUNT'], 2, '.', '') . '-' . $row['PERSONAL_ID'];
+            if (isset($existingIds[$entryId])) {
+                $stats['skipped_dup']++;
+                continue;
+            }
+
+            $nbg = bankBogGetNbgRate($row['DATE'], $nbgErr);
+            if ($nbg === null) {
+                $stats['errors'][] = $row + ['REASON' => $nbgErr];
+                continue;
+            }
+            $amounts = bankBogConvertEntryAmount($row['CURRENCY'], $row['AMOUNT'], 0, $nbg, $row['DATE']);
+
+            $props = [
+                'EntryDate' => $row['DATE'] . 'T00:00:00',
+                'EntryDocumentNumber' => $row['N'],
+                'EntryAmount' => $row['AMOUNT'],
+                'EntryAmountCredit' => $row['AMOUNT'],
+                // გადახდის კომენტარში გადადის: სალაროს ორდერის ნომერი + საფუძველი
+                'EntryComment' => trim('სალარო' . ($row['N'] !== '' ? ' N' . $row['N'] : '') . ': ' . $row['BASIS']),
+                'DocumentNomination' => $row['BASIS'],
+                'SenderDetails_Name' => $row['NAME'],
+                'SenderDetails_Inn' => $row['PERSONAL_ID'],
+                'DocumentPayerInn' => $row['PERSONAL_ID'],
+                'DocumentPayerName' => $row['NAME'],
+                'BeneficiaryDetails_Name' => $row['RECIPIENT'],
+                'EntryId' => $entryId,
+                'istodayactivity' => 'false',
+                'ACCOUNT_CURRENCY' => $row['CURRENCY'],
+                'ACCOUNT_NUMBER' => BANK_BOG_CASH_ACCOUNT,
+                'NBG_RATE' => $nbg,
+                'AMOUNT_GEL' => $amounts['GEL'],
+                'AMOUNT_USD' => $amounts['USD'],
+                'SALE_TYPE' => 'CASH',
+                'PROJECT' => $project,
+                'REASON' => '',
+            ];
+
+            $res = bankBogAddElement([
+                'IBLOCK_ID' => $iblockId,
+                'NAME' => 'სალარო',
+                'ACTIVE' => 'Y',
+            ], $props);
+
+            if (is_numeric($res) && (int)$res > 0) {
+                $existingIds[$entryId] = true;
+                $stats['created']++;
+            } else {
+                $stats['errors'][] = $row + ['REASON' => (string)$res];
+            }
+        }
+
+        return $stats;
+    }
+}
+
+/**
+ * სალაროს საფუძვლიდან ფართის ნომერი: "... ბლოკი ბ ბინა 43   11675 დოლ ექ ლარში" →
+ * ['UNIT' => '43', 'TYPE' => 'ბინა', 'BLOCK' => 'ბ']. ნომერია "ბინა/ბ./პარკ/სად/#" + რიცხვი, რომელსაც
+ * უშუალოდ დოლარის თანხა მოსდევს ("ბინა 173 900 დოლ" - 173 ბინაა, 900 თანხა); ტიპი ცარიელია,
+ * თუ სიტყვიდან არ ჩანს. null = ვერ ამოიცნო.
+ */
+if (!function_exists('bankBogCashUnitHint')) {
+    function bankBogCashUnitHint($text)
+    {
+        $pattern = '/(?<!\p{L})(ბინა|ბპარკ|პარკ|პარტ|პარ|პ|სადგ|სად|ბ|#)[\s.]*(\d{1,4})(?!\d)[\s.;,]+\d[\d ]*(?:[.,]\d+)?\s*(?:დოლ|აშშ)/u';
+        if (!preg_match_all($pattern, (string)$text, $all, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+        $last = end($all);
+        $prefix = substr((string)$text, 0, $last[0][1]);
+        $types = ['ბინა' => 'ბინა', 'ბ' => 'ბინა', '#' => ''];
+        $block = preg_match('/ბლოკი\s*([აბგდ])(?!\p{L})/u', $prefix, $bm) ? $bm[1] : '';
+
+        return [
+            'UNIT' => ltrim($last[2][0], '0') ?: '0',
+            'TYPE' => $types[$last[1][0]] ?? 'ავტოსადგომი',
+            'BLOCK' => $block,
+        ];
+    }
+}
+
+/** ორ სახელში ერთი სიტყვა მაინც ემთხვევა (მაგ. გვარი)? სიტყვების რიგს მნიშვნელობა არ აქვს. */
+if (!function_exists('bankBogNamesOverlap')) {
+    function bankBogNamesOverlap($a, $b)
+    {
+        $words = function ($name) {
+            return array_filter(preg_split('/[^\p{L}]+/u', mb_strtolower((string)$name), -1, PREG_SPLIT_NO_EMPTY), function ($w) {
+                return mb_strlen($w) >= 3;
+            });
+        };
+        return (bool)array_intersect($words($a), $words($b));
+    }
+}
+
+/** სტატემენტის პროექტი (New Depot) და დილის პროექტი (New Depo) ერთია? */
+if (!function_exists('bankBogProjectMatches')) {
+    function bankBogProjectMatches($statementProject, $dealProject)
+    {
+        $a = mb_strtolower(trim((string)$statementProject));
+        $b = mb_strtolower(trim((string)$dealProject));
+        return $a !== '' && $b !== '' && (strpos($a, $b) === 0 || strpos($b, $a) === 0);
+    }
+}
+
+/**
+ * დილი საფუძვლის ფართის ნომრით. $strict = false: ჯერ ნომერი, ტიპი და ბლოკი მხოლოდ მაშინ
+ * ფილტრავს, როცა რამდენიმე დილი რჩება (გადამხდელის დილებში ძებნა). $strict = true: ყველა
+ * ცნობილი ნიშანი ერთად (კონტაქტის გარეშე ძებნა პროექტის ყველა დილში).
+ *
+ * @return int დილის ID; 0, თუ ზუსტად ერთი არ დარჩა
+ */
+if (!function_exists('bankBogPickDealByUnitHint')) {
+    function bankBogPickDealByUnitHint(array $deals, array $hint, $strict = false)
+    {
+        $digits = function ($unit) {
+            return ltrim(preg_replace('/\D+/', '', bankBogUfValue($unit)), '0') ?: '0';
+        };
+        $deals = array_values(array_filter($deals, function ($d) use ($hint, $digits) {
+            return bankBogUfValue($d[BANK_D_UNIT] ?? '') !== '' && $digits($d[BANK_D_UNIT]) === $hint['UNIT'];
+        }));
+        $filters = [
+            BANK_D_TYPE => $hint['TYPE'],
+            BANK_D_BLOCK => $hint['BLOCK'],
+        ];
+        foreach ($filters as $field => $want) {
+            if ($want === '' || (!$strict && count($deals) <= 1)) {
+                continue;
+            }
+            $deals = array_values(array_filter($deals, function ($d) use ($field, $want) {
+                return bankBogUfValue($d[$field] ?? '') === $want;
+            }));
+        }
+        return count($deals) === 1 ? (int)$deals[0]['ID'] : 0;
+    }
+}
+
+/**
+ * სალაროს ჩანაწერი, რომლის გადამხდელიც CRM-ში ვერ მოიძებნა (მაგ. უცხოელის პასპორტი სხვაგვარადაა
+ * ჩაწერილი): დილი იძებნება პროექტის, ბლოკის, ტიპისა და ფართის ნომრით. ერთი და იგივე ნომერი
+ * სხვადასხვა სექციაში მეორდება, ამიტომ დილის კლიენტის სახელიც უნდა ემთხვეოდეს გადამხდელისას.
+ * იწერება SUGGESTED-ში - მიბმის გვერდზე ჩანს შემოთავაზებად, ავტომატურად არ ივსება.
+ */
+if (!function_exists('bankBogSuggestDealsForUnmatchedCash')) {
+    function bankBogSuggestDealsForUnmatchedCash(array &$errors)
+    {
+        $units = [];
+        foreach ($errors as $row) {
+            if (!empty($row['UNIT_HINT'])) {
+                $units[] = (string)$row['UNIT_HINT']['UNIT'];
+            }
+        }
+        if (empty($units)) {
+            return;
+        }
+
+        $dealsById = [];
+        foreach (bankBogGetDealsByFilter(
+            [BANK_D_UNIT => array_values(array_unique($units)), 'STAGE_ID' => bankBogMergeStages()],
+            bankBogDealSelectFields()
+        ) as $deal) {
+            $dealsById[(int)$deal['ID']] = $deal;
+        }
+
+        foreach ($errors as &$row) {
+            if (empty($row['UNIT_HINT'])) {
+                continue;
+            }
+            $project = $row['PROJECT'] ?? '';
+            $payerName = $row['NAME'] ?? '';
+            $candidates = array_filter($dealsById, function ($d) use ($project, $payerName) {
+                $client = trim((string)($d['CONTACT_FULL_NAME'] ?? '')) ?: (string)($d['COMPANY_TITLE'] ?? '');
+                return bankBogProjectMatches($project, bankBogUfValue($d[BANK_D_PROJECT] ?? ''))
+                    && bankBogNamesOverlap($payerName, $client);
+            });
+            $dealId = bankBogPickDealByUnitHint($candidates, $row['UNIT_HINT'], true);
+            if ($dealId > 0) {
+                $deal = $dealsById[$dealId];
+                $row['SUGGESTED'] = [
+                    'ID' => $dealId,
+                    'CLIENT_NAME' => trim((string)($deal['CONTACT_FULL_NAME'] ?? '')) ?: trim((string)($deal['COMPANY_TITLE'] ?? '')),
+                    'PROJECT' => bankBogUfValue($deal[BANK_D_PROJECT] ?? ''),
+                    'TYPE' => bankBogUfValue($deal[BANK_D_TYPE] ?? ''),
+                    'BLOCK' => bankBogUfValue($deal[BANK_D_BLOCK] ?? ''),
+                    'UNIT' => bankBogUfValue($deal[BANK_D_UNIT] ?? ''),
+                ];
+            }
+        }
+        unset($row);
+    }
+}
+
 if (!function_exists('bankBogGetDealsByFilter')) {
     function bankBogGetDealsByFilter(array $filter, array $select = [], array $sort = ['ID' => 'ASC'])
     {
@@ -1337,7 +1677,10 @@ if (!function_exists('bankBogBuildMergeModels')) {
                 'list_id' => $list['ID'],
                 'PAYMENT' => $list['ID'],
                 'COMMENT' => $list['EntryComment'] ?? '',
+                'CASH' => bankBogIsCashStatement($list),
             ];
+            // სალაროს საფუძველში ფართი წერია - მისით დილი წინასწარ შეირჩევა
+            $unitHint = $base['CASH'] ? bankBogCashUnitHint($base['NOMINATION']) : null;
 
             $payer = ($inn !== '' && isset($payers[$inn])) ? $payers[$inn] : null;
             $dealIds = [];
@@ -1389,22 +1732,35 @@ if (!function_exists('bankBogBuildMergeModels')) {
             }
 
             if (!empty($modeled)) {
+                $suggested = 0;
+                if ($unitHint) {
+                    $candidates = [];
+                    foreach ($modeled as $m) {
+                        $candidates[] = $dealsById[$m['ID']];
+                    }
+                    $suggested = bankBogPickDealByUnitHint($candidates, $unitHint);
+                }
                 $matched[] = array_merge($base, [
                     'CLIENT_NAME' => ($payer ? $payer['name'] : '') ?: $name,
                     'CLIENT_ID' => $payer ? $payer['id'] : 0,
                     'STATUS' => $payer ? $payer['type'] : '',
                     'RECOGNIZED' => $recognized,
                     'MERGE_DEALS' => $modeled,
+                    'UNIT_HINT' => $unitHint,
+                    'SUGGESTED_DEAL' => $suggested,
                 ]);
             } elseif ($payer) {
                 $errors[] = array_merge($base, [
                     'CLIENT_ID' => $payer['id'],
                     'STATUS' => $payer['type'],
+                    'UNIT_HINT' => $unitHint,
                 ]);
             } else {
-                $errors[] = $base;
+                $errors[] = $base + ['UNIT_HINT' => $unitHint];
             }
         }
+
+        bankBogSuggestDealsForUnmatchedCash($errors);
 
         return [$matched, $errors, $skipped];
     }
@@ -1532,7 +1888,7 @@ if (!function_exists('bankBogCreatePaymentFromMerge')) {
             'NBG' => (string)$nbg,
             'FULL_NAME' => $fullName,
             'xelshNum' => bankBogUfValue($deal[BANK_D_CONTRACT_NUM] ?? ''),
-            'pay_type' => BANK_BOG_PAY_TYPE_BOG,
+            'pay_type' => bankBogIsCashStatement($list) ? BANK_BOG_PAY_TYPE_CASH : BANK_BOG_PAY_TYPE_BOG,
         ];
 
         $res = bankBogAddElement([

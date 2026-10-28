@@ -20,6 +20,14 @@ if (!defined('BANK_BOG_PAYMENT_IBLOCK')) {
 if (!defined('BANK_BOG_PAY_TYPE_BOG')) {
     define('BANK_BOG_PAY_TYPE_BOG', 122);
 }
+/** pay_type "სალარო" - სალაროს ექსელიდან ატვირთული ჩანაწერიდან შექმნილი გადახდა */
+if (!defined('BANK_BOG_PAY_TYPE_CASH')) {
+    define('BANK_BOG_PAY_TYPE_CASH', 124);
+}
+/** სალაროს ექსელიდან ატვირთული ჩანაწერი ამონაწერების სიაში ამ ACCOUNT_NUMBER-ით იწერება */
+if (!defined('BANK_BOG_CASH_ACCOUNT')) {
+    define('BANK_BOG_CASH_ACCOUNT', 'სალარო');
+}
 /** ხელით გამოტოვებული ამონაწერის მიზეზი (REASON) ამით იწყება - ასეთი ამონაწერი მერჯზე შეიძლება დაბრუნდეს */
 if (!defined('BANK_BOG_MANUAL_SKIP_PREFIX')) {
     define('BANK_BOG_MANUAL_SKIP_PREFIX', 'ხელით: ');

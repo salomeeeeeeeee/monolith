@@ -285,6 +285,7 @@ ob_end_clean();
                 <button class="btn btn-primary" type="submit" value="one">ჩატვირთვა</button>
                 <button class="btn btn-primary" type="submit" value="all">ყველა ანგარიში</button>
                 <a class="btn btn-ghost" href="/crm/deal/bog_merge.php">გადახდებთან მიბმა →</a>
+                <a class="btn btn-ghost" href="/crm/deal/cash_import.php">სალაროს ექსელი</a>
             </div>
         </form>
         <?php endif; ?>
