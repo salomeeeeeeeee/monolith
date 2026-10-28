@@ -13,6 +13,7 @@ $t = array_merge($t, [
     'filter_to_date' => $lang === 'eng' ? 'Contract date to:' : 'ხელშ. თარიღამდე:',
     'h2_summary' => $lang === 'eng' ? 'Sales Summary' : 'გაყიდვების შეჯამება',
     'col_count' => $lang === 'eng' ? 'Count' : 'რაოდენობა',
+    'col_first_paid' => $lang === 'eng' ? 'First Tranche Paid' : 'პირველი ტრანში ჩარიცხულია',
     'col_area' => $lang === 'eng' ? 'Total Area (m²)' : 'ჯამური ფართი (m²)',
     'col_deal_price' => $lang === 'eng' ? 'Sale Total Price ($)' : 'გაყიდვის ჯამური ფასი ($)',
     'col_prod_price' => $lang === 'eng' ? 'Stock Price ($)' : 'Stock ფასი ($)',
@@ -134,8 +135,11 @@ function soldDiffCell($percent)
     return '<span class="diff ' . $class . '">' . $sign . number_format($percent, 2) . '%</span>';
 }
 
+$firstPaidDeals = reportFirstTranchePaidDeals(array_map('reportExtractProductOwnerDealId', $filteredProducts));
+
 $emptyBucket = [
     'num' => 0,
+    'first_paid' => 0,
     'total_area' => 0,
     'price' => 0,
     'KVM_PRICE' => 0,
@@ -150,12 +154,14 @@ foreach ($filteredProducts as $product) {
     if ($subType) {
         $buckets[] = $subType;
     }
+    $firstPaid = isset($firstPaidDeals[reportExtractProductOwnerDealId($product)]);
 
     foreach ($buckets as $bucket) {
         if (!isset($resArray[$bucket])) {
             $resArray[$bucket] = $emptyBucket;
         }
         $resArray[$bucket]['num']++;
+        $resArray[$bucket]['first_paid'] += $firstPaid ? 1 : 0;
         $resArray[$bucket]['total_area'] += (float)($product[F_TOTAL_AREA] ?? 0);
         $resArray[$bucket]['price'] += (float)($product['PRICE'] ?? 0);
         $resArray[$bucket]['KVM_PRICE'] += (float)($product['KVM_PRICE'] ?? 0);
@@ -177,12 +183,13 @@ foreach ($resArray as $prodType => &$infos) {
 unset($infos);
 $resArray = reportSortProductTypes($resArray);
 
-$total_num = $total_area = $total_price = $total_deal_price = 0;
+$total_num = $total_first_paid = $total_area = $total_price = $total_deal_price = 0;
 foreach ($resArray as $prodType => $infos) {
     if (in_array($prodType, REPORT_APARTMENT_SUBTYPES, true)) {
         continue;
     }
     $total_num += $infos['num'];
+    $total_first_paid += $infos['first_paid'];
     $total_area += $infos['total_area'];
     $total_price += $infos['price'];
     $total_deal_price += $infos['deal_price'];
@@ -198,7 +205,7 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
 ?>
 
 <style>
-    .report-table--compare { min-width: 1180px; }
+    .report-table--compare { min-width: 1300px; }
     .diff { font-weight: 600; font-variant-numeric: tabular-nums; }
     .diff--pos { color: #1b7f5a; }
     .diff--neg { color: #c0392b; }
@@ -211,6 +218,7 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
         <tr>
             <th><?= $t['col_type'] ?></th>
             <th><?= $t['col_count'] ?></th>
+            <th><?= $t['col_first_paid'] ?></th>
             <th><?= $t['col_area'] ?></th>
             <th><?= $t['col_deal_price'] ?></th>
             <th><?= $t['col_prod_price'] ?></th>
@@ -227,6 +235,7 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
         <tr <?= $isSubRow ? 'class="sub-row"' : '' ?>>
             <td><?= reportSubTypeCell($prodType, $t, $isSubRow) ?></td>
             <td><?= $infos['num'] ?></td>
+            <td><?= $infos['first_paid'] ?></td>
             <td><?= number_format($infos['total_area'], 2) ?></td>
             <td>$<?= number_format($infos['deal_price'], 2) ?></td>
             <td>$<?= number_format($infos['price'], 2) ?></td>
@@ -239,6 +248,7 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
         <tr class="total-row">
             <td><?= $t['col_total'] ?></td>
             <td><?= $total_num ?></td>
+            <td><?= $total_first_paid ?></td>
             <td><?= number_format($total_area, 2) ?></td>
             <td>$<?= number_format($total_deal_price, 2) ?></td>
             <td>$<?= number_format($total_price, 2) ?></td>

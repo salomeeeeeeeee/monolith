@@ -653,6 +653,40 @@ function reportSplitSchedule(array $rows)
     return [$first, $last, $installments];
 }
 
+/**
+ * Deal ID => true for deals whose first tranche is paid: the deal's payments (list 23, refunds
+ * left out) cover the first payment of its schedule (list 22), or its earliest row when the
+ * schedule has no first payment. A deal without a schedule counts once anything is paid.
+ */
+function reportFirstTranchePaidDeals(array $dealIds)
+{
+    $schedules = [];
+    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds) as $row) {
+        $schedules[$row['_DEAL_ID']][] = [
+            'type' => trim((string)($row['PLAN_TYPE'] ?? '')),
+            'date' => reportParseDate($row['TARIGI'] ?? ''),
+            'amount' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
+        ];
+    }
+    $paid = [];
+    foreach (reportLoadIblockRowsForDeals(REPORT_PAYMENT_IBLOCK, $dealIds) as $row) {
+        if (($row['refund'] ?? '') === '') {
+            $paid[$row['_DEAL_ID']] = ($paid[$row['_DEAL_ID']] ?? 0) + reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0));
+        }
+    }
+
+    $result = [];
+    foreach ($paid as $dealId => $amount) {
+        list($first, $last, $installments) = reportSplitSchedule($schedules[$dealId] ?? []);
+        $first = $first ?: ($installments[0] ?? $last);
+        // a dollar of slack for rounding
+        if ($amount > 0 && $amount + 1 >= ($first ? $first['amount'] : 0)) {
+            $result[$dealId] = true;
+        }
+    }
+    return $result;
+}
+
 /** The accountants' contract register: the columns every report's Excel starts with. */
 function reportRegisterColumns($lang = 'ge')
 {
