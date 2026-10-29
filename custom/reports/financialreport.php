@@ -364,9 +364,88 @@ function fmtMoney($n, $cur) {
         color: var(--fr-muted);
     }
 
+    .fr-head__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ── ცნობის modal ── */
+    .crt-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(17,24,39,.45);
+        font-family: 'Noto Sans Georgian', sans-serif;
+    }
+    .crt-modal.is-open { display: flex; }
+    .crt-dialog {
+        position: relative;
+        width: 100%;
+        max-width: 440px;
+        background: #fff;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 20px 50px rgba(0,0,0,.2);
+        color: var(--fr-ink);
+    }
+    .crt-x {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        border: 0;
+        background: none;
+        font-size: 24px;
+        line-height: 1;
+        color: var(--fr-muted);
+        cursor: pointer;
+    }
+    .crt-dialog__title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .crt-dialog__sub { font-size: 13px; color: var(--fr-muted); margin-bottom: 16px; }
+    .crt-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .crt-opt {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 14px 16px;
+        border: 1.5px solid var(--fr-line);
+        border-radius: 12px;
+        background: #fff;
+        text-align: left;
+        cursor: pointer;
+        font-family: inherit;
+        color: var(--fr-ink);
+        transition: border-color .15s, background .15s, transform .15s;
+    }
+    .crt-opt:hover { border-color: var(--fr-blue); background: #f3f9ff; transform: translateY(-1px); }
+    .crt-opt__tag {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--fr-blue);
+        background: #e7f5ff;
+        border-radius: 6px;
+        padding: 2px 7px;
+    }
+    .crt-opt__name { font-size: 14px; font-weight: 600; }
+    .crt-opt__hint { font-size: 11px; color: var(--fr-muted); }
+    .crt-opt__warn { font-size: 11px; font-weight: 600; color: var(--fr-amber); }
+    .crt-back {
+        border: 0;
+        background: none;
+        padding: 0;
+        margin-bottom: 10px;
+        font: 600 12px 'Noto Sans Georgian', sans-serif;
+        color: var(--fr-blue);
+        cursor: pointer;
+    }
+
     @media (max-width: 720px) {
         .fr-cards { grid-template-columns: 1fr; }
         .fr-table-card { overflow-x: auto; }
+    }
+    @media (max-width: 420px) {
+        .crt-opts { grid-template-columns: 1fr; }
     }
 </style>
 
@@ -377,10 +456,56 @@ function fmtMoney($n, $cur) {
             <div class="fr-head__label">ფინანსური ბარათი</div>
             <a class="fr-head__title" href="<?php echo $href; ?>" target="_blank"><?php echo htmlspecialchars($dealData["TITLE"] ?? ""); ?></a>
         </div>
-        <button class="fr-btn" onclick="exportTableToExcel()">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12.5h10" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Export
-        </button>
+        <div class="fr-head__actions">
+            <button class="fr-btn" type="button" onclick="crtOpen()">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1.8h5.2L12.5 5v9.2H4z M9 1.8V5.2h3.4 M6 8.2h4.5 M6 10.8h4.5" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>
+                ცნობა
+            </button>
+            <button class="fr-btn" type="button" onclick="exportTableToExcel()">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12.5h10" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Export
+            </button>
+        </div>
+    </div>
+
+    <!-- ცნობის არჩევა: ენა → ტიპი -->
+    <div class="crt-modal" id="crtModal" onclick="if (event.target === this) crtClose()">
+        <div class="crt-dialog" role="dialog" aria-modal="true" aria-labelledby="crtTitle">
+            <button class="crt-x" type="button" onclick="crtClose()" aria-label="დახურვა">×</button>
+
+            <div class="crt-step" id="crtStepLang">
+                <div class="crt-dialog__title" id="crtTitle">ცნობა</div>
+                <div class="crt-dialog__sub">აირჩიეთ ენა</div>
+                <div class="crt-opts">
+                    <button class="crt-opt" type="button" onclick="crtPickLang('ka')">
+                        <span class="crt-opt__tag">GE</span>
+                        <span class="crt-opt__name">ქართული</span>
+                    </button>
+                    <button class="crt-opt" type="button" onclick="crtPickLang('en')">
+                        <span class="crt-opt__tag">EN</span>
+                        <span class="crt-opt__name">English</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="crt-step" id="crtStepType" hidden>
+                <button class="crt-back" type="button" onclick="crtBack()">← ენა: <span id="crtLangLbl"></span></button>
+                <div class="crt-dialog__sub">რომელი ცნობა გსურთ?</div>
+                <div class="crt-opts">
+                    <button class="crt-opt" type="button" onclick="crtPickType('full')">
+                        <span class="crt-opt__name">სრულ დაფარვაზე</span>
+                        <span class="crt-opt__hint">ღირებულება სრულად გადახდილია</span>
+                        <?php if ($balance > 0): ?>
+                            <span class="crt-opt__warn">ნაშთი: <?php echo fmtMoney($balance, $valuta); ?></span>
+                        <?php endif; ?>
+                    </button>
+                    <button class="crt-opt" type="button" onclick="crtPickType('partial')">
+                        <span class="crt-opt__name">ნაწილობრივ დაფარვაზე</span>
+                        <span class="crt-opt__hint">გადახდილი და დარჩენილი თანხა</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="fr-cards">
@@ -421,6 +546,37 @@ function fmtMoney($n, $cur) {
 <script>
     const financeArr = <?php echo json_encode($financeArr); ?>;
     const valuta     = <?php echo json_encode($valuta); ?>;
+    const deal_ID    = <?php echo json_encode($deal_ID); ?>;
+
+    // ── ცნობა: ენა → ტიპი → certificate.php ──
+    let crtLang = "ka";
+    const crtModal = document.getElementById("crtModal");
+
+    function crtOpen() {
+        crtBack();
+        crtModal.classList.add("is-open");
+    }
+    function crtClose() {
+        crtModal.classList.remove("is-open");
+    }
+    function crtBack() {
+        document.getElementById("crtStepLang").hidden = false;
+        document.getElementById("crtStepType").hidden = true;
+    }
+    function crtPickLang(lang) {
+        crtLang = lang;
+        document.getElementById("crtLangLbl").textContent = lang === "en" ? "English" : "ქართული";
+        document.getElementById("crtStepLang").hidden = true;
+        document.getElementById("crtStepType").hidden = false;
+    }
+    function crtPickType(type) {
+        window.open("/crm/deal/certificate.php?dealID=" + encodeURIComponent(deal_ID)
+            + "&lang=" + crtLang + "&type=" + type, "_blank");
+        crtClose();
+    }
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") crtClose();
+    });
 
     function fmt(n) {
         const v = Number(n) || 0;
