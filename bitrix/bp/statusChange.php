@@ -89,7 +89,7 @@ if (!function_exists('heldByOtherDeal')) {
 
 if (!function_exists('otherActiveDealHolding')) {
     /**
-     * სხვა აქტიური დილი, რომელსაც ეს ბინა პროდუქტებში აქვს და რეზერვაციის/ხელშეკრულების
+     * სხვა აქტიური დილი, რომელსაც ეს ბინა პროდუქტებში აქვს და ინტერესის/რეზერვაციის/ხელშეკრულების
      * სტადიაზე დგას (ძველი ორმაგი მიბმა). გათავისუფლების ნაცვლად ბინა მას გადაეცემა.
      */
     function otherActiveDealHolding($productId, $dealID)
@@ -122,7 +122,7 @@ if (!function_exists('otherActiveDealHolding')) {
 }
 
 if (!function_exists('handOverProduct')) {
-    /** ბინა გადაეცემა სხვა აქტიურ დილს: "დასადასტურებელი ჯავშანი" თუ ის დასტურს ელოდება, თორემ "დაჯავშნილი" */
+    /** ბინა გადაეცემა სხვა აქტიურ დილს — სტატუსი მისი სტადიის ჯგუფის მიხედვით (list 16) */
     function handOverProduct($element, $otherDeal, $dealID)
     {
         $element = setProductOwnerFields(
@@ -131,8 +131,17 @@ if (!function_exists('handOverProduct')) {
             $otherDeal["CONTACT_ID"] ?? "",
             $otherDeal["ASSIGNED_BY_ID"] ?? ""
         );
-        $element["_P64GYD"] = $otherDeal["STAGE_ID"] == "PREPAYMENT_INVOICE" ? "დასადასტურებელი ჯავშანი" : "დაჯავშნილი";
-        $element["QUEUE"]   = str_replace("|$dealID", "", $element["QUEUE"]);
+
+        $group = getStageType($otherDeal["STAGE_ID"]);
+        if ($group == "Interest") {
+            $element["_P64GYD"] = "ინტერესი";
+        } elseif ($group == "Queue") {
+            $element["_P64GYD"] = "დასადასტურებელი ჯავშანი";
+        } else {
+            $element["_P64GYD"] = "დაჯავშნილი";
+        }
+
+        $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
         return $element;
     }
 }
@@ -306,6 +315,55 @@ if (!function_exists('new_stage')) {
         }
 
         return updateProdElement($elementsForUpdate);
+    }
+}
+
+if (!function_exists('interest')) {
+    function interest($dealID, $arProducts, $deal)
+    {
+        if (!count($arProducts)) {
+            $logText = "დილზე პროდუქტი არ არის მიბმული";
+            sendNotificationToResponsible($dealID, $logText);
+            return $logText;
+        }
+
+        $sendNotification  = false;
+        $errors            = array();
+        $elementsForUpdate = array();
+
+        foreach ($arProducts as $product) {
+            $element = getCIBlockElementByID($product["PRODUCT_ID"]);
+            if (!$element) continue;
+
+            // სხვა დილის ბინაზე მფლობელი არ იცვლება
+            if (heldByOtherDeal($element, $dealID)) {
+                $errors[] = $element["PRODUCT_TYPE"] . " N" . $element["Number"] . " ProdID " . $element["ID"]
+                    . " სხვა დილისაა (დილი #" . productOwnerDealId($element) . ", " . $element["_P64GYD"] . ") - ინტერესი არ დაფიქსირდა";
+                continue;
+            }
+
+            if ($element["_P64GYD"] != "ინტერესი") $sendNotification = true;
+            $element = preparationProductForInterest($element, $deal);
+
+            $elementsForUpdate[$product["PRODUCT_ID"]] = $element;
+        }
+
+        if (empty($errors)) {
+            $logText = updateProdElement($elementsForUpdate) . "ინტერესი";
+            if ($sendNotification) {
+                sendNotificationToResponsible($dealID, $logText);
+            } else {
+                $logText = "";
+            }
+        } else {
+            $logText = updateProdElement($elementsForUpdate);
+            foreach ($errors as $i => $error) {
+                $logText .= ($i + 1) . ") " . $error . "\n";
+            }
+            sendNotificationToResponsible($dealID, $logText);
+        }
+
+        return $logText;
     }
 }
  
@@ -557,6 +615,69 @@ if (!function_exists('preparationProductForReservation')) {
         return $element;
     }
 }
+
+if (!function_exists('preparationProductForInterest')) {
+    function preparationProductForInterest($element, $deal)
+    {
+        $dealID = $deal["ID"];
+        $element["_P64GYD"] = "ინტერესი";
+        $element = setProductOwnerFields(
+            $element,
+            $dealID,
+            $deal["CONTACT_ID"] ?? "",
+            $deal["ASSIGNED_BY_ID"] ?? ""
+        );
+        $element["QUEUE"] = str_replace("|$dealID", "", $element["QUEUE"]);
+        return $element;
+    }
+}
+ 
+if (!function_exists('releaseStaleInterest')) {
+    /**
+     * ბინები, რომლებიც ამ დილის ინტერესშია, მაგრამ დილზე აღარ არის მიბმული (კატალოგიდან მოიხსნა) - თავისუფლდება.
+     * ეშვება ნებისმიერ სტადიაზე, რომ ძველი ინტერესი ბინაზე არ დარჩეს.
+     */
+    function releaseStaleInterest($dealID, $arProducts)
+    {
+        $dealID = intval($dealID);
+        if ($dealID <= 0) return "";
+
+        $keepIds = array();
+        foreach ($arProducts as $p) $keepIds[] = intval($p["PRODUCT_ID"]);
+
+        $ownerValues = array($dealID, "D_" . $dealID);
+        $res = CIBlockElement::GetList(
+            array(),
+            array(
+                "IBLOCK_ID" => 14,
+                array(
+                    "LOGIC" => "OR",
+                    array("PROPERTY_OWNER_DEAL" => $ownerValues),
+                    array("PROPERTY_ownerDeal"  => $ownerValues),
+                ),
+            ),
+            false,
+            false,
+            array("ID")
+        );
+
+        $elementsForUpdate = array();
+        while ($row = $res->Fetch()) {
+            $id = intval($row["ID"]);
+            if (in_array($id, $keepIds, true) || isset($elementsForUpdate[$id])) continue;
+
+            $element = getCIBlockElementByID($id);
+            if (!$element || $element["_P64GYD"] != "ინტერესი" || !productOwnedByDeal($element, $dealID)) continue;
+
+            $element["_P64GYD"] = "თავისუფალი";
+            $element = clearProductOwnerFields($element);
+            $elementsForUpdate[$id] = $element;
+        }
+
+        if (!count($elementsForUpdate)) return "";
+        return updateProdElement($elementsForUpdate) . "გათავისუფლდა (დილზე აღარ არის)\n";
+    }
+}
  
 if (!function_exists('updateProdElement')) {
     function updateProdElement($elements)
@@ -643,6 +764,9 @@ $allocation = 0;
 
 $arProducts = CCrmDeal::LoadProductRows($dealID);
 
+// დილიდან მოხსნილი ბინები, რომლებიც ჯერ კიდევ ამ დილის ინტერესშია
+$staleLog = releaseStaleInterest($dealID, $arProducts);
+
 // --- DEBUG: raw stage info ---
 $this->SetVariable("debug_deal_id", $dealID);
 $this->SetVariable("debug_stage_id", $deal["STAGE_ID"]);
@@ -663,6 +787,8 @@ if ($deal["CLOSED"] == "Y") {
 
     if ($stage_group == "new") {
         $logText = new_stage($dealID, $arProducts, $deal);
+    } elseif ($stage_group == "Interest") {
+        $logText = interest($dealID, $arProducts, $deal);
     } elseif ($stage_group == "Reservation") {
         $logText = reservation($dealID, $arProducts, $deal);
         // მრავალპროდუქტიან რეზერვაციაზე workflow გაუშვებს 85-ე პროცესს.
@@ -678,6 +804,10 @@ if ($deal["CLOSED"] == "Y") {
     } else {
         $logText = new_stage($dealID, $arProducts, $deal);
     }
+}
+
+if ($staleLog !== "") {
+    $logText = $staleLog . ($logText ?: "");
 }
 
 // --- DEBUG: dump first product's element data after processing ---

@@ -179,6 +179,8 @@ ob_end_clean();
             --red-dim:   rgba(217,43,58,.10);
             --blue:      #3b5bdb;
             --purple:    #7048e8;
+            --cyan:      #1098ad;
+            --cyan-dim:  rgba(16,152,173,.10);
             --radius:    7px;
             --radius2:   12px;
             --mono:      'JetBrains Mono', monospace;
@@ -333,6 +335,7 @@ ob_end_clean();
         .legend-item.legend-active.status-sold-frame     { background:var(--red-dim); border-color:var(--red); color:var(--red); }
         .legend-item.legend-active.status-nfs-frame      { background:rgba(112,72,232,.08); border-color:var(--purple); color:var(--purple); }
         .legend-item.legend-active.status-queue-frame    { background:rgba(219,39,119,.08); border-color:#db2777; color:#db2777; }
+        .legend-item.legend-active.status-interest-frame { background:var(--cyan-dim); border-color:var(--cyan); color:var(--cyan); }
         .legend-count {
             font-family:var(--mono); font-size:11px; font-weight:700;
             padding:1px 7px; border-radius:4px; background:var(--bg3);
@@ -476,6 +479,7 @@ ob_end_clean();
         .status-active     { background:#7cdf9c; border-color:#0ca678; color:#087a58; }
         .status-reserved   { background:#ffcf37; border-color:#e67700; color:#b35900; }
         .status-queue      { background:#b69bff; border-color:#7048e8; color:#5433c1; }
+        .status-interest   { background:#66d9e8; border-color:#1098ad; color:#0b7285; }
         .status-sold       { background:#f67581; border-color:#d92b3a; color:#a8202c; }
         .status-notforsale { background:#c0c0c0; border-color:#4e4046; color:#4e3f45; }
         .status-unknown    { background:var(--bg3); border-color:var(--border2); color:var(--text2); }
@@ -587,6 +591,7 @@ ob_end_clean();
         .field-row.is-main.apt-reserved   { background:#fff8e6; border-color:#ffd580; }
         .field-row.is-main.apt-sold       { background:#fff0f1; border-color:#ffa8ae; }
         .field-row.is-main.apt-queue      { background:#fdf2f8; border-color:#f9a8d4; }
+        .field-row.is-main.apt-interest   { background:#e3fafc; border-color:#99e9f2; }
         .field-row.is-main.apt-notforsale { background:#f3f0ff; border-color:#c4b5fd; }
 
         .field-label {
@@ -610,6 +615,7 @@ ob_end_clean();
         .badge-reserved { background:var(--amber-dim); color:var(--amber); border-color:rgba(230,119,0,.3); }
         .badge-sold     { background:var(--red-dim); color:var(--red); border-color:rgba(217,43,58,.3); }
         .badge-queue    { background:rgba(219,39,119,.10); color:#db2777; border-color:rgba(219,39,119,.3); }
+        .badge-interest { background:var(--cyan-dim); color:var(--cyan); border-color:rgba(16,152,173,.3); }
         .badge-nfs      { background:rgba(112,72,232,.08); color:var(--purple); border-color:rgba(112,72,232,.3); }
         .badge-no-info  { background:var(--bg3); color:var(--text3); border-color:var(--border); font-style:italic; }
 
@@ -755,6 +761,7 @@ ob_end_clean();
         <div id="legendBar">
         <button id="backBtn" type="button" style="display:none;">← მთავარი გვერდი</button>
             <div class="legend-item status-active-frame"><span class="legend-color status-active"></span> თავისუფალი <span class="legend-count" id="count-active">0</span></div>
+            <div class="legend-item status-interest-frame"><span class="legend-color status-interest"></span> ინტერესი <span class="legend-count" id="count-interest">0</span></div>
             <div class="legend-item status-reserved-frame"><span class="legend-color status-reserved"></span> დაჯავშნილი <span class="legend-count" id="count-reserved">0</span></div>
             <div class="legend-item status-sold-frame"><span class="legend-color status-sold"></span> გაყიდული <span class="legend-count" id="count-sold">0</span></div>
             <div class="legend-item status-nfs-frame"><span class="legend-color status-notforsale"></span> NFS <span class="legend-count" id="count-nfs">0</span></div>
@@ -917,6 +924,7 @@ const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","T
 // ── Status helpers ──
 const STATUS_MAP = {
     "თავისუფალი":    { tile:"active",     apt:"apt-active",     badge:"badge-active" },
+    "ინტერესი":      { tile:"interest",   apt:"apt-interest",   badge:"badge-interest" },
     "დაჯავშნილი":    { tile:"reserved",   apt:"apt-reserved",   badge:"badge-reserved" },
     "გაყიდული":      { tile:"sold",       apt:"apt-sold",       badge:"badge-sold" },
     "დასადასტურებელი ჯავშანი": { tile:"queue", apt:"apt-queue",  badge:"badge-queue" },
@@ -956,13 +964,22 @@ if (openedOnDeal) {
         const pb = document.getElementById("productsBox");
         products.forEach(apt => pb.appendChild(makeDealTile(apt)));
 
-        // მიბმული ბინები თავისუფალია: ჯავშნის ფორმა ბინის მოხსნა-მიბმის გარეშე
-        if (inAllowedStages && products.every(apt => apt["_P64GYD"] === "თავისუფალი")) {
+        // მიბმული ბინები თავისუფალია ან ამ დილის ინტერესშია: ჯავშნის ფორმა ბინის მოხსნა-მიბმის გარეშე
+        if (inAllowedStages && products.every(apt => isFreeForThisDeal(apt))) {
             const rb = document.getElementById("reserveAgainBtn");
             rb.style.display = "";
             rb.addEventListener("click", () => showReservationPopup());
         }
     }
+}
+
+// ბინა თავისუფალია, ან ინტერესშია ამავე დილზე (Leads / პირველადი კომუნიკაცია / დამუშავების პროცესში)
+function isFreeForThisDeal(apt) {
+    const s = apt["_P64GYD"];
+    if (s === "თავისუფალი") return true;
+    if (s !== "ინტერესი") return false;
+    const owner = String(apt["OWNER_DEAL"] || apt["ownerDeal"] || "").replace(/\D/g, "");
+    return owner !== "" && owner === String(dealID);
 }
 
 // დილზე შენახული ბინები შეიცვალა - ჯავშანი ჯერ შენახვით
@@ -1000,7 +1017,7 @@ function makeDealTile(apt) {
     tile.dataset.id     = apt["ID"];
     tile.dataset.status = apt["_P64GYD"] || "";
     tile.textContent    = apt["Number"] || apt[F_NUMBER] || apt["NAME"];
-    if (inAllowedStages && apt["_P64GYD"] === "თავისუფალი") {
+    if (inAllowedStages && isFreeForThisDeal(apt)) {
         const rm = document.createElement("button");
         rm.textContent = "×"; rm.className = "remove-chip";
         rm.style.cssText = "margin-left:3px;font-size:10px;background:transparent;border:none;cursor:pointer;";
@@ -1713,10 +1730,11 @@ function makeAptTile(apt, prefix="") {
 //  LEGEND
 // ══════════════════════════════════════════
 function updateLegendCounts(prods) {
-    const c = {active:0, reserved:0, sold:0, nfs:0, queue:0};
+    const c = {active:0, interest:0, reserved:0, sold:0, nfs:0, queue:0};
     (prods||[]).forEach(p => {
         switch(p["_P64GYD"]) {
             case "თავისუფალი":    c.active++;   break;
+            case "ინტერესი":      c.interest++; break;
             case "დაჯავშნილი":    c.reserved++; break;
             case "გაყიდული":      c.sold++;     break;
             case "NFS":           c.nfs++;      break;
@@ -1726,6 +1744,7 @@ function updateLegendCounts(prods) {
     });
     document.getElementById("count-total").textContent    = (prods||[]).length;
     document.getElementById("count-active").textContent   = c.active;
+    document.getElementById("count-interest").textContent = c.interest;
     document.getElementById("count-reserved").textContent = c.reserved;
     document.getElementById("count-sold").textContent     = c.sold;
     document.getElementById("count-nfs").textContent      = c.nfs;
@@ -2540,6 +2559,7 @@ document.getElementById("sendButton")?.addEventListener("click", submitReservati
 // ══════════════════════════════════════════
 const legendStatusMap = {
     "count-active":   "თავისუფალი",
+    "count-interest": "ინტერესი",
     "count-reserved": "დაჯავშნილი",
     "count-sold":     "გაყიდული",
     "count-nfs":      "NFS",
@@ -2649,6 +2669,7 @@ async function exportToExcel() {
         // Same colors as the grid tiles — valid 8-char ARGB
         const statusColors={
             "თავისუფალი":    { fill:"FF7CDF9C", font:"FF087A58" },
+            "ინტერესი":      { fill:"FF66D9E8", font:"FF0B7285" },
             "დაჯავშნილი":    { fill:"FFFFCF37", font:"FFB35900" },
             "გაყიდული":      { fill:"FFF67581", font:"FFA8202C" },
             "დასადასტურებელი ჯავშანი": { fill:"FFB69BFF", font:"FF5433C1" },
