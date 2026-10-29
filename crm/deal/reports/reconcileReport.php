@@ -514,7 +514,7 @@ $units = [];
 foreach ($filteredIssues as $i => $issue) {
     $units[$i] = ['deal' => $issue['deal_id'], 'product' => $products[$issue['product_id']] ?? null];
 }
-foreach (reportBuildRegister($units) as $i => $register) {
+foreach (reportBuildRegister($units, $lang) as $i => $register) {
     $filteredIssues[$i]['register'] = reportRegisterExcelRow($register);
 }
 

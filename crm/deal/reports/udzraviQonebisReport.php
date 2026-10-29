@@ -51,7 +51,7 @@ foreach ($filteredProducts as $id => $product) {
     $units[$id] = ['deal' => $hasDeal ? reportExtractProductOwnerDealId($product) : '', 'product' => $product];
 }
 $exportProducts = [];
-foreach (reportBuildRegister($units) as $id => $register) {
+foreach (reportBuildRegister($units, $lang) as $id => $register) {
     $exportProducts[] = array_merge($filteredProducts[$id], reportRegisterExcelRow($register));
 }
 

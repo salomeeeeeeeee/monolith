@@ -38,6 +38,8 @@ define('C_PERSONAL_ID', 'UF_CRM_1781244744534');
 
 // List 30 "ბუღალტერიის აიდი": Deal => BuxalteriisId.
 define('REPORT_BUX_IBLOCK', 30);
+// List 18 "ხელშეკრულებები": DEAL_ID => AGREEMENT (the signed contract file).
+define('REPORT_AGREEMENT_IBLOCK', 18);
 // PLAN_TYPE of the first and last rows of a payment schedule (list 22); installments are 1..N.
 define('REPORT_PLAN_FIRST', 'პირველადი შენატანი');
 define('REPORT_PLAN_LAST', 'ბოლო შენატანი');

@@ -715,7 +715,25 @@ function reportRegisterColumns($lang = 'ge')
         'CONTRACT_DATE' => $eng ? 'Contract Date' : 'ხელშ.თარიღი',
         'BUYER' => $eng ? 'Buyer' : 'მყიდველი',
         'BUYER_ID' => $eng ? 'Personal ID / Company Code' : 'პირადი ნომერი/ საიდენტ. კოდი',
+        'CONTRACT_ATTACHED' => $eng ? 'Contract Attached' : 'ხელშეკრულება მიბმულია',
     ];
+}
+
+/** Deal IDs (as keys) with a contract file in list 18 "ხელშეკრულებები". */
+function reportGetDealsWithAgreement()
+{
+    static $deals = null;
+    if ($deals !== null) {
+        return $deals;
+    }
+    $deals = [];
+    foreach (reportLoadAllIblockPropertyRows(REPORT_AGREEMENT_IBLOCK) as $row) {
+        $dealId = reportExtractDealId($row['DEAL_ID'] ?? '');
+        if ($dealId !== '' && (int)($row['AGREEMENT'] ?? 0) > 0) {
+            $deals[$dealId] = true;
+        }
+    }
+    return $deals;
 }
 
 /** Deal ID => accounting code (list 30 "ბუღალტერიის აიდი"). */
@@ -740,9 +758,10 @@ function reportGetBuxIds()
  * $units: [row key => ['deal' => deal ID or '', 'product' => catalog row or null]].
  * Project, project code and contract number come from the unit, else the deal. The buyer is the
  * deal's contact, else the unit's owner contact, else the old-base name on the deal.
+ * CONTRACT_ATTACHED is დიახ/არა (Yes/No) by list 18, empty on rows without a deal.
  * Rows also carry BUYER_PHONE, STAGE_ID and BARTER (bool) for the reports that show them.
  */
-function reportBuildRegister(array $units)
+function reportBuildRegister(array $units, $lang = 'ge')
 {
     $dealIds = [];
     foreach ($units as $unit) {
@@ -774,6 +793,9 @@ function reportBuildRegister(array $units)
     }
     $contacts = reportBatchContactDetails(array_unique(array_values($contactOf)));
     $buxIds = reportGetBuxIds();
+    $agreements = reportGetDealsWithAgreement();
+    $yesLabel = $lang === 'eng' ? 'Yes' : 'დიახ';
+    $noLabel = $lang === 'eng' ? 'No' : 'არა';
 
     $register = [];
     foreach ($units as $key => $unit) {
@@ -799,6 +821,7 @@ function reportBuildRegister(array $units)
             'CONTRACT_DATE' => (string)($deal[D_CONTRACT_DATE] ?? ''),
             'BUYER' => ($contact['NAME'] ?? '') !== '' ? $contact['NAME'] : trim((string)($deal[D_OLD_BUYER] ?? '')),
             'BUYER_ID' => $contact['PERSONAL_ID'] ?? '',
+            'CONTRACT_ATTACHED' => $dealId === '' ? '' : (isset($agreements[$dealId]) ? $yesLabel : $noLabel),
             'BUYER_PHONE' => $contact['PHONE'] ?? '',
             'STAGE_ID' => (string)($deal['STAGE_ID'] ?? ''),
             'BARTER' => (string)reportScalarProp($deal[D_BARTER] ?? '') === D_BARTER_YES,
@@ -808,7 +831,7 @@ function reportBuildRegister(array $units)
 }
 
 /** reportBuildRegister() rows by deal ID; the unit is the deal's catalog product. */
-function reportDealRegister(array $dealIds)
+function reportDealRegister(array $dealIds, $lang = 'ge')
 {
     $productsByDeal = [];
     foreach (reportGetProductsForDeals($dealIds) as $row) {
@@ -821,7 +844,7 @@ function reportDealRegister(array $dealIds)
             $units[$dealId] = ['deal' => $dealId, 'product' => $productsByDeal[$dealId] ?? null];
         }
     }
-    return reportBuildRegister($units);
+    return reportBuildRegister($units, $lang);
 }
 
 /** Register columns of one row as Excel values: accounting code and deal ID as numbers. */
@@ -854,7 +877,7 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
         }
     }
     $dealIds = array_keys($dealIds);
-    $register = reportBuildRegister($units);
+    $register = reportBuildRegister($units, $lang);
 
     $deals = [];
     if (!empty($dealIds)) {

@@ -111,7 +111,7 @@ foreach ($deals as &$deal) {
 unset($deal);
 
 // Excel: the accountants' register columns first.
-foreach (reportDealRegister(array_keys($deals)) as $dealId => $register) {
+foreach (reportDealRegister(array_keys($deals), $lang) as $dealId => $register) {
     $deals[$dealId] = array_merge($deals[$dealId], reportRegisterExcelRow($register));
 }
 
