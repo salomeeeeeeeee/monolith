@@ -1,6 +1,6 @@
 <?php
 /**
- * აბონირების გადასახადი: Dighomi 2500 ₾, Green City 2300 ₾, მხოლოდ ბინებზე.
+ * აბონირების გადასახადი: Dighomi 2500 ₾, Green City 2300 ₾, მხოლოდ ბინებსა და კომერციულ ფართებზე.
  * ბინის ფასში და გრაფიკში (ლისტი 22) არ შედის, კლიენტი ცალკე იხდის.
  *
  * ორი სია (ქმნის /crm/deal/bank_integration/setup.php):
@@ -8,9 +8,9 @@
  *  - SUBSCRIPTION_PAYMENTS "აბონირების გადახდები": ბანკის / სალაროს ამონაწერიდან (bog_merge.php) ან ხელით.
  *    დილის ბარათზე ჩანს ტაბად "აბონირების გადახდები" (DEAL ველი, VISIBLE = Y).
  *
- * დარიცხვა იქმნება, როცა ამ პროექტების ბინის დილი ხელშეკრულების ან შემდეგ სტადიაზე გადადის. თუ დილი ამ
+ * დარიცხვა იქმნება, როცა ამ პროექტების ბინის / კომერციული ფართის დილი ხელშეკრულების ან შემდეგ სტადიაზე გადადის. თუ დილი ამ
  * სტადიებიდან გავიდა და გადახდა არ აქვს, დარიცხვა იშლება. ძველ (უკვე გაყიდულ) დილს დარიცხვა მაშინ ექმნება,
- * როცა ბანკის გვერდზე თანხა აბონირებაზე გატარდება.
+ * როცა ბანკის გვერდზე თანხა აბონირებაზე გატარდება, ან ერთიანად /crm/deal/migration/subscriptionFeeCharges.php-ით.
  * გადახდების სიის ყოველი ცვლილება (კოდით თუ ხელით) დარიცხვის "გადახდილი / დარჩენილი" ველებს თავიდან ითვლის.
  */
 
@@ -21,7 +21,7 @@ const SUBSCRIPTION_FEE_D_TYPE       = 'UF_CRM_1779277898205';  // ფართ�
 const SUBSCRIPTION_FEE_D_BLOCK      = 'UF_CRM_1779277644355';  // ბლოკი
 const SUBSCRIPTION_FEE_D_UNIT       = 'UF_CRM_1779277613798';  // ბინის ნომერი
 const SUBSCRIPTION_FEE_D_CONTRACT   = 'UF_CRM_1791205458297';  // ხელშეკრულების ნომერი
-const SUBSCRIPTION_FEE_UNIT_TYPE    = 'ბინა';
+const SUBSCRIPTION_FEE_UNIT_TYPES   = ['ბინა', 'კომერციული', 'კომერციული ფართი'];  // ფართის ტიპები, რომლებსაც აბონირება აქვთ
 // ხელშეკრულება, დადასტურებული ხელშეკრულება, მოთხოვნილი გაყიდვა, გაყიდული - იგივე, რაზეც ბანკის მიბმა მუშაობს
 const SUBSCRIPTION_FEE_STAGES       = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];
 
@@ -69,10 +69,10 @@ function subscriptionFeeUfValue($value)
     return trim((string)$value);
 }
 
-/** დილის აბონირების თანხა პროექტით: 0, თუ პროექტს აბონირება არ აქვს ან ფართი ბინა არ არის */
+/** დილის აბონირების თანხა პროექტით: 0, თუ პროექტს აბონირება არ აქვს ან ფართი არც ბინაა და არც კომერციული */
 function subscriptionFeeAmountForDeal(array $deal)
 {
-    if (subscriptionFeeUfValue($deal[SUBSCRIPTION_FEE_D_TYPE] ?? '') !== SUBSCRIPTION_FEE_UNIT_TYPE) {
+    if (!in_array(subscriptionFeeUfValue($deal[SUBSCRIPTION_FEE_D_TYPE] ?? ''), SUBSCRIPTION_FEE_UNIT_TYPES, true)) {
         return 0.0;
     }
     $project = mb_strtolower(subscriptionFeeUfValue($deal[SUBSCRIPTION_FEE_D_PROJECT] ?? ''));

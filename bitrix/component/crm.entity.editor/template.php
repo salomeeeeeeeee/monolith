@@ -2213,7 +2213,7 @@ BX.ready(function() {
               '<span>დარჩენილი: ' + gel(status.LEFT) + ';</span>'
             : (info.STATUS
                 ? '<span>გაყიდული დილი: დარიცხვა (' + gel(info.STATUS.AMOUNT) + ') შეიქმნება, როცა ბანკის გვერდზე პირველად გატარდება აბონირება</span>'
-                : '<span>ამ დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები)</span>');
+                : '<span>ამ დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები და კომერციული ფართები)</span>');
         container.insertAdjacentHTML('beforebegin', '<div class="leac-title-menu dmg-subscription-info">' + html + '</div>');
     }, 700);
 })();
