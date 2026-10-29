@@ -6,6 +6,8 @@
  *
  * ქმნის ამონაწერების სიას (CODE = BOG_STATEMENTS) და ამატებს გადახდების სიას
  * (ლისტი 23) ორ ველს: BANK_PAYMENT_ID (დუბლიკატების კონტროლი) და comment.
+ * ასევე ქმნის აბონირების ორ სიას: SUBSCRIPTION_CHARGES და SUBSCRIPTION_PAYMENTS
+ * (local/php_interface/subscription_fee.php).
  *
  * ველები იქმნება Lists მოდულის API-ით (CList::AddField) და არა პირდაპირ
  * CIBlockProperty::Add-ით: Lists-ს ველების საკუთარი რეგისტრი აქვს და "ნედლი"
@@ -117,6 +119,93 @@ function bankBogPaymentFields()
     ];
 }
 
+/** დილის ველი; $visible - ჩანდეს თუ არა სია დილის ბარათზე ტაბად */
+function bankBogSubscriptionDealField($visible)
+{
+    return [
+        'CODE' => 'DEAL', 'NAME' => 'დილი', 'TYPE' => 'S:ECrm', 'REQUIRED' => true,
+        'USER_TYPE_SETTINGS' => ['DEAL' => 'Y', 'LEAD' => 'N', 'CONTACT' => 'N', 'COMPANY' => 'N', 'VISIBLE' => $visible ? 'Y' : 'N'],
+    ];
+}
+
+/** დილის ველები, რომლებიც ორივე აბონირების სიაშია (subscriptionFeeDealProps) */
+function bankBogSubscriptionDealInfoFields()
+{
+    return [
+        ['CODE' => 'PROJECT', 'NAME' => 'პროექტი', 'TYPE' => 'S'],
+        ['CODE' => 'KORPUSI', 'NAME' => 'კორპუსი', 'TYPE' => 'S'],
+        ['CODE' => 'BINIS_NOMERI', 'NAME' => 'ბინის #', 'TYPE' => 'S'],
+        ['CODE' => 'FULL_NAME', 'NAME' => 'სახელი გვარი', 'TYPE' => 'S'],
+        ['CODE' => 'xelshNum', 'NAME' => 'ხელშეკრულების ნომერი', 'TYPE' => 'S'],
+        ['CODE' => 'comment', 'NAME' => 'კომენტარი', 'TYPE' => 'S', 'ROWS' => 3],
+    ];
+}
+
+/** აბონირების დარიცხვა: თითო დილზე ერთი ელემენტი (local/php_interface/subscription_fee.php) */
+function bankBogSubscriptionChargeFields()
+{
+    return array_merge([
+        bankBogSubscriptionDealField(false),
+        ['CODE' => 'DEAL_ID', 'NAME' => 'DEAL_ID', 'TYPE' => 'N'],
+        ['CODE' => 'TANXA', 'NAME' => 'თანხა ₾', 'TYPE' => 'N', 'REQUIRED' => true],
+        ['CODE' => 'PAID', 'NAME' => 'გადახდილი ₾', 'TYPE' => 'N'],
+        ['CODE' => 'LEFT', 'NAME' => 'დარჩენილი ₾', 'TYPE' => 'N'],
+    ], bankBogSubscriptionDealInfoFields());
+}
+
+/** აბონირების გადახდები: ბანკის / სალაროს ამონაწერიდან ან ხელით */
+function bankBogSubscriptionPaymentFields()
+{
+    return array_merge([
+        bankBogSubscriptionDealField(true),
+        ['CODE' => 'DEAL_ID', 'NAME' => 'DEAL_ID', 'TYPE' => 'N'],
+        ['CODE' => 'date', 'NAME' => 'თარიღი', 'TYPE' => 'S:Date'],
+        ['CODE' => 'TANXA', 'NAME' => 'თანხა ₾', 'TYPE' => 'N', 'REQUIRED' => true],
+        ['CODE' => 'TANXA_USD', 'NAME' => 'თანხა $ (NBG კურსით)', 'TYPE' => 'N'],
+        ['CODE' => 'NBG', 'NAME' => 'NBG კურსი', 'TYPE' => 'N'],
+        ['CODE' => 'pay_type', 'NAME' => 'გადახდის ტიპი', 'TYPE' => 'L',
+            'ENUM' => ['bank' => 'ბანკი', 'cash' => 'სალარო', 'manual' => 'ხელით შექმნილი გადახდა']],
+        ['CODE' => 'BANK_PAYMENT_ID', 'NAME' => 'ბანკის ამონაწერის ID', 'TYPE' => 'S'],
+    ], bankBogSubscriptionDealInfoFields());
+}
+
+/** გაფართოებული უფლებები სხვა სიიდან (აბონირების სიებს იგივე ხედავს და ცვლის, ვინც გადახდებს - ლისტი 23) */
+function bankBogSetupCopyRights($fromIblockId, $toIblockId)
+{
+    $from = CIBlock::GetList([], ['ID' => $fromIblockId, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
+    if (!$from || $from['RIGHTS_MODE'] !== 'E') {
+        return;
+    }
+    $rights = [];
+    $n = 0;
+    foreach ((new CIBlockRights($fromIblockId))->GetRights() as $right) {
+        $rights['n' . $n++] = ['GROUP_CODE' => $right['GROUP_CODE'], 'TASK_ID' => $right['TASK_ID']];
+    }
+    (new CIBlock())->Update($toIblockId, ['RIGHTS_MODE' => 'E']);
+    (new CIBlockRights($toIblockId))->SetRights($rights);
+}
+
+/** სიის ჩამონათვალი ველის მნიშვნელობები XML_ID-ით (აკლებულს ამატებს) */
+function bankBogSetupEnsureEnums($iblockId, $code, array $values)
+{
+    $prop = CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId, 'CODE' => $code, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
+    if (!$prop) {
+        return;
+    }
+    $have = [];
+    $res = CIBlockPropertyEnum::GetList([], ['PROPERTY_ID' => $prop['ID']]);
+    while ($row = $res->Fetch()) {
+        $have[$row['XML_ID']] = true;
+    }
+    $sort = 100;
+    foreach ($values as $xmlId => $value) {
+        if (!isset($have[$xmlId])) {
+            (new CIBlockPropertyEnum())->Add(['PROPERTY_ID' => $prop['ID'], 'VALUE' => $value, 'XML_ID' => $xmlId, 'SORT' => $sort]);
+        }
+        $sort += 100;
+    }
+}
+
 function bankBogSetupTemplate($templateIblockId)
 {
     $row = CIBlock::GetList([], ['ID' => $templateIblockId, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
@@ -219,7 +308,7 @@ function bankBogSetupAddField($obList, $iblockId, array $property, $sort, &$erro
         'CODE' => $property['CODE'],
         'SORT' => $sort,
         'ACTIVE' => 'Y',
-        'IS_REQUIRED' => 'N',
+        'IS_REQUIRED' => !empty($property['REQUIRED']) ? 'Y' : 'N',
         'MULTIPLE' => 'N',
         'FILTRABLE' => 'Y',
         'SEARCHABLE' => 'N',
@@ -228,6 +317,9 @@ function bankBogSetupAddField($obList, $iblockId, array $property, $sort, &$erro
     if (!empty($property['ROWS'])) {
         $fields['ROW_COUNT'] = (int)$property['ROWS'];
         $fields['COL_COUNT'] = 60;
+    }
+    if (!empty($property['USER_TYPE_SETTINGS'])) {
+        $fields['USER_TYPE_SETTINGS'] = $property['USER_TYPE_SETTINGS'];
     }
 
     if ($obList !== null) {
@@ -240,7 +332,7 @@ function bankBogSetupAddField($obList, $iblockId, array $property, $sort, &$erro
     }
 
     $fields['IBLOCK_ID'] = $iblockId;
-    $fields['PROPERTY_TYPE'] = $property['TYPE'];
+    list($fields['PROPERTY_TYPE'], $fields['USER_TYPE']) = array_pad(explode(':', $property['TYPE']), 2, '');
 
     $prop = new CIBlockProperty();
     if (!$prop->Add($fields)) {
@@ -346,6 +438,40 @@ $report[] = array_merge($paymentEntry, [
     'ID' => BANK_BOG_PAYMENT_IBLOCK,
     'STATUS' => 'არსებული სია',
 ]);
+
+// 3-4. აბონირების სიები (local/php_interface/subscription_fee.php)
+$subscriptionLists = [
+    [SUBSCRIPTION_FEE_CHARGE_CODE, 'აბონირების დარიცხვა', bankBogSubscriptionChargeFields()],
+    [SUBSCRIPTION_FEE_PAYMENT_CODE, 'აბონირების გადახდები', bankBogSubscriptionPaymentFields()],
+];
+foreach ($subscriptionLists as [$code, $name, $definitions]) {
+    $row = CIBlock::GetList([], ['CODE' => $code, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
+    $iblockId = $row ? (int)$row['ID'] : 0;
+    $created = false;
+    if ($iblockId <= 0) {
+        $error = '';
+        $iblockId = bankBogSetupCreateIblock($code, $name, bankBogSetupTemplate(BANK_BOG_PAYMENT_IBLOCK), $error);
+        $created = $iblockId > 0;
+        if (!$created) {
+            $report[] = ['NAME' => $name, 'ID' => 0, 'STATUS' => 'ვერ შეიქმნა: ' . $error, 'FIELDS_ADDED' => [], 'FIELDS_KEPT' => [], 'ERRORS' => []];
+            continue;
+        }
+        bankBogSetupCopyRights(BANK_BOG_PAYMENT_IBLOCK, $iblockId);
+    }
+    $entry = bankBogSetupEnsureFields($iblockId, $definitions, $listsModule);
+    foreach ($definitions as $property) {
+        if (!empty($property['ENUM'])) {
+            bankBogSetupEnsureEnums($iblockId, $property['CODE'], $property['ENUM']);
+        }
+    }
+    $report[] = array_merge($entry, [
+        'NAME' => $name . ' (' . $code . ')',
+        'ID' => $iblockId,
+        'STATUS' => $created ? 'ახლად შეიქმნა' : 'უკვე არსებობდა',
+    ]);
+}
+// დილის ბარათის ტაბები (CLists::getIblockAttachedCrm) ქეშიდან იკითხება
+BXClearCache(true, '/lists/crm/attached/');
 ?>
 <style>
     .bog-setup { font: 14px/1.5 "Helvetica Neue", Arial, sans-serif; max-width: 900px; padding: 16px 0; }

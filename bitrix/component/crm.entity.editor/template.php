@@ -984,6 +984,7 @@ $urlParts = explode('/', "//{$_SERVER['HTTP_HOST']}{$_SERVER['REQUEST_URI']}");
 $dealInfo = array();
 $leadInfo = array();
 $paymentsArr = array();
+$subscriptionFeeInfo = null;
 
 function getDealInfoForDublTemplate($dealID) {
     $res = CCrmDeal::GetListEx(array("ID" => "ASC"), array("ID" => $dealID), false, false, array("ID","CATEGORY_ID","STAGE_ID","ASSIGNED_BY_ID", "DATE_CREATE"));
@@ -1124,6 +1125,14 @@ if ($dealId > 0 && ($isDealEntity || (isset($urlParts[4]) && $urlParts[4] == "de
 		$paymentsArr["diff"] = moneyToNum_CRM_ENTITY($paymentsArr["OPPORTUNITY"]) - moneyToNum_CRM_ENTITY($paymentsArr["PAYMENT_PLAN_SUM"]);
 		$paymentsArr["diff"] = moneyFormatNum_CRM_ENTITY($paymentsArr["diff"], "USD");
 		$paymentsArr["PAYMENT_PLAN_SUM_FORMATED"] = moneyFormatNum_CRM_ENTITY($paymentsArr["PAYMENT_PLAN_SUM"], "USD");
+	}
+
+	// აბონირება (local/php_interface/subscription_fee.php)
+	if (function_exists('subscriptionFeeStatusForDeal')) {
+		$subscriptionFeeInfo = array(
+			"IBLOCK_ID" => subscriptionFeePaymentIblockId(),
+			"STATUS" => subscriptionFeeStatusForDeal($dealId),
+		);
 	}
 }
 
@@ -2166,6 +2175,47 @@ BX.ready(function() {
     };
 
     PaymentInfoManager.init();
+})();
+
+// აბონირების გადახდები: ჯამი (დარიცხვის სიიდან) ტაბის თავში; დარიცხვის გარეშე დილზე (სხვა პროექტი, ძველი დილი) ტაბი არ ჩანს
+(function() {
+    var info = <?php echo json_encode($subscriptionFeeInfo, JSON_UNESCAPED_UNICODE); ?>;
+    if (!info || !info.IBLOCK_ID || window.__dmgSubscriptionInfoBound) {
+        return;
+    }
+    window.__dmgSubscriptionInfoBound = true;
+
+    var status = info.STATUS && info.STATUS.CHARGE_ID ? info.STATUS : null;
+    var tabId = 'crm_scope_detail_c_deal__tab_lists_' + info.IBLOCK_ID;
+    var tries = 0;
+
+    function gel(n) {
+        return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₾';
+    }
+
+    // ტაბი ზოლშია - იმალება; "More" მენიუში მოხვედრილს id არ აქვს, ამიტომ შიგნით წარწერა ჩანს
+    var timer = setInterval(function() {
+        var tabBtn = document.getElementById(tabId);
+        if (!tabBtn && ++tries < 20) return;
+        clearInterval(timer);
+        if (tabBtn && !status) {
+            tabBtn.style.display = 'none';
+        }
+    }, 300);
+
+    // ჯამი ტაბის შიგთავსის გამოჩენისას - ზოლიდან გაიხსნება თუ "More" მენიუდან
+    setInterval(function() {
+        var container = document.querySelector('#container_lists_attached_crm_' + info.IBLOCK_ID);
+        if (!container || document.querySelector('.dmg-subscription-info')) return;
+        var html = status
+            ? '<span>აბონირება: ' + gel(status.AMOUNT) + ';</span>' +
+              '<span>გადახდილი: ' + gel(status.PAID) + ';</span>' +
+              '<span>დარჩენილი: ' + gel(status.LEFT) + ';</span>'
+            : (info.STATUS
+                ? '<span>გაყიდული დილი: დარიცხვა (' + gel(info.STATUS.AMOUNT) + ') შეიქმნება, როცა ბანკის გვერდზე პირველად გატარდება აბონირება</span>'
+                : '<span>ამ დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები)</span>');
+        container.insertAdjacentHTML('beforebegin', '<div class="leac-title-menu dmg-subscription-info">' + html + '</div>');
+    }, 700);
 })();
 
 

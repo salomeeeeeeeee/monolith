@@ -11,3 +11,6 @@ require_once __DIR__ . '/apartment_stage_guard.php';
 
 // ხელშეკრულების ეტაპი: 5 სამუშაო დღე, მერე დილი ბრუნდება დამუშავებაზე (agent)
 require_once __DIR__ . '/contract_deadline.php';
+
+// აბონირების გადასახადი (Dighomi / Green City): დარიცხვა და გადახდები ცალკე სიებში
+require_once __DIR__ . '/subscription_fee.php';

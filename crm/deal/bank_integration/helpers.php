@@ -1436,7 +1436,38 @@ if (!function_exists('bankBogLoadMergedPaymentDeals')) {
                 $map[$pid][$dealId] = true;
             }
         }
+
+        // აბონირების გადახდებიც: ამონაწერი შეიძლება მთლიანად აბონირებაზე იყოს გატარებული
+        $subIblock = function_exists('subscriptionFeePaymentIblockId') ? subscriptionFeePaymentIblockId() : 0;
+        if ($subIblock > 0) {
+            $res = CIBlockElement::GetList(
+                [],
+                ['IBLOCK_ID' => $subIblock, '!PROPERTY_BANK_PAYMENT_ID' => false, 'CHECK_PERMISSIONS' => 'N'],
+                false,
+                false,
+                ['ID', 'PROPERTY_BANK_PAYMENT_ID', 'PROPERTY_DEAL']
+            );
+            while ($row = $res->Fetch()) {
+                $pid = trim((string)($row['PROPERTY_BANK_PAYMENT_ID_VALUE'] ?? ''));
+                $dealId = bankBogNormalizeDealId($row['PROPERTY_DEAL_VALUE'] ?? '');
+                if ($pid !== '' && $dealId !== '') {
+                    $map[$pid][$dealId] = true;
+                }
+            }
+        }
         return $map;
+    }
+}
+
+/**
+ * დანიშნულებაში / კომენტარში აბონირება წერია - ბანკის გვერდი აბონირებას წინასწარ შეავსებს.
+ * კლიენტები ხშირად წერენ "მრიცხველების საფასური" / "გამრიცხველიანება" / "za schetchiki".
+ */
+if (!function_exists('bankBogMentionsSubscription')) {
+    function bankBogMentionsSubscription($text)
+    {
+        // "meter" არა: "square meters" ფართის აღწერაშიც წერია
+        return (bool)preg_match('/აბონ|მრიცხვ|abon|subscr|schetchik|сч[её]тчик/iu', (string)$text);
     }
 }
 
@@ -1647,6 +1678,7 @@ if (!function_exists('bankBogBuildMergeModels')) {
 
         $allDealIds = array_keys($dealsById);
         $leftMap = bankBogComputeLeftToPayMap($allDealIds);
+        $subscriptionMap = function_exists('subscriptionFeeStatusMap') ? subscriptionFeeStatusMap($dealsById) : [];
 
         $matched = [];
         $errors = [];
@@ -1678,6 +1710,7 @@ if (!function_exists('bankBogBuildMergeModels')) {
                 'PAYMENT' => $list['ID'],
                 'COMMENT' => $list['EntryComment'] ?? '',
                 'CASH' => bankBogIsCashStatement($list),
+                'SUB_HINT' => bankBogMentionsSubscription(($list['DocumentNomination'] ?? '') . ' ' . ($list['EntryComment'] ?? '')),
             ];
             // სალაროს საფუძველში ფართი წერია - მისით დილი წინასწარ შეირჩევა
             $unitHint = $base['CASH'] ? bankBogCashUnitHint($base['NOMINATION']) : null;
@@ -1728,6 +1761,8 @@ if (!function_exists('bankBogBuildMergeModels')) {
                     'FROM_HISTORY' => !in_array($dealId, $innDealIds, true),
                     'HISTORY_COUNT' => $hist ? $hist['COUNT'] : 0,
                     'HISTORY_LAST' => $hist ? bankBogFormatDateDmy($hist['LAST']) : '',
+                    // აბონირება (₾): AMOUNT / PAID / LEFT; null - დილს აბონირება არ აქვს
+                    'SUB' => $subscriptionMap[$dealId] ?? null,
                 ];
             }
 
@@ -1905,6 +1940,84 @@ if (!function_exists('bankBogCreatePaymentFromMerge')) {
     }
 }
 
+/**
+ * ამონაწერის ნაწილი აბონირებაზე: გადახდა "აბონირების გადახდების" სიაში (₾), ლისტ 23-ში არა.
+ * დარჩენილ აბონირებაზე მეტის შემოწმება bankBogProcessMergePost-შია (ამონაწერის ყველა ხაზი ერთად).
+ */
+if (!function_exists('bankBogCreateSubscriptionPaymentFromMerge')) {
+    function bankBogCreateSubscriptionPaymentFromMerge($dealId, $paymentId, $valueGel)
+    {
+        $dealId = (int)$dealId;
+        $paymentId = (int)$paymentId;
+        $valueGel = bankBogMoney($valueGel);
+        $iblockId = function_exists('subscriptionFeePaymentIblockId') ? subscriptionFeePaymentIblockId() : 0;
+
+        if ($dealId <= 0 || $paymentId <= 0 || $valueGel <= 0) {
+            return ['ok' => false, 'error' => 'invalid_input'];
+        }
+        if ($iblockId <= 0) {
+            return ['ok' => false, 'error' => 'subscription_iblock_missing'];
+        }
+
+        $dup = bankBogGetElements([
+            'IBLOCK_ID' => $iblockId,
+            'PROPERTY_DEAL' => $dealId,
+            'PROPERTY_BANK_PAYMENT_ID' => $paymentId,
+        ], ['ID'], ['ID' => 'DESC'], 1);
+        if (!empty($dup)) {
+            return ['ok' => false, 'error' => 'already_merged'];
+        }
+
+        $listRows = bankBogGetElements(['IBLOCK_ID' => bankBogStatementIblockId(), 'ID' => $paymentId], null, ['ID' => 'DESC'], 1);
+        if (empty($listRows)) {
+            return ['ok' => false, 'error' => 'statement_not_found'];
+        }
+        $list = $listRows[0];
+
+        $deal = bankBogLoadDealForPayment($dealId);
+        if (!$deal) {
+            return ['ok' => false, 'error' => 'deal_not_found'];
+        }
+        if (!bankBogIsActiveMergeStage($deal['STAGE_ID'] ?? '')) {
+            return ['ok' => false, 'error' => 'inactive_stage', 'stage' => $deal['STAGE_ID'] ?? ''];
+        }
+        // ძველ დილს დარიცხვა პირველი გადახდისას ექმნება
+        if (subscriptionFeeEnsureCharge($dealId, $deal) <= 0) {
+            return ['ok' => false, 'error' => 'დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები)'];
+        }
+
+        $amounts = bankBogStatementAmounts($list);
+        $nbg = floatval($amounts['NBG']) ?: floatval($list['NBG_RATE'] ?? 0);
+        $date = bankBogFormatDateDmy(explode('T', (string)($list['EntryDate'] ?? ''))[0]) ?: date('d/m/Y');
+        $cash = bankBogIsCashStatement($list);
+
+        $props = subscriptionFeeDealProps($deal) + [
+            'date' => $date,
+            'TANXA' => $valueGel,
+            'TANXA_USD' => $nbg > 0 ? bankBogMoney($valueGel / $nbg) : '',
+            'NBG' => $nbg > 0 ? $nbg : '',
+            'pay_type' => subscriptionFeePayTypeId($cash ? 'cash' : 'bank') ?: '',
+            'BANK_PAYMENT_ID' => (string)$paymentId,
+            'comment' => $list['EntryComment'] ?? '',
+        ];
+
+        $res = bankBogAddElement([
+            'IBLOCK_ID' => $iblockId,
+            'NAME' => trim('აბონირება ' . ($list['SenderDetails_Name'] ?? '') . ' ' . $date),
+            'ACTIVE' => 'Y',
+        ], $props);
+
+        if (!is_numeric($res) || (int)$res <= 0) {
+            return ['ok' => false, 'error' => (string)$res];
+        }
+        return ['ok' => true, 'payment_id' => (int)$res];
+    }
+}
+
+/**
+ * POST ხაზები: DEAL_i, PAYMENT_i (ამონაწერი), VALUE_i, KIND_i.
+ * KIND = sub - აბონირება, VALUE ₾-ში; სხვა შემთხვევაში ბინის გადახდა ლისტ 23-ში, VALUE $-ში.
+ */
 if (!function_exists('bankBogProcessMergePost')) {
     function bankBogProcessMergePost(array $post)
     {
@@ -1913,23 +2026,66 @@ if (!function_exists('bankBogProcessMergePost')) {
             return strpos($key, 'DEAL_') === 0;
         });
 
+        $rows = [];
         foreach ($dealKeys as $dealKey) {
             $index = str_replace('DEAL_', '', $dealKey);
             $dealId = bankBogNormalizeDealId($post['DEAL_' . $index] ?? '');
             $value = isset($post['VALUE_' . $index]) ? trim((string)$post['VALUE_' . $index]) : '';
             $payment = isset($post['PAYMENT_' . $index]) ? trim((string)$post['PAYMENT_' . $index]) : '';
 
-            if ($value === '' || $value === '0' || $dealId === '' || $payment === '') {
+            if ($value === '' || (float)$value == 0.0 || $dealId === '' || $payment === '') {
                 continue;
             }
+            $rows[] = [
+                'deal' => $dealId,
+                'payment' => $payment,
+                'value' => $value,
+                'sub' => ($post['KIND_' . $index] ?? '') === 'sub',
+            ];
+        }
 
-            $out = bankBogCreatePaymentFromMerge($dealId, $payment, $value);
+        // აბონირების ხაზები შენახვამდე მოწმდება: არასწორი ხაზის მქონე ამონაწერი საერთოდ არ ინახება,
+        // რომ ნახევრად მიბმული (და გვერდიდან გამქრალი) არ დარჩეს
+        $subRequested = [];
+        foreach ($rows as $row) {
+            if ($row['sub']) {
+                $subRequested[$row['deal']] = ($subRequested[$row['deal']] ?? 0) + bankBogMoney($row['value']);
+            }
+        }
+        $subStatus = ($subRequested && function_exists('subscriptionFeeStatusMap'))
+            ? subscriptionFeeStatusMap(array_fill_keys(array_keys($subRequested), null))
+            : [];
+        $blocked = [];
+        foreach ($rows as $row) {
+            if (!$row['sub']) {
+                continue;
+            }
+            $status = $subStatus[$row['deal']] ?? null;
+            $error = '';
+            if (!$status) {
+                $error = 'დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები)';
+            } elseif ($subRequested[$row['deal']] > $status['LEFT'] + 0.01) {
+                $error = 'აბონირების თანხა დარჩენილზე მეტია (დარჩენილი ' . number_format($status['LEFT'], 2) . ' ₾)';
+            }
+            if ($error !== '') {
+                $blocked[$row['payment']] = true;
+                $results['errors'][] = ['deal' => $row['deal'], 'payment' => $row['payment'], 'error' => $error];
+            }
+        }
+
+        foreach ($rows as $row) {
+            if (isset($blocked[$row['payment']])) {
+                continue;
+            }
+            $out = $row['sub']
+                ? bankBogCreateSubscriptionPaymentFromMerge($row['deal'], $row['payment'], $row['value'])
+                : bankBogCreatePaymentFromMerge($row['deal'], $row['payment'], $row['value']);
             if (!empty($out['ok'])) {
                 $results['saved']++;
             } else {
                 $results['errors'][] = [
-                    'deal' => $dealId,
-                    'payment' => $payment,
+                    'deal' => $row['deal'],
+                    'payment' => $row['payment'],
                     'error' => $out['error'] ?? 'unknown',
                 ];
             }

@@ -29,4 +29,6 @@ echo json_encode([
     'exists' => true,
     'active' => bankBogIsActiveMergeStage($stageId),
     'stage_id' => $stageId,
+    // აბონირება (₾): AMOUNT / PAID / LEFT; null - დილს აბონირება არ აქვს
+    'sub' => function_exists('subscriptionFeeStatusMap') ? (subscriptionFeeStatusMap([$dealId => $deal])[$dealId] ?? null) : null,
 ], JSON_UNESCAPED_UNICODE);

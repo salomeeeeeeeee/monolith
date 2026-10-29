@@ -222,6 +222,28 @@ ob_end_clean();
         .alloc-meta { grid-column: 1 / -1; margin-top: -4px; }
         .alloc-meta .deal-meta { margin-top: 0; }
         .add-deal { margin-top: 8px; }
+        /* აბონირების ხაზი: თანხა ₾-ში, ცალკე სიაში ინახება */
+        .alloc-row.alloc-sub { padding: 6px; margin: 0 -6px; border-radius: 6px; background: #f1ecfb; }
+        .alloc-sub input[name^="DEAL_"] { background: #f7f5fb; }
+        .sub-badge {
+            display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 999px;
+            background: #6b4fbb; color: #fff; font-size: 11px; font-weight: 700;
+        }
+        .sub-note { color: #6b4fbb; }
+        .sub-note .mini-btn { height: 22px; margin-left: 4px; color: #6b4fbb; border-color: #cfc3ee; }
+        .sub-note .mini-btn:disabled { opacity: .45; cursor: default; }
+        .sub-over input[name^="VALUE_"] { border-color: #e08b86; background: #fff6f5; }
+        /* ერთეული ველში: ბინა $, აბონირება ₾ */
+        .alloc-value { position: relative; }
+        .alloc-value::after {
+            content: attr(data-unit); position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            font-size: 12px; font-weight: 700; color: var(--muted); pointer-events: none;
+        }
+        .alloc-value input { padding-right: 20px; -moz-appearance: textfield; }
+        .alloc-value input::-webkit-outer-spin-button,
+        .alloc-value input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .alloc-sum { margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--err); }
+        .alloc-sum:empty { display: none; }
         .alloc-del {
             height: 36px; width: 34px; border-radius: 4px;
             border: 1px solid #e8bcb8; background: #fef3f2; color: var(--err);
@@ -441,7 +463,7 @@ ob_end_clean();
                     <th>თანხა ₾</th>
                     <th>თანხა $</th>
                     <th title="NBG კურსი ამონაწერის EntryDate-ის მიხედვით">კურსი</th>
-                    <th class="col-alloc">დილი / თანხა $</th>
+                    <th class="col-alloc" title="ბინის გადახდა $-ში, აბონირება ₾-ში">დილი / თანხა $ (აბონირება ₾)</th>
                 </tr>
                 </thead>
                 <tbody id="tbody_data"></tbody>
@@ -468,7 +490,7 @@ ob_end_clean();
                     <th>კურსი</th>
                     <th>თანხა ₾</th>
                     <th>თანხა $</th>
-                    <th class="col-alloc">დილი / თანხა $</th>
+                    <th class="col-alloc" title="ბინის გადახდა $-ში, აბონირება ₾-ში">დილი / თანხა $ (აბონირება ₾)</th>
                 </tr>
                 </thead>
                 <tbody id="tbody_data_errors"></tbody>
@@ -607,6 +629,7 @@ async function validateDealInput(input) {
     const wrapper = input.closest('.alloc-deal') || input.parentElement;
     if (!dealId) {
         clearDealValidationState(input);
+        renderSubscriptionAction(input, null);
         updateDealValidationBanner();
         return;
     }
@@ -617,6 +640,7 @@ async function validateDealInput(input) {
             input.classList.add('deal-inactive');
             setDealValidationError(wrapper, cached.exists ? `სტეიჯი: ${cached.stage_id || '?'}` : 'დილი ვერ მოიძებნა');
         }
+        renderSubscriptionAction(input, cached);
         updateDealValidationBanner();
         return;
     }
@@ -629,6 +653,7 @@ async function validateDealInput(input) {
             input.classList.add('deal-inactive');
             setDealValidationError(wrapper, json.exists ? `სტეიჯი: ${json.stage_id || '?'}` : 'დილი ვერ მოიძებნა');
         }
+        renderSubscriptionAction(input, json);
     } catch (e) {}
     updateDealValidationBanner();
 }
@@ -654,10 +679,34 @@ function checkRowTotals(formId) {
 
     rows.forEach(row => {
         const expected = Number(row.dataset.expectedUsd || 0);
-        const values = [...row.querySelectorAll('input[name^="VALUE_"]')].map(i => Number(i.value || 0));
-        const sum = values.reduce((a, b) => a + b, 0);
-        const filled = values.some(v => v > 0);
-        const ok = filled && Math.abs(sum - expected) < 0.02;
+        const rate = Number(row.dataset.nbg || 0);
+        let sum = 0;
+        let filled = false;
+        let subOver = false;
+        row.querySelectorAll('.alloc-row').forEach(alloc => {
+            const v = Number(alloc.querySelector('input[name^="VALUE_"]').value || 0);
+            if (v > 0) filled = true;
+            if (!alloc.classList.contains('alloc-sub')) {
+                sum += v;
+                return;
+            }
+            // აბონირება ₾-შია: ამონაწერის $ თანხასთან შესადარებლად NBG კურსით
+            sum += rate > 0 ? v / rate : 0;
+            const over = v > Number(alloc.dataset.left || 0) + 0.01;
+            alloc.classList.toggle('sub-over', over);
+            if (over) subOver = true;
+        });
+        const ok = filled && !subOver && Math.abs(sum - expected) < 0.02;
+        // რატომ არ ემთხვევა - ხაზების ქვეშ
+        let note = row.querySelector('.alloc-sum');
+        if (!note) {
+            note = document.createElement('div');
+            note.className = 'alloc-sum';
+            row.querySelector('.alloc-list').after(note);
+        }
+        note.textContent = !filled || ok ? '' : (subOver
+            ? 'აბონირება დარჩენილზე მეტია'
+            : `ჯამი $${money(sum)}, ამონაწერი $${money(expected)} - სხვაობა $${money(expected - sum)}`);
         row.classList.toggle('sum-ok', ok);
         row.classList.toggle('sum-bad', filled && !ok);
         if (ok) hasValid = true;
@@ -670,18 +719,119 @@ function checkRowTotals(formId) {
     updateSaveButtonsState();
 }
 
-function buildAllocRow(idx, paymentId, dealId, metaHtml, value) {
-    return `<div class="alloc-row" data-idx="${idx}">
+/** opts.sub - აბონირების ხაზი (თანხა ₾, opts.left - დარჩენილი აბონირება); opts.subHtml - დილის აბონირების ინფო / ღილაკი */
+function buildAllocRow(idx, paymentId, dealId, metaHtml, value, opts = {}) {
+    const sub = !!opts.sub;
+    return `<div class="alloc-row${sub ? ' alloc-sub' : ''}" data-idx="${idx}"${sub ? ` data-deal="${esc(dealId)}" data-left="${Number(opts.left || 0)}"` : ''}>
         <div class="alloc-deal">
-            <input class="form-control" name="DEAL_${idx}" value="${esc(dealId)}" placeholder="Deal ID">
+            <input class="form-control" name="DEAL_${idx}" value="${esc(dealId)}" placeholder="Deal ID"${sub ? ' readonly' : ''}>
             <input type="hidden" name="PAYMENT_${idx}" value="${esc(paymentId)}">
+            <input type="hidden" name="KIND_${idx}" value="${sub ? 'sub' : 'flat'}">
+            ${sub ? '<span class="sub-badge">აბონირება ₾</span>' : ''}
         </div>
-        <div class="alloc-value">
+        <div class="alloc-value" data-unit="${sub ? '₾' : '$'}">
             <input class="form-control" name="VALUE_${idx}" type="number" step="0.01" value="${value}">
         </div>
         <button type="button" class="alloc-del" title="წაშლა" onclick="removeAllocRow(this)">×</button>
         ${metaHtml ? `<div class="alloc-meta">${metaHtml}</div>` : ''}
+        ${opts.subHtml || ''}
     </div>`;
+}
+
+function round2(n) {
+    return Math.round(Number(n || 0) * 100) / 100;
+}
+/** 0 ზუსტად "0"-ად: სერვერი ასეთ ხაზს გამოტოვებს */
+function valueText(n) {
+    return n > 0 ? round2(n).toFixed(2) : '0';
+}
+
+/** დილის აბონირება ბინის ხაზის ქვეშ: თანხა, დარჩენილი და "+ აბონირება" */
+function subscriptionAction(dealId, sub) {
+    if (!sub) return '';
+    const left = Number(sub.LEFT || 0);
+    const btn = left > 0.009
+        ? `<button type="button" class="mini-btn sub-add" data-left="${left}" onclick="addSubscriptionRow(this)" title="ამონაწერის ნაწილი აბონირებაზე (₾)">+ აბონირება</button>`
+        : '';
+    return `<div class="alloc-meta sub-action" data-deal="${esc(dealId)}"><div class="deal-meta sub-note">აბონირება: ${money(sub.AMOUNT)} ₾ · დარჩენილი: <b>${money(left)} ₾</b>${btn}</div></div>`;
+}
+
+/** ვალიდაციის შემდეგ: ხელით ჩაწერილ / შეცვლილ დილსაც უჩნდება აბონირება */
+function renderSubscriptionAction(input, info) {
+    const allocRow = input.closest('.alloc-row');
+    if (!allocRow || allocRow.classList.contains('alloc-sub')) return;
+    allocRow.querySelectorAll('.sub-action').forEach(el => el.remove());
+    if (info && info.exists && info.active && info.sub) {
+        allocRow.insertAdjacentHTML('beforeend', subscriptionAction(input.value.trim(), info.sub));
+        syncSubscriptionButtons(allocRow.closest('tr'));
+    }
+}
+
+/** ერთ ამონაწერზე ერთი დილის აბონირება ერთხელ */
+function syncSubscriptionButtons(tr) {
+    if (!tr) return;
+    tr.querySelectorAll('.sub-action').forEach(action => {
+        const btn = action.querySelector('.sub-add');
+        if (btn) btn.disabled = !!tr.querySelector(`.alloc-sub[data-deal="${CSS.escape(action.dataset.deal || '')}"]`);
+    });
+}
+
+/** ბინის ხაზის ქვეშ აბონირების ხაზი: ₾ თანხიდან რამდენიც დარჩენილ აბონირებას ეტევა, ბინას რჩება დანარჩენი */
+function addSubscriptionRow(btn) {
+    const allocRow = btn.closest('.alloc-row');
+    const tr = btn.closest('tr');
+    const formId = tr.closest('form').id;
+    const dealId = allocRow.querySelector('input[name^="DEAL_"]').value.trim();
+    if (!dealId || tr.querySelector(`.alloc-sub[data-deal="${CSS.escape(dealId)}"]`)) return;
+    const left = Number(btn.dataset.left || 0);
+    const rate = Number(tr.dataset.nbg || 0);
+    const subGel = round2(Math.min(left, Number(tr.dataset.gel || 0)));
+    const flatInput = allocRow.querySelector('input[name^="VALUE_"]');
+    const flatUsd = Number(flatInput.value || 0);
+    if (flatUsd > 0 && rate > 0) {
+        flatInput.value = valueText(flatUsd - subGel / rate);
+    }
+    const idx = formId === 'myForm' ? indexDeals++ : indexErrors++;
+    const paymentId = allocRow.querySelector('input[name^="PAYMENT_"]').value;
+    allocRow.insertAdjacentHTML('afterend', buildAllocRow(idx, paymentId, dealId, '', valueText(subGel), { sub: true, left }));
+    allocRow.nextElementSibling.querySelector('input[name^="VALUE_"]').addEventListener('input', () => checkRowTotals(formId));
+    syncSubscriptionButtons(tr);
+    checkRowTotals(formId);
+}
+
+// ხაზში თანხის ჩაწერისას დანარჩენი სხვა ხაზზე გადადის. capture - checkRowTotals-მდე ეშვება
+let editSeq = 0;
+document.addEventListener('input', e => {
+    const row = e.target.matches && e.target.matches('input[name^="VALUE_"]') ? e.target.closest('.alloc-row') : null;
+    if (!row) return;
+    row.dataset.edited = String(++editSeq);
+    rebalanceRemainder(row);
+}, true);
+
+/**
+ * მხოლოდ აბონირებიან ამონაწერზე: დანარჩენი თანხა იწერება ხაზში, რომელიც ყველაზე დიდი ხნის წინ შეიცვალა
+ * (ან საერთოდ არ შეცვლილა); შეუცვლელებიდან ჯერ აბონირებაში, მერე იმავე დილის ბინაში, მერე სხვა დილში.
+ * აბონირების გარეშე ამონაწერზე არაფერი ივსება - თანხა სხვა დილზე უნებლიედ არ უნდა გადავიდეს.
+ */
+function rebalanceRemainder(edited) {
+    const tr = edited.closest('tr');
+    const rate = Number(tr.dataset.nbg || 0);
+    const rows = [...tr.querySelectorAll('.alloc-row')];
+    const subDeals = rows.filter(r => r.classList.contains('alloc-sub')).map(r => r.dataset.deal);
+    if (!subDeals.length || rows.length < 2 || rate <= 0) return;
+    const rank = r => r.classList.contains('alloc-sub') ? 0
+        : (subDeals.includes(r.querySelector('input[name^="DEAL_"]').value.trim()) ? 1 : 2);
+    const target = rows.filter(r => r !== edited).sort((a, b) =>
+        (Number(a.dataset.edited || 0) - Number(b.dataset.edited || 0)) || (rank(a) - rank(b)))[0];
+    let othersUsd = 0;
+    rows.forEach(r => {
+        if (r === target) return;
+        const v = Number(r.querySelector('input[name^="VALUE_"]').value || 0);
+        othersUsd += r.classList.contains('alloc-sub') ? v / rate : v;
+    });
+    target.querySelector('input[name^="VALUE_"]').value = target.classList.contains('alloc-sub')
+        ? valueText(Number(tr.dataset.gel || 0) - othersUsd * rate)
+        : valueText(Number(tr.dataset.expectedUsd || 0) - othersUsd);
 }
 
 function removeAllocRow(btn) {
@@ -690,15 +840,17 @@ function removeAllocRow(btn) {
     const formId = form.id;
     const allocRow = btn.closest('.alloc-row');
     const list = row.querySelector('.alloc-list');
-    if (list.querySelectorAll('.alloc-row').length <= 1) {
+    if (allocRow.classList.contains('alloc-sub')) {
+        allocRow.remove();
+        syncSubscriptionButtons(row);
+    } else if (list.querySelectorAll('.alloc-row').length <= 1) {
         // ბოლო ხაზი — ცარიელდება, არ იშლება მთლიანად
         const deal = allocRow.querySelector('input[name^="DEAL_"]');
         const val = allocRow.querySelector('input[name^="VALUE_"]');
         deal.value = '';
         val.value = '0';
         clearDealValidationState(deal);
-        const meta = allocRow.querySelector('.alloc-meta');
-        if (meta) meta.remove();
+        allocRow.querySelectorAll('.alloc-meta').forEach(meta => meta.remove());
     } else {
         allocRow.remove();
     }
@@ -741,7 +893,16 @@ function renderMatched() {
                 const owner = d.FROM_HISTORY && d.CLIENT_NAME ? `<br>დილის კლიენტი: ${esc(d.CLIENT_NAME)}` : '';
                 const history = d.HISTORY_COUNT ? `<br><span class="history-note">წინა მიბმები: ${esc(d.HISTORY_COUNT)}, ბოლო: ${esc(d.HISTORY_LAST)}</span>` : '';
                 const meta = `<div class="deal-meta" title="დარჩენილი დავალიანება: გრაფიკი - გადახდები (დღემდე)">#${esc(d.ID)} · ${esc(info.join(' · '))}${owner}<br>დარჩენილი: <b>${money(d.LEFT_TO_PAY)}</b>${history}</div>`;
-                allocParts.push(buildAllocRow(idx, row.list_id, d.ID, meta, prefill));
+                // დანიშნულებაში აბონირება წერია: ₾ თანხიდან რამდენიც ეტევა აბონირებაზე, დანარჩენი ბინაზე
+                const subLeft = d.SUB ? Number(d.SUB.LEFT || 0) : 0;
+                const subGel = prefill > 0 && row.SUB_HINT && subLeft > 0.009 && Number(row.NBG_RATE) > 0
+                    ? round2(Math.min(subLeft, Number(row.BANK_AMOUNT_GEL || 0)))
+                    : 0;
+                const flatValue = subGel > 0 ? valueText(prefill - subGel / Number(row.NBG_RATE)) : prefill;
+                allocParts.push(buildAllocRow(idx, row.list_id, d.ID, meta, flatValue, { subHtml: subscriptionAction(d.ID, d.SUB) }));
+                if (subGel > 0) {
+                    allocParts.push(buildAllocRow(indexDeals++, row.list_id, d.ID, '', valueText(subGel), { sub: true, left: subLeft }));
+                }
             });
         } else {
             const idx = indexDeals++;
@@ -751,6 +912,7 @@ function renderMatched() {
         const tr = document.createElement('tr');
         tr.className = `filtertr ${tone}`;
         tr.dataset.expectedUsd = String(row.BANK_AMOUNT_USD || 0);
+        tr.dataset.nbg = String(row.NBG_RATE || 0);
         tr.dataset.date = String(row.DATE || '');
         tr.dataset.search = [
             row.CLIENT_NAME, row.NAME, row.INN, row.SENDER_ACCOUNT, row.BENEFICIARY, row.NOMINATION, row.CURRENCY, row.PROJECT, row.ACCOUNT,
@@ -776,6 +938,7 @@ function renderMatched() {
             <td><div class="alloc-list">${allocParts.join('')}</div><button type="button" class="mini-btn add-deal" onclick="addDealField(this,'myForm')">+ დილი</button></td>
         `;
         tbody.appendChild(tr);
+        syncSubscriptionButtons(tr);
         tr.querySelectorAll('input[name^="DEAL_"]').forEach(bindDealInput);
         tr.querySelectorAll('input[name^="VALUE_"]').forEach(inp => {
             inp.addEventListener('input', () => checkRowTotals('myForm'));
@@ -794,6 +957,7 @@ function renderErrors() {
         const tr = document.createElement('tr');
         tr.className = 'filtertr tone-red';
         tr.dataset.expectedUsd = String(usd);
+        tr.dataset.nbg = String(row.NBG_RATE || 0);
         tr.dataset.date = String(row.DATE || '');
         tr.dataset.search = [row.NAME, row.INN, row.BENEFICIARY, row.NOMINATION, row.CURRENCY, row.PROJECT, row.ACCOUNT].join(' ').toLowerCase();
         tr.dataset.currency = (row.CURRENCY || '').toUpperCase();
