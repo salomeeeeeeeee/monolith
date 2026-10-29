@@ -1983,7 +1983,7 @@ if (!function_exists('bankBogCreateSubscriptionPaymentFromMerge')) {
         }
         // ძველ დილს დარიცხვა პირველი გადახდისას ექმნება
         if (subscriptionFeeEnsureCharge($dealId, $deal) <= 0) {
-            return ['ok' => false, 'error' => 'დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები და კომერციული ფართები)'];
+            return ['ok' => false, 'error' => 'დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები, კომერციული ფართები და ოფისები)'];
         }
 
         $amounts = bankBogStatementAmounts($list);
@@ -2063,7 +2063,7 @@ if (!function_exists('bankBogProcessMergePost')) {
             $status = $subStatus[$row['deal']] ?? null;
             $error = '';
             if (!$status) {
-                $error = 'დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები და კომერციული ფართები)';
+                $error = 'დილს აბონირება არ აქვს (მხოლოდ Dighomi / Green City ბინები, კომერციული ფართები და ოფისები)';
             } elseif ($subRequested[$row['deal']] > $status['LEFT'] + 0.01) {
                 $error = 'აბონირების თანხა დარჩენილზე მეტია (დარჩენილი ' . number_format($status['LEFT'], 2) . ' ₾)';
             }
