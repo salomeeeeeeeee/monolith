@@ -672,6 +672,16 @@ ob_end_clean();
     margin-bottom: 4px;
 }
 
+/* Reservation rows: label keeps its width, long values wrap */
+.field-row.res-row { align-items:flex-start; }
+.field-row.res-row .field-label { flex-shrink:0; white-space:nowrap; padding-top:3px; }
+.field-row.res-row .field-value {
+    flex:1 1 auto; min-width:0;
+    white-space:normal; word-break:break-word; text-align:right;
+}
+.field-row.res-row .field-value a { color:var(--accent); text-decoration:none; }
+.field-row.res-row .field-value a:hover { text-decoration:underline; }
+
 #backBtn {
     padding:6px 16px; margin-right:8px;
     border:1px solid var(--accent); border-radius:var(--radius);
@@ -2126,79 +2136,93 @@ function renderBlockSections(apt) {
         "Number","FLOOR","TOTAL_AREA",
         "OWNER_DEAL","OWNER_CONTACT","OWNER_CONTACT_NAME",
         "DEAL_RESPONSIBLE","DEAL_RESPONSIBLE_NAME","OWNER_PERSONAL_CONTACT","QUEUE",
-        "__51MODL","__6ZWTER",  "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL","RESERVATION_STAGE_ID","RESERVATION_DATE",
+        "__51MODL","__6ZWTER","RESERVATION_STAGE_ID","RESERVATION_DATE",
         "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
         "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","_101080_7L7QZC","_101080_QACVJ6",
-                F_NFS_COMMENT,
+        F_NFS_COMMENT,
     ]);
+
+    // Row with a fixed-width label and a wrapping value (long links / names)
+    function makeWrapRow(label, valueHtml, valueExtraStyle = "") {
+        const row = document.createElement("div");
+        row.className = "field-row";
+        row.style.alignItems = "flex-start";
+        row.innerHTML = `
+            <span class="field-label" style="flex-shrink:0;white-space:nowrap;padding-top:3px;">${label}</span>
+            <span class="field-value" style="flex:1 1 auto;min-width:0;white-space:normal;word-break:break-word;text-align:right;${valueExtraStyle}">${valueHtml}</span>`;
+        return row;
+    }
+
     // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
-    shownCodes.add("PRICE"); shownCodes.add("PRICE_GEL");
 
     // ── NFS reason (set in the products module together with the status) ──
     if (apt["_P64GYD"] === "NFS" && apt[F_NFS_COMMENT]) appendNfsSection(container, apt);
 
     // ── 2. Grouped sections ───────────────────────────────────────────
     POPUP_GROUPS.forEach(group => {
-    const fields = group.codes
-        .filter(code =>
-            !shownCodes.has(code) &&
-            apt[code] !== undefined &&
-            apt[code] !== null &&
-            apt[code] !== ""
-        )
-        .map(code => ({
-            code,
-            name: propertyMap[code]?.name || code,
-            main: (group.mainCodes || []).includes(code),
-        }));
+        const fields = group.codes
+            .filter(code =>
+                !shownCodes.has(code) &&
+                apt[code] !== undefined &&
+                apt[code] !== null &&
+                apt[code] !== ""
+            )
+            .map(code => ({
+                code,
+                name: propertyMap[code]?.name || code,
+                main: (group.mainCodes || []).includes(code),
+            }));
 
-    if (fields.length === 0) return;
+        if (fields.length === 0) return;
 
-    const sc = aptCls(apt["_P64GYD"] || "");
-    appendSectionWithIcon(container, group.title, group.icon, fields, apt, sc, group.openByDefault || false);
-    fields.forEach(f => shownCodes.add(f.code));
-});
+        const sc = aptCls(apt["_P64GYD"] || "");
+        appendSectionWithIcon(container, group.title, group.icon, fields, apt, sc, group.openByDefault || false);
+        fields.forEach(f => shownCodes.add(f.code));
+    });
 
     // ── 3. Reservation info ───────────────────────────────────────────
-    const resFields = [];
+    const resRows = [];
+
     if (apt["OWNER_DEAL"])
-    resFields.push({ code: "OWNER_DEAL", name: "მფლობელის დილი", value: `<a href="/crm/deal/details/${apt["OWNER_DEAL"]}/" target="_blank">${apt["OWNER_DEAL_TITLE"] || apt["OWNER_DEAL"]}</a>` });
-if (apt["OWNER_PERSONAL_CONTACT"])
-    resFields.push({ code: "OWNER_PERSONAL_CONTACT", name: "კონტაქტი", value: `<a href="/crm/contact/details/${apt["OWNER_PERSONAL_CONTACT"]}/" target="_blank">${apt["OWNER_CONTACT_NAME"] || apt["OWNER_PERSONAL_CONTACT"]}</a>` });
+        resRows.push(makeWrapRow("მფლობელის დილი",
+            `<a href="/crm/deal/details/${apt["OWNER_DEAL"]}/" target="_blank">${apt["OWNER_DEAL_TITLE"] || apt["OWNER_DEAL"]}</a>`));
+
+    if (apt["OWNER_PERSONAL_CONTACT"])
+        resRows.push(makeWrapRow("კონტაქტი",
+            `<a href="/crm/contact/details/${apt["OWNER_PERSONAL_CONTACT"]}/" target="_blank">${apt["OWNER_CONTACT_NAME"] || apt["OWNER_PERSONAL_CONTACT"]}</a>`));
+
     if (apt["DEAL_RESPONSIBLE"])
-        resFields.push({ code: "DEAL_RESPONSIBLE", name: "პასუხისმგებელი", value: `<a href="/company/personal/user/${apt["DEAL_RESPONSIBLE"]}/" target="_blank">${apt["DEAL_RESPONSIBLE_NAME"] || apt["DEAL_RESPONSIBLE"]}</a>` });
-       
-       
-        if (apt["RESERVATION_DATE"])
-    resFields.push({ code: "RESERVATION_DATE", name: "რეზერვაციის თარიღი", value: formatResDate(apt["RESERVATION_DATE"]) });
+        resRows.push(makeWrapRow("პასუხისმგებელი",
+            `<a href="/company/personal/user/${apt["DEAL_RESPONSIBLE"]}/" target="_blank">${apt["DEAL_RESPONSIBLE_NAME"] || apt["DEAL_RESPONSIBLE"]}</a>`));
 
-// Show stage from pre-resolved field OR fetch it live from OWNER_DEAL
-if (apt["RESERVATION_STAGE_ID"]) {
-    resFields.push({ code: "RESERVATION_STAGE_ID", name: "ეტაპი", value: stageLabel(apt["RESERVATION_STAGE_ID"]) });
-} else if (apt["OWNER_DEAL"]) {
-    // Insert a placeholder row, then fill it asynchronously
-    const stageRow = document.createElement("div");
-    stageRow.className = "field-row";
-    stageRow.innerHTML = `<span class="field-label">ეტაპი</span><span class="field-value" style="color:var(--text3);font-style:italic;">იტვირთება...</span>`;
-    resFields.push({ _isNode: true, node: stageRow });
+    if (apt["RESERVATION_DATE"])
+        resRows.push(makeWrapRow("რეზერვაციის თარიღი", formatResDate(apt["RESERVATION_DATE"])));
 
-    fetch(`/rest/local/api/projects/get.php?stageOnly=1&dealId=${apt["OWNER_DEAL"]}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.stage_id) {
-                stageRow.querySelector(".field-value").textContent = stageLabel(data.stage_id);
-                stageRow.querySelector(".field-value").style.fontStyle = "";
-                stageRow.querySelector(".field-value").style.color = "";
-                apt["RESERVATION_STAGE_ID"] = data.stage_id; // cache it
-            } else {
-                stageRow.remove();
-            }
-        })
-        .catch(() => stageRow.remove());
-}
+    // Stage: pre-resolved, or fetched live from OWNER_DEAL
+    if (apt["RESERVATION_STAGE_ID"]) {
+        resRows.push(makeWrapRow("ეტაპი", stageLabel(apt["RESERVATION_STAGE_ID"])));
+    } else if (apt["OWNER_DEAL"]) {
+        const stageRow = makeWrapRow("ეტაპი", "იტვირთება...", "color:var(--text3);font-style:italic;");
+        resRows.push(stageRow);
 
-        if (resFields.length > 0) {
+        fetch(`/rest/local/api/projects/get.php?stageOnly=1&dealId=${apt["OWNER_DEAL"]}`)
+            .then(r => r.json())
+            .then(data => {
+                const v = stageRow.querySelector(".field-value");
+                if (data.stage_id) {
+                    v.textContent     = stageLabel(data.stage_id);
+                    v.style.fontStyle = "";
+                    v.style.color     = "";
+                    apt["RESERVATION_STAGE_ID"] = data.stage_id; // cache it
+                } else {
+                    stageRow.remove();
+                }
+            })
+            .catch(() => stageRow.remove());
+    }
+
+    if (resRows.length > 0) {
         const resIcon = `<svg viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="#00d4aa" stroke-width="1.2"/><circle cx="8" cy="6.5" r="2" stroke="#00d4aa" stroke-width="1.1"/><path d="M4 13c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#00d4aa" stroke-width="1.1" stroke-linecap="round"/></svg>`;
         const sec = document.createElement("div");
         sec.className = "block-section";
@@ -2213,23 +2237,15 @@ if (apt["RESERVATION_STAGE_ID"]) {
         const bf  = sec.querySelector(".block-fields");
         const hdr = sec.querySelector(".block-header");
         const arr = sec.querySelector(".block-header-arrow");
-        resFields.forEach(({ name, value }) => {
-            const row = document.createElement("div");
-            row.className = "field-row";
-            row.innerHTML = `<span class="field-label">${name}</span><span class="field-value" style="white-space:normal;text-align:right;">${value}</span>`;
-            bf.appendChild(row);
-        });
+        resRows.forEach(row => bf.appendChild(row));
         hdr.addEventListener("click", () => {
             const open = bf.style.display !== "none";
-            bf.style.display = open ? "none" : "";
+            bf.style.display = open ? "none" : "flex";
             arr.style.transform = open ? "" : "rotate(90deg)";
         });
     }
 
     // ── 4. Images ─────────────────────────────────────────────────────
-
-
-    // ── 3. Images ─────────────────────────────────────────────────────
     const imgFields = Object.keys(apt).filter(
         code => IMAGE_CODES.has(code) && apt[code] && !shownCodes.has(code)
     );
@@ -2238,7 +2254,7 @@ if (apt["RESERVATION_STAGE_ID"]) {
         imgFields.forEach(c => shownCodes.add(c));
     }
 
-    // ── 4. Remainder + links merged into one section ───────────────────
+    // ── 5. Remainder + queue links in one section ─────────────────────
     const restFields = Object.keys(apt)
         .filter(code =>
             !shownCodes.has(code) &&
@@ -2249,13 +2265,13 @@ if (apt["RESERVATION_STAGE_ID"]) {
         )
         .map(code => ({ code, name: propertyMap[code]?.name || code, main: false }));
 
-    // Build link rows as pseudo field-row HTML appended after restFields
-   // Build link rows as pseudo field-row HTML appended after restFields
-   const linkRows = [];
+    const linkRows = [];
     if (apt["QUEUE"] && apt["QUEUE"] !== "") {
-        const ql = apt["QUEUE"].split("|").filter(q=>q).map(q=>`<a href="/crm/deal/details/${q}/" target="_blank">${q}</a>`).join(", ");
-        linkRows.push({ label: "ჯავშნის რიგში", html: ql });
+        const ql = apt["QUEUE"].split("|").filter(q => q)
+            .map(q => `<a href="/crm/deal/details/${q}/" target="_blank">${q}</a>`).join(", ");
+        linkRows.push(makeWrapRow("ჯავშნის რიგში", ql));
     }
+
     if (restFields.length > 0 || linkRows.length > 0) {
         const icon = `<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#00d4aa" stroke-width="1.2"/><path d="M8 6v2M8 10v.5" stroke="#00d4aa" stroke-width="1.4" stroke-linecap="round"/></svg>`;
         const sec = document.createElement("div");
@@ -2269,18 +2285,8 @@ if (apt["RESERVATION_STAGE_ID"]) {
         container.appendChild(sec);
         const bf = sec.querySelector(".block-fields");
 
-        // Regular unknown fields
         restFields.forEach(f => bf.appendChild(buildFieldRow(f, apt, "")));
-
-        // Link rows styled like field rows
-        linkRows.forEach(({ label, html }) => {
-            const row = document.createElement("div");
-            row.className = "field-row";
-            row.innerHTML = `
-                <span class="field-label">${label}</span>
-                <span class="field-value" style="white-space:normal;text-align:right;">${html}</span>`;
-            bf.appendChild(row);
-        });
+        linkRows.forEach(row => bf.appendChild(row));
     }
 }
 
