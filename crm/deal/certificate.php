@@ -262,6 +262,17 @@ if (isset($_GET["debug"])) {
     die();
 }
 
+/* ── Full-payment certificate only when nothing is left to pay ── */
+if ($type === "full" && $balance > 0) {
+    header("Content-Type: text/html; charset=UTF-8");
+    echo "<div style=\"font-family:'Noto Sans Georgian',sans-serif;max-width:480px;margin:60px auto;padding:24px;"
+       . "border:1px solid #e5e7eb;border-radius:14px;text-align:center;color:#1f2937\">"
+       . "<b>სრული დაფარვის ცნობა ვერ გაიცემა</b><br><br>"
+       . "ღირებულება ჯერ სრულად არ არის გადახდილი. ნაშთი: <b>" . $curSymbol . " " . crt_amount($balance) . "</b>"
+       . "</div>";
+    die();
+}
+
 /* ── Texts ── */
 $T = array(
     "ka" => array(

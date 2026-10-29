@@ -418,7 +418,13 @@ function fmtMoney($n, $cur) {
         color: var(--fr-ink);
         transition: border-color .15s, background .15s, transform .15s;
     }
-    .crt-opt:hover { border-color: var(--fr-blue); background: #f3f9ff; transform: translateY(-1px); }
+    .crt-opt:hover:not(:disabled) { border-color: var(--fr-blue); background: #f3f9ff; transform: translateY(-1px); }
+    .crt-opt:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        background: #f8f9fa;
+        filter: grayscale(1);
+    }
     .crt-opt__tag {
         font-size: 11px;
         font-weight: 700;
@@ -492,13 +498,18 @@ function fmtMoney($n, $cur) {
                 <button class="crt-back" type="button" onclick="crtBack()">← ენა: <span id="crtLangLbl"></span></button>
                 <div class="crt-dialog__sub">რომელი ცნობა გსურთ?</div>
                 <div class="crt-opts">
+                    <?php if ($balance > 0): ?>
+                    <button class="crt-opt" type="button" disabled title="ღირებულება ჯერ სრულად არ არის გადახდილი">
+                        <span class="crt-opt__name">სრულ დაფარვაზე</span>
+                        <span class="crt-opt__hint">ხელმისაწვდომია სრულად გადახდის შემდეგ</span>
+                        <span class="crt-opt__warn">ნაშთი: <?php echo fmtMoney($balance, $valuta); ?></span>
+                    </button>
+                    <?php else: ?>
                     <button class="crt-opt" type="button" onclick="crtPickType('full')">
                         <span class="crt-opt__name">სრულ დაფარვაზე</span>
                         <span class="crt-opt__hint">ღირებულება სრულად გადახდილია</span>
-                        <?php if ($balance > 0): ?>
-                            <span class="crt-opt__warn">ნაშთი: <?php echo fmtMoney($balance, $valuta); ?></span>
-                        <?php endif; ?>
                     </button>
+                    <?php endif; ?>
                     <button class="crt-opt" type="button" onclick="crtPickType('partial')">
                         <span class="crt-opt__name">ნაწილობრივ დაფარვაზე</span>
                         <span class="crt-opt__hint">გადახდილი და დარჩენილი თანხა</span>
