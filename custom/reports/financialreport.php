@@ -341,6 +341,7 @@ function fmtMoney($n, $cur) {
     .fr-table tbody tr:hover { background: #fafbfd; }
     .fr-table .num { text-align: right; }
     .fr-table .idx { color: #adb5bd; width: 40px; }
+    .fr-table .docs { white-space: nowrap; text-align: right; }
 
     .fr-badge {
         display: inline-block;
@@ -357,6 +358,28 @@ function fmtMoney($n, $cur) {
     .fr-pos { color: var(--fr-red); font-weight: 600; }
     .fr-neg { color: var(--fr-green); font-weight: 600; }
     .fr-dim { color: #ced4da; }
+
+    /* Invoice button */
+    .fr-doc-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        margin-left: 6px;
+        border: 1px solid var(--fr-line);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--fr-blue);
+        font: 600 11px 'Noto Sans Georgian', sans-serif;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background .2s, border-color .2s, color .2s;
+    }
+    .fr-doc-btn:hover {
+        background: var(--fr-blue);
+        border-color: var(--fr-blue);
+        color: #fff;
+    }
 
     .fr-empty {
         padding: 40px;
@@ -546,6 +569,7 @@ function fmtMoney($n, $cur) {
                     <th class="num">განვადების თანხა</th>
                     <th class="num">გადახდილი თანხა</th>
                     <th class="num">ნაშთი</th>
+                    <th class="docs">დოკუმენტები</th>
                 </tr>
             </thead>
             <tbody id="financial_data"></tbody>
@@ -555,9 +579,11 @@ function fmtMoney($n, $cur) {
 </div>
 
 <script>
-    const financeArr = <?php echo json_encode($financeArr); ?>;
-    const valuta     = <?php echo json_encode($valuta); ?>;
-    const deal_ID    = <?php echo json_encode($deal_ID); ?>;
+    const financeArr        = <?php echo json_encode($financeArr); ?>;
+    const valuta            = <?php echo json_encode($valuta); ?>;
+    const deal_ID           = <?php echo json_encode($deal_ID); ?>;
+
+    const invoiceFile = "invoice.php";   // Invoice
 
     // ── ცნობა: ენა → ტიპი → certificate.php ──
     let crtLang = "ka";
@@ -589,6 +615,10 @@ function fmtMoney($n, $cur) {
         if (e.key === "Escape") crtClose();
     });
 
+    function openDoc(file, elementId) {
+        window.open("/crm/deal/" + file + "?id=" + encodeURIComponent(elementId) + "&dealID=" + encodeURIComponent(deal_ID), "_blank");
+    }
+
     function fmt(n) {
         const v = Number(n) || 0;
         return (v < 0 ? "-" : "") + valuta + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -602,7 +632,7 @@ function fmtMoney($n, $cur) {
     const tbody = document.getElementById("financial_data");
 
     if (!financeArr.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="fr-empty">მონაცემები არ მოიძებნა</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="fr-empty">მონაცემები არ მოიძებნა</td></tr>';
     } else {
         let rows = "";
         financeArr.forEach(function (row, i) {
@@ -617,6 +647,9 @@ function fmtMoney($n, $cur) {
 
             const left = Number(row.leftToPay) || 0;
 
+            // Invoice for every row
+            const docs = '<button type="button" class="fr-doc-btn" onclick="openDoc(invoiceFile, ' + Number(row.ID) + ')">Invoice</button>';
+
             rows += '<tr>'
                 + '<td class="idx">' + (i + 1) + '</td>'
                 + '<td>' + (row.DATE || '') + '</td>'
@@ -624,6 +657,7 @@ function fmtMoney($n, $cur) {
                 + '<td class="num">' + (isPlan ? fmt(row.PLAN) : '<span class="fr-dim">—</span>') + '</td>'
                 + '<td class="num">' + (!isPlan ? fmt(paymentSigned(row)) : '<span class="fr-dim">—</span>') + '</td>'
                 + '<td class="num ' + (left > 0 ? 'fr-pos' : 'fr-neg') + '">' + fmt(left) + '</td>'
+                + '<td class="docs">' + docs + '</td>'
                 + '</tr>';
         });
         tbody.innerHTML = rows;
