@@ -1834,6 +1834,33 @@ if (!function_exists('bankBogIsActiveMergeStage')) {
 }
 
 /**
+ * დილიდან აღებული ველები, რომლებიც გადახდას (ლისტი 23) ეწერება: ბანკის გატარებისას და ხელით შექმნილზე (bankBogFillPaymentFromDeal).
+ */
+if (!function_exists('bankBogPaymentDealProps')) {
+    function bankBogPaymentDealProps(array $deal)
+    {
+        $fullName = trim((string)($deal['CONTACT_FULL_NAME'] ?? ''));
+        if ($fullName === '') {
+            $fullName = trim((string)($deal['COMPANY_TITLE'] ?? ''));
+        }
+
+        return [
+            'DEAL_ID' => (int)$deal['ID'],
+            'PROJECT' => bankBogUfValue($deal[BANK_D_PROJECT] ?? ''),
+            'KORPUSI' => bankBogUfValue($deal[BANK_D_BLOCK] ?? ''),
+            'BINIS_NOMERI' => bankBogUfValue($deal[BANK_D_UNIT] ?? ''),
+            'ZETIPI' => bankBogUfValue($deal[BANK_D_TYPE] ?? ''),
+            'floor' => bankBogUfValue($deal[BANK_D_FLOOR] ?? ''),
+            'KONTRAKT_DATE' => bankBogResolveContractDate($deal),
+            // დანარჩენი გადახდების მსგავსად დილის ვალუტა იწერება; ბანკის ვალუტა ამონაწერშია
+            'CURRENCY' => trim((string)($deal['CURRENCY_ID'] ?? '')) ?: bankBogDealCurrencyLabel($deal),
+            'FULL_NAME' => $fullName,
+            'xelshNum' => bankBogUfValue($deal[BANK_D_CONTRACT_NUM] ?? ''),
+        ];
+    }
+}
+
+/**
  * Create payment element from merge POST row.
  */
 if (!function_exists('bankBogCreatePaymentFromMerge')) {
@@ -1899,32 +1926,19 @@ if (!function_exists('bankBogCreatePaymentFromMerge')) {
             $formTarigi = date('d/m/Y');
         }
 
-        $fullName = trim((string)($deal['CONTACT_FULL_NAME'] ?? ''));
-        if ($fullName === '') {
-            $fullName = trim((string)($deal['COMPANY_TITLE'] ?? ($list['SenderDetails_Name'] ?? '')));
-        }
-
-        $props = [
+        $props = bankBogPaymentDealProps($deal) + [
             'DEAL' => $dealId,
-            'DEAL_ID' => $dealId,
             'date' => $formTarigi,
             'comment' => $list['EntryComment'] ?? '',
             'TANXA' => $valueUsd . '|USD',
             'tanxa_gel' => (string)$tanxaGel,
             'BANK_PAYMENT_ID' => (string)$paymentId,
-            'PROJECT' => bankBogUfValue($deal[BANK_D_PROJECT] ?? ''),
-            'KORPUSI' => bankBogUfValue($deal[BANK_D_BLOCK] ?? ''),
-            'BINIS_NOMERI' => bankBogUfValue($deal[BANK_D_UNIT] ?? ''),
-            'ZETIPI' => bankBogUfValue($deal[BANK_D_TYPE] ?? ''),
-            'floor' => bankBogUfValue($deal[BANK_D_FLOOR] ?? ''),
-            'KONTRAKT_DATE' => bankBogResolveContractDate($deal),
-            // დანარჩენი გადახდების მსგავსად დილის ვალუტა იწერება; ბანკის ვალუტა ამონაწერშია
-            'CURRENCY' => trim((string)($deal['CURRENCY_ID'] ?? '')) ?: bankBogDealCurrencyLabel($deal),
             'NBG' => (string)$nbg,
-            'FULL_NAME' => $fullName,
-            'xelshNum' => bankBogUfValue($deal[BANK_D_CONTRACT_NUM] ?? ''),
             'pay_type' => bankBogIsCashStatement($list) ? BANK_BOG_PAY_TYPE_CASH : BANK_BOG_PAY_TYPE_BOG,
         ];
+        if ($props['FULL_NAME'] === '') {
+            $props['FULL_NAME'] = trim((string)($list['SenderDetails_Name'] ?? ''));
+        }
 
         $res = bankBogAddElement([
             'IBLOCK_ID' => BANK_BOG_PAYMENT_IBLOCK,
@@ -1937,6 +1951,87 @@ if (!function_exists('bankBogCreatePaymentFromMerge')) {
         }
 
         return ['ok' => true, 'payment_id' => (int)$res];
+    }
+}
+
+/**
+ * ხელით შექმნილი გადახდა (ლისტი 23) ივსება იმავე ველებით, რასაც ბანკის გატარება წერს: დილის ველები,
+ * NBG USD კურსი გადახდის თარიღით, თანხა ლარში, სახელი "კლიენტი თარიღი".
+ * მხოლოდ ცარიელი ველები ივსება, ხელით შეყვანილი არ იცვლება (გარდა ლარის თანხის მძიმის წერტილით შეცვლისა).
+ *
+ * იძახებს ლისტ 23-ის BP #84 შექმნისას ($isNew: ცარიელ ტიპს "ხელით შექმნილი გადახდა" ეწერება);
+ * არსებულ გადახდებზე ერთჯერადად გაეშვა 2026-10-30. $write = false - მხოლოდ აბრუნებს, რა ჩაიწერებოდა.
+ *
+ * @return array ჩასაწერი ველები (NAME-ის ჩათვლით), ცარიელი - თუ შესავსები არაფერია
+ */
+if (!function_exists('bankBogFillPaymentFromDeal')) {
+    function bankBogFillPaymentFromDeal($elementId, $isNew = false, $write = true)
+    {
+        $elementId = (int)$elementId;
+        if ($elementId <= 0 || !bankBogEnsureModules()) {
+            return [];
+        }
+        $rows = bankBogGetElements(['IBLOCK_ID' => BANK_BOG_PAYMENT_IBLOCK, 'ID' => $elementId], null, ['ID' => 'DESC'], 1);
+        if (empty($rows)) {
+            return [];
+        }
+        $row = $rows[0];
+
+        $dealId = bankBogNormalizeDealId(bankBogUfValue($row['DEAL'] ?? ''));
+        $deal = $dealId ? bankBogLoadDealForPayment($dealId) : null;
+        $want = $deal ? bankBogPaymentDealProps($deal) : [];
+
+        // კურსი გადახდის თარიღით, როგორც ამონაწერზე; მომავალი თარიღის კურსი ჯერ არ არსებობს
+        $date = bankBogParseDate($row['date'] ?? '');
+        $nbg = bankBogParseAmount($row['NBG'] ?? '');
+        if ($nbg <= 0 && $date && $date->format('Y-m-d') <= date('Y-m-d')) {
+            $nbg = floatval(bankBogGetNbgRate($date->format('Y-m-d')));
+        }
+        // ლარი $-დან ითვლება, როგორც ბანკზე; ცარიელ $-ს არ ვავსებთ (მაგ. აბონირების ძველი ჩანაწერი ბინის ჯამში არ უნდა მოხვდეს)
+        $usd = bankBogParseAmount($row['TANXA'] ?? '');
+        $gel = bankBogParseAmount($row['tanxa_gel'] ?? '');
+        if ($nbg > 0) {
+            $want['NBG'] = (string)$nbg;
+            if ($gel == 0.0 && $usd != 0.0) {
+                $want['tanxa_gel'] = (string)bankBogMoney($usd * $nbg);
+            }
+        }
+        if ($isNew) {
+            $want['pay_type'] = BANK_BOG_PAY_TYPE_MANUAL;
+        }
+
+        $set = [];
+        foreach ($want as $code => $value) {
+            if ((string)$value !== '' && bankBogUfValue($row[$code] ?? '') === '') {
+                $set[$code] = $value;
+            }
+        }
+        // ხელით ლარის თანხა ხშირად მძიმით იწერება ("66271,7"), ბანკი - წერტილით
+        $gelRaw = bankBogUfValue($row['tanxa_gel'] ?? '');
+        if (preg_match('/^-?\d+,\d+$/', $gelRaw)) {
+            $set['tanxa_gel'] = str_replace(',', '.', $gelRaw);
+        }
+
+        // ბანკის გატარების სახელი "გამგზავნი თარიღი"; ხელით ფორმაში "NAME" რჩება
+        $name = trim((string)($row['~NAME'] ?? $row['NAME'] ?? ''));
+        $fullName = (string)($want['FULL_NAME'] ?? '');
+        $newName = '';
+        if (($name === '' || $name === 'NAME') && $fullName !== '' && $date) {
+            $newName = $fullName . ' ' . $date->format('Y-m-d') . 'T00:00:00';
+        }
+
+        if ($write) {
+            if ($set) {
+                CIBlockElement::SetPropertyValuesEx($elementId, BANK_BOG_PAYMENT_IBLOCK, $set);
+            }
+            if ($newName !== '') {
+                (new CIBlockElement())->Update($elementId, ['NAME' => $newName]);
+            }
+        }
+        if ($newName !== '') {
+            $set['NAME'] = $newName;
+        }
+        return $set;
     }
 }
 

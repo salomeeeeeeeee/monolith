@@ -20,6 +20,10 @@ if (!defined('BANK_BOG_PAYMENT_IBLOCK')) {
 if (!defined('BANK_BOG_PAY_TYPE_BOG')) {
     define('BANK_BOG_PAY_TYPE_BOG', 122);
 }
+/** pay_type "ხელით შექმნილი გადახდა" - სიაში ხელით დამატებული გადახდა (სიის ნაგულისხმევი მნიშვნელობა) */
+if (!defined('BANK_BOG_PAY_TYPE_MANUAL')) {
+    define('BANK_BOG_PAY_TYPE_MANUAL', 123);
+}
 /** pay_type "სალარო" - სალაროს ექსელიდან ატვირთული ჩანაწერიდან შექმნილი გადახდა */
 if (!defined('BANK_BOG_PAY_TYPE_CASH')) {
     define('BANK_BOG_PAY_TYPE_CASH', 124);
