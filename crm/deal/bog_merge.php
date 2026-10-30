@@ -321,7 +321,7 @@ ob_end_clean();
         <div>
             <h1>გადახდებთან მიბმა</h1>
             <p>დილები იძებნება სტეიჯებზე: <?= htmlspecialchars(implode(' · ', bankBogMergeStageLabels())) ?> — ამ დილის კონტაქტის პირადი/პასპორტის ნომრის ან კომპანიის საიდ. კოდის მიხედვით.</p>
-            <p>თუ გადამხდელის ჩარიცხვა ადრე სხვა დილზე უკვე აქამდე არის მიბმული, შემდეგ ჯერზე ის დილი იქნება ნაჩვენები/შემოთავაზებული (ცისფერი რიგი) - ამოიცნობა INN-ით, INN-ის გარეშე კი გამგზავნის ანგარიშით.</p>
+            <p>თუ გადამხდელის ჩარიცხვა ადრე სხვა დილზე უკვე აქამდე არის გატარებული, შემდეგ ჯერზე ის დილი იქნება ნაჩვენები/შემოთავაზებული (ცისფერი რიგი) - ამოიცნობა INN-ით, INN-ის გარეშე კი გამგზავნის ანგარიშით.</p>
             <p>სალაროს ექსელიდან ატვირთული ჩანაწერები "სალარო" ნიშნით აქვე ჩანს: დილი საფუძველში ჩაწერილი ფართის ნომრით წინასწარ ირჩევა, შექმნილ გადახდას ტიპი "სალარო" ეწერება.</p>
             <p>კურსი მოდის NBG-დან ამონაწერის თარიღის მიხედვით. "დარჩენილი" ნიშნავს დარჩენილ დავალიანებას $-ში დღემდე (გადახდის გრაფიკის თანხების ჯამს (დღემდე) − უკვე არსებული გადახდების ჯამი).</p>
         </div>
@@ -387,7 +387,7 @@ ob_end_clean();
     <div class="legend">
         <span><i style="background:#72c4b1"></i>1 დილი</span>
         <span><i style="background:#f5d78e"></i>1-ზე მეტი დილი</span>
-        <span><i style="background:#2563c9"></i>ამოცნობილი წინა მიბმით</span>
+        <span><i style="background:#2563c9"></i>ამოცნობილი წინა გატარებით</span>
         <span><i style="background:#f5c2c0"></i>დილი ვერ მოიძებნა</span>
     </div>
 
@@ -448,7 +448,7 @@ ob_end_clean();
     <div class="section-title">
         ამონაწერის მიხედვით მოიძებნა დილები
         <span class="pill" id="pillMatched">0</span>
-        <span class="sub">მწვანე = 1 დილი · ყვითელი = რამდენიმე · ცისფერი = წინა მიბმით</span>
+        <span class="sub">მწვანე = 1 დილი · ყვითელი = რამდენიმე · ცისფერი = წინა გატარებით</span>
     </div>
     <form action="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>" method="post" id="myForm">
         <div class="table-card">
@@ -880,7 +880,7 @@ function renderMatched() {
         const deals = [...(row.MERGE_DEALS || [])].sort((a, b) => (Number(b.ID) === suggested) - (Number(a.ID) === suggested));
         // საფუძვლის ფართი კლიენტის დილებში არ არის: ერთადერთი დილიც ხელით უნდა დადასტურდეს
         const hintMiss = row.CASH && row.UNIT_HINT && !suggested;
-        // ცისფერი: INN-ით ვერნაპოვნი დილი წინა მიბმიდან
+        // ცისფერი: INN-ით ვერნაპოვნი დილი წინა გატარებიდან
         const tone = row.RECOGNIZED ? 'tone-blue' : ((deals.length > 1 && !suggested) || hintMiss ? 'tone-yellow' : 'tone-green');
         const allocParts = [];
         if (deals.length) {
@@ -891,7 +891,7 @@ function renderMatched() {
                 const info = [d.PROJECT || '-', d.TYPE, [d.BLOCK, d.UNIT].filter(Boolean).join(' ')].filter(Boolean);
                 // სხვის დილზე გადახდისას ჩანს, ვისი დილია
                 const owner = d.FROM_HISTORY && d.CLIENT_NAME ? `<br>დილის კლიენტი: ${esc(d.CLIENT_NAME)}` : '';
-                const history = d.HISTORY_COUNT ? `<br><span class="history-note">წინა მიბმები: ${esc(d.HISTORY_COUNT)}, ბოლო: ${esc(d.HISTORY_LAST)}</span>` : '';
+                const history = d.HISTORY_COUNT ? `<br><span class="history-note">წინა გატარებები: ${esc(d.HISTORY_COUNT)}, ბოლო: ${esc(d.HISTORY_LAST)}</span>` : '';
                 const meta = `<div class="deal-meta" title="დარჩენილი დავალიანება: გრაფიკი - გადახდები (დღემდე)">#${esc(d.ID)} · ${esc(info.join(' · '))}${owner}<br>დარჩენილი: <b>${money(d.LEFT_TO_PAY)}</b>${history}</div>`;
                 // დანიშნულებაში აბონირება წერია: ₾ თანხიდან რამდენიც ეტევა აბონირებაზე, დანარჩენი ბინაზე
                 const subLeft = d.SUB ? Number(d.SUB.LEFT || 0) : 0;
@@ -925,7 +925,7 @@ function renderMatched() {
         tr.dataset.gel = String(row.BANK_AMOUNT_GEL || 0);
         // INN-ის გარეშე გადამხდელი გამგზავნის ანგარიშით ამოიცნობა - ის ჩანს INN-ის ადგილას
         const clientMeta = [row.STATUS, row.PAYER || row.INN].filter(Boolean);
-        const badge = row.RECOGNIZED ? '<div><span class="recognized-badge">წინა მიბმით</span></div>' : '';
+        const badge = row.RECOGNIZED ? '<div><span class="recognized-badge">წინა გატარებით</span></div>' : '';
         tr.innerHTML = `
             <td><b>${esc(row.CLIENT_NAME || row.NAME)}</b><div class="deal-meta">${esc(clientMeta.join(' · '))}</div>${badge}${cashMeta(row, suggested > 0, 'კლიენტს ამ ფართის დილი არ აქვს. მარჯვნივ მისი სხვა დილი(ები)ა, თანხა ჩაწერეთ მხოლოდ თუ სწორია')}${skipButton(row.list_id)}</td>
             <td class="nowrap">${esc(row.DATE)}</td>
