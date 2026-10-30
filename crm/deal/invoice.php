@@ -193,7 +193,7 @@ foreach ($planRows as $r) {
     $totalPlan += inv_toNum($isGEL ? $r["PROPS"]["amount_GEL"]["VALUE"] : $r["PROPS"]["TANXA"]["VALUE"]);
 }
 
-// Paid up to (and including) the invoice date
+// Paid up to (and including) the invoice date  → "გადახდილი თანხა ჯამურად"
 $paidToDate = 0.0;
 foreach ($payRows as $r) {
     $d = inv_parseDate($r["PROPS"]["date"]["VALUE"]);
@@ -201,6 +201,23 @@ foreach ($payRows as $r) {
     $amt = inv_toNum($isGEL ? $r["PROPS"]["tanxa_gel"]["VALUE"] : $r["PROPS"]["TANXA"]["VALUE"]);
     $paidToDate += ($r["PROPS"]["refund"]["VALUE"] == "YES") ? -$amt : $amt;
 }
+
+// Paid on this row's date → "გადახდილი თანხა" (same as the finance card's column for this row)
+//   payment row: that payment's amount (refund = negative)
+//   plan row:    payments made on the same date as the schedule row (0 if none)
+$rowPaid = 0.0;
+if ($rowType === "PAYMENT") {
+    $amt = inv_toNum($isGEL ? $el["PROPS"]["tanxa_gel"]["VALUE"] : $el["PROPS"]["TANXA"]["VALUE"]);
+    $rowPaid = ($el["PROPS"]["refund"]["VALUE"] == "YES") ? -$amt : $amt;
+} else {
+    foreach ($payRows as $r) {
+        $d = inv_parseDate($r["PROPS"]["date"]["VALUE"]);
+        if (!$d || $d != $invDate) continue;
+        $amt = inv_toNum($isGEL ? $r["PROPS"]["tanxa_gel"]["VALUE"] : $r["PROPS"]["TANXA"]["VALUE"]);
+        $rowPaid += ($r["PROPS"]["refund"]["VALUE"] == "YES") ? -$amt : $amt;
+    }
+}
+$rowPaid = round($rowPaid, 2);
 
 // Invoice number: YYYYMMDD-NN (NN = position of this row among its type, sorted by date)
 $sameType = ($rowType === "PLAN") ? $planRows : $payRows;
@@ -288,10 +305,15 @@ usort($ledger, function ($a, $b) {
     return $da <=> $db;
 });
 
-$leftToPay = 0.0;
-$running   = 0.0;
+// Walk the card's rows in the same order: ნაშთი + paid so far, up to and including this row
+$leftToPay  = 0.0;
+$running    = 0.0;
+$paidSoFar  = 0.0;
 foreach ($ledger as $l) {
     $running = round($running + $l["DELTA"], 2);
+    if ($l["TYPE"] === "PAYMENT") {
+        $paidSoFar = round($paidSoFar - $l["DELTA"], 2);   // payment = +, refund = −
+    }
     if ($l["ID"] === $elementID && $l["TYPE"] === $rowType) {
         $leftToPay = $running;
         break;
@@ -300,13 +322,19 @@ foreach ($ledger as $l) {
 
 // Totals
 $totalValue = $price;
-$totalPaid  = round($paidToDate, 2);
-$toPay      = $leftToPay;   // = ნაშთი of this row in the finance card
+$totalPaid  = $paidSoFar;             // გადახდილი თანხა ჯამურად = sum of the card's გადახდილი თანხა column up to this row
+$toPay      = $leftToPay;              // = ნაშთი of this row in the finance card
 
 if (isset($_GET["debug"])) {
     echo "<h3>DEAL</h3>";   inv_printArr($deal);
     if (!empty($contact)) { echo "<h3>CONTACT</h3>"; inv_printArr($contact); }
     echo "<h3>ELEMENT ($rowType)</h3>"; inv_printArr($el["PROPS"]);
+    echo "<h3>TOTALS</h3>"; inv_printArr(array(
+        "invoice date"              => $invDate->format('d/m/Y'),
+        "გადახდილი თანხა (row)"     => $rowPaid,
+        "გადახდილი თანხა ჯამურად"   => $totalPaid,
+        "გადასახდელი თანხა (ნაშთი)" => $toPay,
+    ));
     die();
 }
 ?>
@@ -506,7 +534,7 @@ if (isset($_GET["debug"])) {
             <tr class="paid">
                 <td></td>
                 <td class="lbl" colspan="3">გადახდილი თანხა:</td>
-                <td class="money"><?php echo inv_money($totalPaid, $valuta); ?></td>
+                <td class="money"><?php echo inv_money($rowPaid, $valuta); ?></td>
             </tr>
         </tbody>
     </table>
