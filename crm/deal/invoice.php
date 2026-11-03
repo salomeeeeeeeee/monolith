@@ -24,9 +24,13 @@ $INV_CFG = array(
     // Deal fields
     "PROJECT_FIELD"   => "",   // project name field
     "ADDRESS_FIELD"   => "",   // property address
-    "CADASTRAL_FIELD" => "",   // ს/კ (cadastral code)
-    "APARTMENT_FIELD" => "",   // apartment data (block / floor / N)
-    "AREA_FIELD"      => "",   // area m²
+    "CADASTRAL_FIELD" => "UF_CRM_1782206163787",   // ს/კ (cadastral code)
+    "APARTMENT_FIELD" => "",                       // (unused — apartment data is built from the 4 fields below)
+    "SECTOR_FIELD"    => "UF_CRM_1781768590754",   // სექტორი
+    "BLOCK_FIELD"     => "UF_CRM_1779277644355",   // ბლოკი
+    "FLOOR_FIELD"     => "UF_CRM_1779277828822",   // სართული
+    "APT_NUM_FIELD"   => "UF_CRM_1779277613798",   // ბინის ნომერი
+    "AREA_FIELD"      => "UF_CRM_1779277886804",   // area m²
     "PRICE_FIELD"     => "",   // apartment price (empty => sum of payment plan)
     "DELIVERY_FIELD"  => "",   // ჩაბარების პირობა
 
@@ -273,8 +277,25 @@ if ($contact) {
 $project   = inv_uf("CRM_DEAL", $deal, $INV_CFG["PROJECT_FIELD"])  ?: $INV_CFG["PROJECT_DEFAULT"];
 $address   = inv_uf("CRM_DEAL", $deal, $INV_CFG["ADDRESS_FIELD"])  ?: $INV_CFG["ADDRESS_DEFAULT"];
 $cadastral = inv_uf("CRM_DEAL", $deal, $INV_CFG["CADASTRAL_FIELD"]);
-$apartment = inv_uf("CRM_DEAL", $deal, $INV_CFG["APARTMENT_FIELD"]);
-$area      = inv_uf("CRM_DEAL", $deal, $INV_CFG["AREA_FIELD"]);
+// ბინის მონაცემები: სექტორი / ბლოკი / სართული / ბინა N (empty parts are skipped)
+$aptParts = array();
+$aptMap = array(
+    "SECTOR_FIELD"  => "სექტორი ",
+    "BLOCK_FIELD"   => "ბლოკი ",
+    "FLOOR_FIELD"   => "სართული ",
+    "APT_NUM_FIELD" => "ბინა N: ",
+);
+foreach ($aptMap as $cfgKey => $label) {
+    $v = inv_uf("CRM_DEAL", $deal, $INV_CFG[$cfgKey]);
+    if ($v !== "") $aptParts[] = $label . $v;
+}
+$apartment = implode(", ", $aptParts);
+if ($apartment === "") $apartment = inv_uf("CRM_DEAL", $deal, $INV_CFG["APARTMENT_FIELD"]);
+
+$area = inv_uf("CRM_DEAL", $deal, $INV_CFG["AREA_FIELD"]);
+if ($area !== "" && is_numeric(str_replace(",", ".", $area))) {
+    $area = rtrim(rtrim(number_format((float)str_replace(",", ".", $area), 2, '.', ''), '0'), '.');
+}
 $delivery  = inv_uf("CRM_DEAL", $deal, $INV_CFG["DELIVERY_FIELD"]) ?: $INV_CFG["DELIVERY_DEFAULT"];
 
 $priceRaw  = inv_uf("CRM_DEAL", $deal, $INV_CFG["PRICE_FIELD"]);
