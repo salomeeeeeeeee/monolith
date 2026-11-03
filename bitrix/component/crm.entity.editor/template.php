@@ -301,6 +301,65 @@ if (!empty($htmlEditorConfigs))
 	}
 	?></div>
 <?php endif ?>
+<?php
+// SOURCE_ID — option UC_61RG25 selectable only by users 1 and 3.
+// Removed from the field's item list before the editor is built, so it never shows in the dropdown.
+// If the entity already has UC_61RG25 (set by an admin), the option is kept so the value still displays.
+$sourceRestrictedValue = 'UC_61RG25';
+$sourceAllowedUsers = [1, 3];
+$sourceCurrentValue = (string)(
+	$arResult['ENTITY_DATA']['SOURCE_ID']
+	?? $arResult['PREPARED_ENTITY_DATA']['SOURCE_ID']
+	?? ''
+);
+
+if (
+	!in_array((int)$GLOBALS['USER']->GetID(), $sourceAllowedUsers, true)
+	&& $sourceCurrentValue !== $sourceRestrictedValue
+)
+{
+	$dmgFilterSourceItems = function (&$node) use (&$dmgFilterSourceItems, $sourceRestrictedValue)
+	{
+		if (!is_array($node))
+		{
+			return;
+		}
+
+		if (
+			($node['name'] ?? null) === 'SOURCE_ID'
+			&& isset($node['data']['items'])
+			&& is_array($node['data']['items'])
+		)
+		{
+			$node['data']['items'] = array_values(array_filter(
+				$node['data']['items'],
+				static function ($item) use ($sourceRestrictedValue)
+				{
+					return (string)($item['VALUE'] ?? '') !== $sourceRestrictedValue;
+				}
+			));
+		}
+
+		foreach ($node as &$child)
+		{
+			if (is_array($child))
+			{
+				$dmgFilterSourceItems($child);
+			}
+		}
+		unset($child);
+	};
+
+	if (isset($arResult['ENTITY_SCHEME']))
+	{
+		$dmgFilterSourceItems($arResult['ENTITY_SCHEME']);
+	}
+	if (isset($arResult['ENTITY_AVAILABLE_FIELDS']))
+	{
+		$dmgFilterSourceItems($arResult['ENTITY_AVAILABLE_FIELDS']);
+	}
+}
+?>
 <script>
 	BX.ready(
 		function()
