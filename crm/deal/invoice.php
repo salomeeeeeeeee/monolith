@@ -30,6 +30,7 @@ $INV_CFG = array(
     "BLOCK_FIELD"     => "UF_CRM_1779277644355",   // ბლოკი
     "FLOOR_FIELD"     => "UF_CRM_1779277828822",   // სართული
     "APT_NUM_FIELD"   => "UF_CRM_1779277613798",   // ბინის ნომერი
+    "APT_TYPE_FIELD"  => "UF_CRM_1779277898205",   // label shown instead of "ბინა" (e.g. ბინა / ოფისი / ფართი)
     "AREA_FIELD"      => "UF_CRM_1779277886804",   // area m²
     "PRICE_FIELD"     => "",   // apartment price (empty => sum of payment plan)
     "DELIVERY_FIELD"  => "",   // ჩაბარების პირობა
@@ -279,11 +280,13 @@ $address   = inv_uf("CRM_DEAL", $deal, $INV_CFG["ADDRESS_FIELD"])  ?: $INV_CFG["
 $cadastral = inv_uf("CRM_DEAL", $deal, $INV_CFG["CADASTRAL_FIELD"]);
 // ბინის მონაცემები: სექტორი / ბლოკი / სართული / ბინა N (empty parts are skipped)
 $aptParts = array();
+$aptTypeLabel = inv_uf("CRM_DEAL", $deal, $INV_CFG["APT_TYPE_FIELD"]);
+if ($aptTypeLabel === "") $aptTypeLabel = "ბინა";   // fallback when the field is empty
 $aptMap = array(
     "SECTOR_FIELD"  => "სექტორი ",
     "BLOCK_FIELD"   => "ბლოკი ",
     "FLOOR_FIELD"   => "სართული ",
-    "APT_NUM_FIELD" => "ბინა N: ",
+    "APT_NUM_FIELD" => $aptTypeLabel . " N: ",
 );
 foreach ($aptMap as $cfgKey => $label) {
     $v = inv_uf("CRM_DEAL", $deal, $INV_CFG[$cfgKey]);
@@ -506,7 +509,7 @@ if (isset($_GET["debug"])) {
 <body>
 
 <div class="toolbar">
-    <button type="button" onclick="window.print()">ბეჭდვა / PDF</button>
+    <button type="button" onclick="window.print()">print / save</button>
 </div>
 
 <div class="page">
@@ -539,7 +542,7 @@ if (isset($_GET["debug"])) {
             <tr>
                 <th style="width:30%">უძრავი ქონების მის:</th>
                 <th style="width:18%">ს/კ</th>
-                <th style="width:24%">ბინის მონაცემები:</th>
+                <th style="width:24%">უძრავი ქონების მონაცემები:</th>
                 <th style="width:12%">ფართი:</th>
                 <th style="width:16%">ღირებულება</th>
             </tr>
