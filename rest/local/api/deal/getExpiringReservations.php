@@ -1,5 +1,6 @@
 <?php
-// 24 სთ-ში რეზერვაციის ვადა ეწურება: რეზერვაციის ეტაპზე მყოფი დილები, რომელთა ვადა ხვალ იწურება.
+// 24 სთ-ში რეზერვაციის ვადა ეწურება: რეზერვაციის ეტაპზე მყოფი დილები, რომელთა ვადა დღეს ან ხვალ იწურება
+// (ლიდების რეპორტის Liveboard-ის "ვადა დღეს იწურება" + "ვადა ხვალ იწურება").
 ob_start();
 define('NO_KEEP_STATISTIC', true);
 define('NO_AGENT_STATISTIC', true);
@@ -37,6 +38,7 @@ function normalizeReservationDate($value)
     return "";
 }
 
+$today = (new DateTime("today"))->format("d/m/Y");
 $tomorrow = (new DateTime("tomorrow"))->format("d/m/Y");
 $deals = [];
 
@@ -63,7 +65,7 @@ if ($USER->IsAuthorized()) {
     );
     while ($deal = $res->Fetch()) {
         $deadline = normalizeReservationDate($deal[EXPIRING_RESERVATION_DATE_FIELD] ?? "");
-        if ($deadline !== $tomorrow) {
+        if ($deadline !== $today && $deadline !== $tomorrow) {
             continue;
         }
 
@@ -89,10 +91,18 @@ if ($USER->IsAuthorized()) {
             "DEADLINE" => $deadline,
         ];
     }
+
+    // ჯერ დღეს ვადაგასულები, მერე ხვალინდელები
+    usort($deals, function ($a, $b) use ($today) {
+        $aToday = $a["DEADLINE"] === $today ? 0 : 1;
+        $bToday = $b["DEADLINE"] === $today ? 0 : 1;
+        return $aToday <=> $bToday ?: $a["ID"] <=> $b["ID"];
+    });
 }
 
 $response = [
     "deals" => $deals,
+    "today" => $today,
     "tomorrow" => $tomorrow,
     "count" => count($deals),
 ];
