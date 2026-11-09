@@ -14,6 +14,55 @@ $APPLICATION->SetTitle("გაყიდვა");
 $deal_id = (int)($_GET["deal_id"] ?? 0);
 if (!$deal_id) die("No deal ID");
 
+// ── UF ველის მეტამონაცემები (ტიპი, მრავლობითობა, სიის მნიშვნელობები) ──
+if (!function_exists('sellFormGetUfMeta')) {
+    function sellFormGetUfMeta($entityId, $fieldName) {
+        $meta = ['type' => 'string', 'multiple' => false, 'items' => []];
+
+        $rs = CUserTypeEntity::GetList([], [
+            'ENTITY_ID'  => $entityId,
+            'FIELD_NAME' => $fieldName,
+        ]);
+        $f = $rs ? $rs->Fetch() : false;
+        if (!$f) {
+            return $meta;
+        }
+
+        $meta['type']     = $f['USER_TYPE_ID'];
+        $meta['multiple'] = ($f['MULTIPLE'] === 'Y');
+
+        if ($f['USER_TYPE_ID'] === 'enumeration') {
+            $enum = CUserFieldEnum::GetList(['SORT' => 'ASC'], ['USER_FIELD_ID' => $f['ID']]);
+            while ($e = $enum->Fetch()) {
+                $meta['items'][] = ['id' => (string)$e['ID'], 'value' => $e['VALUE']];
+            }
+        }
+
+        return $meta;
+    }
+}
+
+// შენახული მნიშვნელობა → სტრიქონების მასივი ფორმის წინასწარ შესავსებად
+if (!function_exists('sellFormUfValuesForInput')) {
+    function sellFormUfValuesForInput($raw, $meta) {
+        $out = [];
+        foreach ((is_array($raw) ? $raw : [$raw]) as $v) {
+            $v = trim((string)$v);
+            if ($v === '') continue;
+            if (in_array($meta['type'], ['date', 'datetime'], true)) {
+                $v = ConvertDateTime($v, 'YYYY-MM-DD');
+            }
+            if ($meta['type'] === 'boolean' && $v !== '1') continue;
+            $out[] = (string)$v;
+        }
+        return $out;
+    }
+}
+
+// ── ეროვნება (კონტაქტის ველი, სავალდებულო) ──
+$nationalityFieldId = 'UF_CRM_1794207994';
+$nationalityMeta    = sellFormGetUfMeta('CRM_CONTACT', $nationalityFieldId);
+
 $contactId = 0;
 $firstName = $lastName = $idNumber = '';
 
@@ -24,19 +73,20 @@ foreach ($contactIds as $cid) {
     $cid = intval($cid);
     if ($cid <= 0) continue;
 
-    $res = CCrmContact::GetList([], ["ID" => $cid], ["NAME", "LAST_NAME", "UF_CRM_1781244744534"]);
+    $res = CCrmContact::GetList([], ["ID" => $cid], ["NAME", "LAST_NAME", "UF_CRM_1781244744534", $nationalityFieldId]);
     if ($arContact = $res->Fetch()) {
         $contacts[] = [
-            'id'        => $cid,
-            'firstName' => $arContact["NAME"] ?? '',
-            'lastName'  => $arContact["LAST_NAME"] ?? '',
-            'idNumber'  => $arContact["UF_CRM_1781244744534"] ?? '',
+            'id'          => $cid,
+            'firstName'   => $arContact["NAME"] ?? '',
+            'lastName'    => $arContact["LAST_NAME"] ?? '',
+            'idNumber'    => $arContact["UF_CRM_1781244744534"] ?? '',
+            'nationality' => sellFormUfValuesForInput($arContact[$nationalityFieldId] ?? '', $nationalityMeta),
         ];
     }
 }
 
 if (empty($contacts)) {
-    $contacts[] = ['id' => 0, 'firstName' => '', 'lastName' => '', 'idNumber' => ''];
+    $contacts[] = ['id' => 0, 'firstName' => '', 'lastName' => '', 'idNumber' => '', 'nationality' => []];
 }
 
 // ── მიმდინარე (დაუდასტურებელი) გაყიდვის მოთხოვნა ──
@@ -327,6 +377,8 @@ ob_end_clean();
     cursor: pointer;
     transition: border-color .15s, background .15s, box-shadow .15s;
   }
+  .field select[multiple] { padding: 6px 8px; }
+  .field select[multiple] option { padding: 6px 8px; border-radius: 4px; }
   .field select:focus {
     border-color: #0d9488;
     background: #fff;
@@ -565,6 +617,39 @@ ob_end_clean();
       <label>პირადი ნომერი <span class="req">*</span></label>
       <input type="text" class="idNumber" value="<?= htmlspecialchars($c['idNumber']) ?>" placeholder="00000000000" />
     </div>
+
+    <?php
+      $natVals  = $c['nationality'] ?? [];
+      $natFirst = $natVals[0] ?? '';
+      $natType  = $nationalityMeta['type'];
+    ?>
+    <div class="field">
+      <label>ეროვნება <span class="req">*</span></label>
+
+      <?php if ($natType === 'enumeration'): ?>
+        <select class="nationality"<?= $nationalityMeta['multiple'] ? ' multiple size="' . min(6, max(3, count($nationalityMeta['items']))) . '"' : '' ?>>
+          <?php if (!$nationalityMeta['multiple']): ?>
+            <option value="">აირჩიეთ...</option>
+          <?php endif; ?>
+          <?php foreach ($nationalityMeta['items'] as $item): ?>
+            <option value="<?= htmlspecialchars($item['id']) ?>"<?= in_array($item['id'], $natVals, true) ? ' selected' : '' ?>><?= htmlspecialchars($item['value']) ?></option>
+          <?php endforeach; ?>
+        </select>
+
+      <?php elseif ($natType === 'boolean'): ?>
+        <select class="nationality">
+          <option value="">აირჩიეთ...</option>
+          <option value="1"<?= $natFirst === '1' ? ' selected' : '' ?>>კი</option>
+          <option value="0">არა</option>
+        </select>
+
+      <?php elseif (in_array($natType, ['date', 'datetime'], true)): ?>
+        <input type="date" class="nationality" value="<?= htmlspecialchars($natFirst) ?>" onclick="this.showPicker()" />
+
+      <?php else: ?>
+        <input type="text" class="nationality" value="<?= htmlspecialchars($natFirst) ?>" placeholder="ეროვნება" />
+      <?php endif; ?>
+    </div>
   </div>
 <?php endforeach; ?>
 
@@ -651,6 +736,18 @@ function handleFile(f) {
   preview.classList.add('visible');
 }
 
+// ეროვნება — ყოველთვის აბრუნებს მასივს (ცარიელი = არ არის შევსებული)
+function getFieldValues(el) {
+  if (!el) return [];
+  if (el.tagName === 'SELECT' && el.multiple) {
+    return Array.prototype.filter.call(el.options, function(o){
+      return o.selected && o.value !== '';
+    }).map(function(o){ return o.value; });
+  }
+  var v = (el.value || '').trim();
+  return v === '' ? [] : [v];
+}
+
 function setStatus(type, msg) {
   var s = document.getElementById('status');
   s.className = 'show ' + type;
@@ -710,14 +807,16 @@ function saveSell() {
     var firstName  = block.querySelector('.firstName').value.trim();
     var lastName   = block.querySelector('.lastName').value.trim();
     var idNumber   = block.querySelector('.idNumber').value.trim();
+    var nationality = getFieldValues(block.querySelector('.nationality'));
 
-    if (!firstName || !lastName || !idNumber) allValid = false;
+    if (!firstName || !lastName || !idNumber || nationality.length === 0) allValid = false;
 
     clients.push({
       contact_id: contactId,
       firstName: firstName,
       lastName: lastName,
-      idNumber: idNumber
+      idNumber: idNumber,
+      nationality: nationality
     });
   });
 

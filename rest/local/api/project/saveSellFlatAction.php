@@ -21,6 +21,9 @@ $agreementIblockId = 18;
 $agencySourceId = 'UC_HN9W32';
 $brokerFieldId  = 'UF_CRM_1785491867';
 
+// ეროვნება — კონტაქტის ველი, სავალდებულო ყველა კლიენტისთვის
+$nationalityFieldId = 'UF_CRM_1794207994';
+
 /** Absolute public URL with encoded filename (spaces, (), etc.) */
 function buildPassportFileLink($fileId) {
     $path = CFile::GetPath($fileId);
@@ -99,6 +102,77 @@ if (!function_exists('sellActionIsEmptyValue')) {
     }
 }
 
+// ── Helper: UF field metadata (type, multiple, enum items) ──
+if (!function_exists('sellActionGetUfMeta')) {
+    function sellActionGetUfMeta($entityId, $fieldName) {
+        $meta = ['type' => 'string', 'multiple' => false, 'items' => []];
+
+        $rs = CUserTypeEntity::GetList([], [
+            'ENTITY_ID'  => $entityId,
+            'FIELD_NAME' => $fieldName,
+        ]);
+        $f = $rs ? $rs->Fetch() : false;
+        if (!$f) {
+            return $meta;
+        }
+
+        $meta['type']     = $f['USER_TYPE_ID'];
+        $meta['multiple'] = ($f['MULTIPLE'] === 'Y');
+
+        if ($f['USER_TYPE_ID'] === 'enumeration') {
+            $enum = CUserFieldEnum::GetList(['SORT' => 'ASC'], ['USER_FIELD_ID' => $f['ID']]);
+            while ($e = $enum->Fetch()) {
+                $meta['items'][(string)$e['ID']] = $e['VALUE'];
+            }
+        }
+
+        return $meta;
+    }
+}
+
+// ── Helper: validate + convert posted UF value to what Bitrix expects ──
+// Returns null when empty/invalid, otherwise a scalar (single) or array (multiple).
+if (!function_exists('sellActionNormalizeUf')) {
+    function sellActionNormalizeUf($raw, $meta) {
+        $values = [];
+        foreach ((is_array($raw) ? $raw : [$raw]) as $v) {
+            if (is_array($v)) continue;
+            $v = trim((string)$v);
+            if ($v === '') continue;
+
+            switch ($meta['type']) {
+                case 'enumeration':
+                    if (!isset($meta['items'][$v])) continue 2;
+                    $v = (int)$v;
+                    break;
+                case 'boolean':
+                    if ($v !== '0' && $v !== '1') continue 2;
+                    $v = (int)$v;
+                    break;
+                case 'date':
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) continue 2;
+                    $v = CDatabase::FormatDate($v, 'YYYY-MM-DD', CSite::GetDateFormat('SHORT'));
+                    break;
+                case 'datetime':
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) continue 2;
+                    $v = CDatabase::FormatDate($v . ' 00:00:00', 'YYYY-MM-DD HH:MI:SS', CSite::GetDateFormat('FULL'));
+                    break;
+                case 'integer':
+                case 'double':
+                    $v = str_replace(',', '.', $v);
+                    if (!is_numeric($v)) continue 2;
+                    break;
+            }
+            $values[] = $v;
+        }
+
+        if (empty($values)) {
+            return null;
+        }
+        return $meta['multiple'] ? $values : $values[0];
+    }
+}
+
 function sendJsonAndExit($resArr) {
     ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
@@ -154,8 +228,27 @@ if (!is_array($clients)) $clients = [];
 if (empty($clients) && $dealId) {
     $contactIds = \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($dealId);
     foreach ($contactIds as $cid) {
-        $clients[] = ['contact_id' => intval($cid), 'firstName' => '', 'lastName' => '', 'idNumber' => ''];
+        $clients[] = ['contact_id' => intval($cid), 'firstName' => '', 'lastName' => '', 'idNumber' => '', 'nationality' => []];
     }
+}
+
+// ── ეროვნება: required for every client — checked before any upload/update ──
+$nationalityMeta = sellActionGetUfMeta('CRM_CONTACT', $nationalityFieldId);
+
+if (empty($clients)) {
+    sendJsonAndExit(["status" => 422, "message" => "კლიენტი ვერ მოიძებნა"]);
+}
+
+foreach ($clients as $idx => $client) {
+    $normalized = sellActionNormalizeUf($client['nationality'] ?? '', $nationalityMeta);
+    if ($normalized === null) {
+        $who = trim(($client['firstName'] ?? '') . ' ' . ($client['lastName'] ?? ''));
+        sendJsonAndExit([
+            "status"  => 422,
+            "message" => "გთხოვთ შეავსოთ ველი „ეროვნება“" . ($who !== '' ? " ({$who})" : ''),
+        ]);
+    }
+    $clients[$idx]['nationalityValue'] = $normalized;
 }
 
 // ── First payment lookup for this deal (IBlock 22) — filter by PLAN_TYPE ──
@@ -309,6 +402,9 @@ foreach ($clients as $client) {
     if ($firstName !== '') $contactFields['NAME']      = $firstName;
     if ($lastName  !== '') $contactFields['LAST_NAME'] = $lastName;
     if ($idNumber  !== '') $contactFields['UF_CRM_1781244744534'] = $idNumber;
+    if (isset($client['nationalityValue'])) {
+        $contactFields[$nationalityFieldId] = $client['nationalityValue'];   // ეროვნება
+    }
 
     // Same uploaded file attached to every contact on the deal
     if ($passportFileId && $passportFilePath) {
