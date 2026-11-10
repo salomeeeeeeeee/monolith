@@ -36,7 +36,7 @@ $INV_CFG = array(
     "DELIVERY_FIELD"  => "",   // ჩაბარების პირობა
 
     // Contact fields
-    "PERSONAL_ID_FIELD" => "", // პირადი ნომერი
+    "PERSONAL_ID_FIELD" => "UF_CRM_1781244744534", // პირადი ნომერი
 
     // Fallbacks (from the template)
     "PROJECT_DEFAULT"   => "მონოლით ეთნო სითი",
@@ -44,6 +44,15 @@ $INV_CFG = array(
     "DELIVERY_DEFAULT"  => "პრემიუმ მწვანე კარკასი",
 
     "ASSETS"            => "/crm/deal/invoice_assets",
+
+    // Only these user IDs may open invoices
+    "ALLOWED_USERS"     => array(474, 130),
+
+    // Signature per user (files inside ASSETS folder)
+    "SIGNATURES"        => array(
+        130 => "signature_130.png",
+        474 => "signature_474.png",
+    ),
 );
 
 // Supplier (static)
@@ -157,6 +166,22 @@ function inv_getRows($iblockId, $dealId) {
         $rows[] = array("ID" => $f["ID"], "PROPS" => $ob->GetProperties());
     }
     return $rows;
+}
+
+/* ────────────────────────────── ACCESS ────────────────────────────── */
+
+global $USER;
+if (!is_object($USER) || !$USER->IsAuthorized()
+    || !in_array((int)$USER->GetID(), $INV_CFG["ALLOWED_USERS"], true)) {
+    http_response_code(403);
+    die("წვდომა აკრძალულია");
+}
+
+// Signature of the user who generates the invoice
+$currentUserID = (int)$USER->GetID();
+$signatureFile = isset($INV_CFG["SIGNATURES"][$currentUserID]) ? $INV_CFG["SIGNATURES"][$currentUserID] : "";
+if ($signatureFile !== "" && !file_exists($_SERVER["DOCUMENT_ROOT"] . $INV_CFG["ASSETS"] . "/" . $signatureFile)) {
+    $signatureFile = "";   // file not uploaded yet → no image instead of a broken icon
 }
 
 /* ────────────────────────────── DATA ────────────────────────────── */
@@ -471,8 +496,8 @@ if (isset($_GET["debug"])) {
         .inv-note { margin-top: 6mm; font-size: 10.5px; }
 
         .inv-sign { margin-top: 6mm; }
-        .inv-sign img { width: 52mm; display: block; margin-left: 40mm; }
-        .inv-sign p { margin: 2mm 0 0; font-size: 10.5px; }
+        .inv-sign p { margin: 0; font-size: 10.5px; }
+        .inv-sign img { width: 52mm; display: block; margin: 3mm 0 0 40mm; }
 
         .inv-footer {
             margin-top: auto;
@@ -589,8 +614,10 @@ if (isset($_GET["debug"])) {
     <?php endif; ?>
 
     <div class="inv-sign">
-        <img src="<?php echo $INV_CFG["ASSETS"]; ?>/signature.png" alt="">
         <p>ინვოისი მომზადებული და დადასტურებულია ბუღალტერიის მიერ</p>
+        <?php if ($signatureFile !== ""): ?>
+        <img src="<?php echo $INV_CFG["ASSETS"] . "/" . inv_h($signatureFile); ?>" alt="">
+        <?php endif; ?>
     </div>
 
     <div class="inv-footer">

@@ -143,6 +143,12 @@ function sortByDate($a, $b) {
 $deal_ID = (int)$_GET["dealid"];
 $href="/crm/deal/details/$deal_ID/";
 
+// ── Invoice access: only these user IDs see the Invoice button ──
+$INVOICE_USERS = array(474, 130);
+global $USER;
+$canInvoice = is_object($USER) && $USER->IsAuthorized()
+    && in_array((int)$USER->GetID(), $INVOICE_USERS, true);
+
 $dealData = getDealInfoByID($deal_ID, array("ID", "TITLE", "UF_CRM_1702019032102"));
 
 $valuta = ($dealData["UF_CRM_1702019032102"] == 322) ? "₾" : "$";
@@ -569,7 +575,9 @@ function fmtMoney($n, $cur) {
                     <th class="num">განვადების თანხა</th>
                     <th class="num">გადახდილი თანხა</th>
                     <th class="num">ნაშთი</th>
+                    <?php if ($canInvoice): ?>
                     <th class="docs">დოკუმენტები</th>
+                    <?php endif; ?>
                 </tr>
             </thead>
             <tbody id="financial_data"></tbody>
@@ -582,6 +590,7 @@ function fmtMoney($n, $cur) {
     const financeArr        = <?php echo json_encode($financeArr); ?>;
     const valuta            = <?php echo json_encode($valuta); ?>;
     const deal_ID           = <?php echo json_encode($deal_ID); ?>;
+    const canInvoice        = <?php echo $canInvoice ? 'true' : 'false'; ?>;
 
     const invoiceFile = "invoice.php";   // Invoice
 
@@ -632,7 +641,7 @@ function fmtMoney($n, $cur) {
     const tbody = document.getElementById("financial_data");
 
     if (!financeArr.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="fr-empty">მონაცემები არ მოიძებნა</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="' + (canInvoice ? 7 : 6) + '" class="fr-empty">მონაცემები არ მოიძებნა</td></tr>';
     } else {
         let rows = "";
         financeArr.forEach(function (row, i) {
@@ -647,8 +656,8 @@ function fmtMoney($n, $cur) {
 
             const left = Number(row.leftToPay) || 0;
 
-            // Invoice for every row
-            const docs = '<button type="button" class="fr-doc-btn" onclick="openDoc(invoiceFile, ' + Number(row.ID) + ')">Invoice</button>';
+            // Invoice for every row (only for allowed users)
+            const docs = !canInvoice ? '' : '<button type="button" class="fr-doc-btn" onclick="openDoc(invoiceFile, ' + Number(row.ID) + ')">Invoice</button>';
 
             rows += '<tr>'
                 + '<td class="idx">' + (i + 1) + '</td>'
@@ -657,7 +666,7 @@ function fmtMoney($n, $cur) {
                 + '<td class="num">' + (isPlan ? fmt(row.PLAN) : '<span class="fr-dim">—</span>') + '</td>'
                 + '<td class="num">' + (!isPlan ? fmt(paymentSigned(row)) : '<span class="fr-dim">—</span>') + '</td>'
                 + '<td class="num ' + (left > 0 ? 'fr-pos' : 'fr-neg') + '">' + fmt(left) + '</td>'
-                + '<td class="docs">' + docs + '</td>'
+                + (canInvoice ? '<td class="docs">' + docs + '</td>' : '')
                 + '</tr>';
         });
         tbody.innerHTML = rows;
