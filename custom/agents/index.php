@@ -1601,6 +1601,7 @@ if (!agentsModuleCanAccess()) {
                 <th class="report-totals-empty"></th>
                 <th class="report-totals-empty"></th>
                 <th class="num col-r-val" data-total="propertyValue">—</th>
+                <th class="num col-r-val" data-total="propertyValueNoVat">—</th>
                 <th class="num col-r-paid" data-total="paidUsd">—</th>
                 <th class="report-totals-empty"></th>
                 <th class="report-totals-empty"></th>
@@ -1622,6 +1623,7 @@ if (!agentsModuleCanAccess()) {
                 <th class="col-r-type sortable" data-sort="propertyType" data-sort-type="string" title="უძრავი ქონების ტიპი">უძ. ტიპი</th>
                 <th class="col-r-no sortable" data-sort="propertyNo" data-sort-type="string" title="უძრავი ქონების #">#</th>
                 <th class="col-r-val num sortable" data-sort="propertyValue" data-sort-type="number" title="უძრავი ქონების ღირებულება $">ღირებულება $</th>
+                <th class="col-r-val num sortable" data-sort="propertyValueNoVat" data-sort-type="number" title="უძრავი ქონების ღირებულება დღგ-ს გარეშე $ (ღირებულება / 1.18) - საკომისიო ამ თანხიდან ითვლება">დღგ-ს გარეშე $</th>
                 <th class="col-r-paid num sortable" data-sort="paidUsd" data-sort-type="number" title="კლიენტის გადახდილი თანხა $">გადახდილი $</th>
                 <th class="col-r-pct num sortable" data-sort="paidPct" data-sort-type="number" title="კლიენტის გადახდილი %">გადახდილი %</th>
                 <th class="col-r-agency sortable" data-sort="agency" data-sort-type="string" title="სააგენტო">სააგენტო</th>
@@ -3597,9 +3599,13 @@ if (!agentsModuleCanAccess()) {
       return null;
     }
 
+    // დილის ფასი დღგ-ს (18%) შეიცავს; საკომისიო ითვლება დღგ-ს გარეშე ღირებულებიდან (ფასი / 1.18)
+    const VAT_RATE = 0.18;
+
     function calculateReportAmounts(deal, creditPct, paidUsdOverride, commissionOverride, paidCommissionOverride, commissionType) {
       const F = BITRIX_CRM_CONFIG.dealFields;
       const propertyValue = Number(deal.OPPORTUNITY) || 0;
+      const propertyValueNoVat = Math.round((propertyValue / (1 + VAT_RATE)) * 100) / 100;
       const crmPaidPct = Number(deal[F.paidPct]) || 0;
       const commission = commissionOverride !== '' && commissionOverride != null
         ? Number(commissionOverride) || 0
@@ -3613,14 +3619,14 @@ if (!agentsModuleCanAccess()) {
         : 0;
       const meetsCreditThreshold = credit > 0 && paidPct >= credit;
       const payableRaw = meetsCreditThreshold
-        ? (commissionType === 'fixed' ? commission : propertyValue * (commission / 100))
+        ? (commissionType === 'fixed' ? commission : propertyValueNoVat * (commission / 100))
         : 0;
       const payable = Math.round(payableRaw);
       const paidCommission = paidCommissionOverride != null && !Number.isNaN(paidCommissionOverride)
         ? Math.round(paidCommissionOverride)
         : 0;
       const difference = payable - paidCommission;
-      return { propertyValue, paidPct, paidUsd, commission, payable, paidCommission, difference };
+      return { propertyValue, propertyValueNoVat, paidPct, paidUsd, commission, payable, paidCommission, difference };
     }
 
     function bitrixDealToReportDeal(deal, contactMap, agentLookup, paymentTotals, agentCommissionPaid, companyMap = {}) {
@@ -3647,6 +3653,7 @@ if (!agentsModuleCanAccess()) {
         propertyType: String(deal[F.propertyType] || '').trim(),
         propertyNo,
         propertyValue: amounts.propertyValue,
+        propertyValueNoVat: amounts.propertyValueNoVat,
         paidUsd: amounts.paidUsd,
         paidPct: amounts.paidPct,
         agency,
@@ -4039,7 +4046,7 @@ if (!agentsModuleCanAccess()) {
     function renderReportTotals(rows) {
       const totalRow = $('report-totals-row');
       if (!totalRow) return;
-      ['propertyValue', 'paidUsd', 'payable', 'paidCommission', 'difference'].forEach(key => {
+      ['propertyValue', 'propertyValueNoVat', 'paidUsd', 'payable', 'paidCommission', 'difference'].forEach(key => {
         const cell = totalRow.querySelector(`[data-total="${key}"]`);
         if (!cell) return;
         cell.textContent = rows.length ? formatReportTotal(sumReportRows(rows, key)) : '—';
@@ -4278,6 +4285,7 @@ if (!agentsModuleCanAccess()) {
             <div class="detail-item"><span class="lbl">უძ. ტიპი</span><span class="val">${esc(d.propertyType)}</span></div>
             <div class="detail-item"><span class="lbl">#</span><span class="val">${esc(d.propertyNo)}</span></div>
             <div class="detail-item"><span class="lbl">ღირებულება $</span><span class="val">${formatUsd(d.propertyValue)}</span></div>
+            <div class="detail-item"><span class="lbl">ღირებულება დღგ-ს გარეშე $</span><span class="val">${formatUsd(d.propertyValueNoVat)}</span></div>
           </div>
         </div>
         <div class="deal-detail-block">
@@ -4318,7 +4326,7 @@ if (!agentsModuleCanAccess()) {
       renderReportTotals(rows);
 
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:var(--muted);padding:24px">ჩანაწერი ვერ მოიძებნა</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="20" style="text-align:center;color:var(--muted);padding:24px">ჩანაწერი ვერ მოიძებნა</td></tr>';
         clearReportRowHighlight();
         return;
       }
@@ -4338,6 +4346,7 @@ if (!agentsModuleCanAccess()) {
           <td>${esc(d.propertyType)}</td>
           <td>${esc(d.propertyNo)}</td>
           <td class="num">${formatUsd(d.propertyValue)}</td>
+          <td class="num">${formatUsd(d.propertyValueNoVat)}</td>
           <td class="num">${formatUsd(d.paidUsd)}</td>
           <td class="num">${formatPct(d.paidPct)}</td>
           <td>${d.agency === 'არ არის არჩეული'
@@ -4441,15 +4450,15 @@ ${dataRows}
     function exportReportExcel() {
       const headers = [
         '#', 'ლიდის ID', 'კლიენტი', 'პასუხისმგებელი', 'ხელშ. გაფორმების თარიღი', 'პროექტი', 'უძ.ქონების ტიპი', 'უძ.ქონების #',
-        'ღირებულება $', 'გადახდილი $', 'გადახდილი %', 'სააგენტო', 'სააგენტო / აგენტი (ფორმიდან)', 'საკომისიო', 'ჩასარიცხი %',
+        'ღირებულება $', 'ღირებულება დღგ-ს გარეშე $', 'გადახდილი $', 'გადახდილი %', 'სააგენტო', 'სააგენტო / აგენტი (ფორმიდან)', 'საკომისიო', 'ჩასარიცხი %',
         'გადასახ. $', 'გადახ. საკ. $', 'სხვაობა $', 'გადახდილი/დახურული', 'კომენტარი',
       ];
       const rows = sortReportRows(getReportFiltered()).map((d, index) => [
         index + 1, d.leadId, d.client, d.responsible || '', formatDate(d.signedDate), d.project, d.propertyType, d.propertyNo,
-        d.propertyValue, d.paidUsd, d.paidPct, d.agency, d.formAgency || '', formatCommissionLabel(d, d.commissionType), getDealCreditPct(d),
+        d.propertyValue, d.propertyValueNoVat, d.paidUsd, d.paidPct, d.agency, d.formAgency || '', formatCommissionLabel(d, d.commissionType), getDealCreditPct(d),
         d.payable, d.paidCommission, d.difference, d.commissionSettled ? 'დიახ' : 'არა', d.commissionComment || '',
       ]);
-      downloadExcel(`agents-report-${new Date().toISOString().slice(0, 10)}.xls`, headers, rows, [8, 9, 10, 14, 15, 16, 17]);
+      downloadExcel(`agents-report-${new Date().toISOString().slice(0, 10)}.xls`, headers, rows, [8, 9, 10, 11, 15, 16, 17, 18]);
       toast('Excel ფაილი ჩამოიტვირთა');
     }
 
