@@ -1,4 +1,6 @@
 <?php
+// ჯავშნის ვადის ცვლილების მოთხოვნა (დილის ბარათის ღილაკი "რეზერვაციის ცვლილება", მხოლოდ დადასტურებულ რეზერვაციაზე).
+// ერთ რეზერვაციაზე ვადა მხოლოდ ერთხელ გრძელდება, იხ. local/php_interface/reservation_extension.php
 ob_start();
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
 
@@ -7,25 +9,43 @@ use Bitrix\Main\Loader;
 if (!Loader::includeModule('crm')) {
     die('CRM module not loaded');
 }
+require_once($_SERVER["DOCUMENT_ROOT"] . "/local/php_interface/reservation_extension.php");
 
 $APPLICATION->SetTitle("რეზერვაციის ცვლილება");
 
 $deal_id = (int)($_GET["deal_id"] ?? 0);
 if (!$deal_id) die("No deal ID");
 
-$res  = CCrmDeal::GetList([], ["ID" => $deal_id]);
-$deal = $res->Fetch();
+$info    = reservationExtInfo($deal_id);
+$minDate = $info["DATE"] ? date("Y-m-d", strtotime("+1 day", $info["DATE"])) : date("Y-m-d");
 
 ob_end_clean();
 ?>
 
-<div style="width:650px; padding:20px; background:#eef2f4;">
+<div style="width:650px; padding:20px; background:#eef2f4; font-family:'Noto Sans Georgian',sans-serif;">
+
+<?php if ($info["DEAL"] && $info["DATE"] && $info["DEAL"]["STAGE_ID"] === RESERVATION_EXT_STAGE): ?>
+    <div style="margin-bottom:15px; padding:14px 18px; background:#fff; border:2px solid #e2e8f0; border-radius:10px; font-size:14px; color:#2d3748;">
+        მიმდინარე ვადა: <b><?= reservationExtFormatDate($info["DATE"]) ?></b>
+        <?php if ($info["APPROVED"]): ?><span style="color:#718096;">(გაგრძელებული)</span><?php endif; ?>
+    </div>
+<?php endif; ?>
+
+<?php if (!$info["ALLOWED"]): ?>
+    <div style="padding:14px; background:<?= $info["PENDING"] ? '#fef3c7' : '#fee2e2' ?>; color:<?= $info["PENDING"] ? '#92400e' : '#991b1b' ?>; border-radius:10px;">
+        <?= htmlspecialcharsbx($info["REASON"]) ?>.
+    </div>
+<?php else: ?>
+
+    <div style="margin-bottom:15px; padding:12px 16px; background:#fff4e6; border:1px solid #ffd8a8; border-radius:10px; color:#a14a00; font-size:13px;">
+        ჯავშნის ვადის გაგრძელება ერთ რეზერვაციაზე მხოლოდ ერთხელ შეიძლება.
+    </div>
 
     <div style="margin-bottom:15px;">
         <label style="display:block; color:#4a5568; font-weight:600; margin-bottom:8px; font-size:14px;">
             <span style="color:red">*</span> რეზერვაციის ვადა:
         </label>
-        <input type="date" id="contr_date"
+        <input type="date" id="contr_date" min="<?= htmlspecialcharsbx($minDate) ?>"
        style="width:100%; padding:14px 18px; border:2px solid #e2e8f0; border-radius:10px; font-size:15px; outline:none; background:white; box-sizing:border-box; cursor:pointer;"
        onclick="this.showPicker()" />
     </div>
@@ -44,6 +64,8 @@ ob_end_clean();
     </button>
 
     <div id="status" style="margin-top:15px; padding:10px; display:none; border-radius:5px;"></div>
+
+<?php endif; ?>
 
 </div>
 
