@@ -21,17 +21,18 @@ $CRT_CFG = array(
     // Deal fields
     "ADDRESS_FIELD"       => "",   // property address (Georgian)
     "ADDRESS_EN_FIELD"    => "",   // property address (English)
-    "CADASTRAL_FIELD"     => "",   // საკადასტრო კოდი
-    "SECTOR_FIELD"        => "",   // სექტორი
-    "BLOCK_FIELD"         => "",   // ბლოკი
-    "FLOOR_FIELD"         => "",   // სართული
-    "APARTMENT_FIELD"     => "",   // ბინის N
-    "AREA_FIELD"          => "",   // ფართი კვ.მ
+    "CADASTRAL_FIELD"     => "UF_CRM_1782206163787",   // საკადასტრო კოდი
+    "SECTOR_FIELD"        => "UF_CRM_1781768590754",   // სექტორი
+    "BLOCK_FIELD"         => "UF_CRM_1779277644355",   // ბლოკი
+    "FLOOR_FIELD"         => "UF_CRM_1779277828822",   // სართული
+    "APARTMENT_FIELD"     => "UF_CRM_1779277613798",   // ბინის N
+    "APT_TYPE_FIELD"      => "UF_CRM_1779277898205",   // ბინა / ოფისი / ფართი
+    "AREA_FIELD"          => "UF_CRM_1779277886804",   // ფართი კვ.მ
     "PRICE_FIELD"         => "",   // ღირებულება (empty => sum of payment plan)
     "CONTRACT_DATE_FIELD" => "",   // წინასწარი ნასყიდობის ხელშეკრულების თარიღი
 
     // Contact fields
-    "PERSONAL_ID_FIELD"   => "",   // პირადი ნომერი
+    "PERSONAL_ID_FIELD"   => "UF_CRM_1781244744534",   // პირადი ნომერი
     "NAME_EN_FIELD"       => "",   // name in Latin letters (empty => NAME + LAST_NAME)
 
     // Fallbacks
@@ -238,19 +239,41 @@ $address = ($lang === "en")
     ? (crt_uf("CRM_DEAL", $deal, $CRT_CFG["ADDRESS_EN_FIELD"]) ?: $CRT_CFG["ADDRESS_EN_DEFAULT"])
     : (crt_uf("CRM_DEAL", $deal, $CRT_CFG["ADDRESS_FIELD"])    ?: $CRT_CFG["ADDRESS_DEFAULT"]);
 
-$propParts = array();
 $L = array(
-    "ka" => array("CADASTRAL" => "საკადასტრო კოდი:", "SECTOR" => "სექტორი", "BLOCK" => "ბლოკი",
-                  "FLOOR" => "სართული", "APARTMENT" => "ბინა N", "AREA" => "ფართი", "SQM" => "კვ.მ."),
-    "en" => array("CADASTRAL" => "Cadastral code:", "SECTOR" => "Sector", "BLOCK" => "Block",
-                  "FLOOR" => "Floor", "APARTMENT" => "Apartment No.", "AREA" => "Area", "SQM" => "sq.m."),
+    "ka" => array("ADDRESS" => "მისამართი", "CADASTRAL" => "საკადასტრო კოდი", "SECTOR" => "სექტორი",
+                  "BLOCK" => "ბლოკი", "FLOOR" => "სართული", "APARTMENT" => "ბინა", "NUM" => "N",
+                  "AREA" => "ფართი", "SQM" => "კვ.მ."),
+    "en" => array("ADDRESS" => "Address", "CADASTRAL" => "Cadastral code", "SECTOR" => "Sector",
+                  "BLOCK" => "Block", "FLOOR" => "Floor", "APARTMENT" => "Apartment", "NUM" => "No.",
+                  "AREA" => "Area", "SQM" => "sq.m."),
 );
-foreach (array("CADASTRAL", "SECTOR", "BLOCK", "FLOOR", "APARTMENT") as $k) {
-    $v = crt_uf("CRM_DEAL", $deal, $CRT_CFG[$k . "_FIELD"]);
-    if ($v !== "") $propParts[] = $L[$lang][$k] . " " . $v;
+
+// Unit type label (ბინა / ოფისი / ფართი) — falls back to "ბინა" / "Apartment"
+$aptType = crt_uf("CRM_DEAL", $deal, $CRT_CFG["APT_TYPE_FIELD"]);
+if ($lang === "en") {
+    $aptTypeEn = array("ბინა" => "Apartment", "ოფისი" => "Office", "ფართი" => "Commercial space",
+                       "კომერციული ფართი" => "Commercial space", "პარკინგი" => "Parking", "სათავსო" => "Storage");
+    $aptType = isset($aptTypeEn[$aptType]) ? $aptTypeEn[$aptType] : ($aptType !== "" ? $aptType : "");
 }
+if ($aptType === "") $aptType = $L[$lang]["APARTMENT"];
+
+// Area: 75.50 -> 75.5, 80.00 -> 80
 $area = crt_uf("CRM_DEAL", $deal, $CRT_CFG["AREA_FIELD"]);
-if ($area !== "") $propParts[] = $L[$lang]["AREA"] . " " . $area . " " . $L[$lang]["SQM"];
+if ($area !== "" && is_numeric(str_replace(",", ".", $area))) {
+    $area = rtrim(rtrim(number_format((float)str_replace(",", ".", $area), 2, '.', ''), '0'), '.');
+}
+
+// Detailed property rows: label => value (empty values are skipped)
+$propRows = array();
+$propRows[$L[$lang]["ADDRESS"]]   = $address;
+$propRows[$L[$lang]["CADASTRAL"]] = crt_uf("CRM_DEAL", $deal, $CRT_CFG["CADASTRAL_FIELD"]);
+$propRows[$L[$lang]["SECTOR"]]    = crt_uf("CRM_DEAL", $deal, $CRT_CFG["SECTOR_FIELD"]);
+$propRows[$L[$lang]["BLOCK"]]     = crt_uf("CRM_DEAL", $deal, $CRT_CFG["BLOCK_FIELD"]);
+$propRows[$L[$lang]["FLOOR"]]     = crt_uf("CRM_DEAL", $deal, $CRT_CFG["FLOOR_FIELD"]);
+$aptNum = crt_uf("CRM_DEAL", $deal, $CRT_CFG["APARTMENT_FIELD"]);
+$propRows[$aptType . " " . $L[$lang]["NUM"]] = $aptNum;
+$propRows[$L[$lang]["AREA"]]      = ($area !== "") ? $area . " " . $L[$lang]["SQM"] : "";
+$propRows = array_filter($propRows, function ($v) { return trim((string)$v) !== ""; });
 
 $contractDate = crt_parseDate(crt_uf("CRM_DEAL", $deal, $CRT_CFG["CONTRACT_DATE_FIELD"]));
 $today        = new DateTime();
@@ -311,7 +334,7 @@ $T = array(
 $t = $T[$lang];
 
 $who = crt_h($buyerName);
-if ($buyerPID !== "") $who .= ($lang === "en" ? " (ID " : " (პ/ნ ") . crt_h($buyerPID) . ")";
+if ($buyerPID !== "") $who .= ($lang === "en" ? " (Personal ID: " : " (პირადი ნომერი: ") . crt_h($buyerPID) . ")";
 
 $paidStr    = crt_amount($totalPaid);
 $balanceStr = crt_amount(max(0, $balance));
@@ -403,7 +426,6 @@ $foot   = $CRT_FOOTER[$lang];
         .crt-concern { font-weight: 700; font-size: 15px; margin: 7mm 0 3mm; }
 
         .crt-block { margin-top: 4mm; }
-        .crt-prop b:first-child { margin-right: 4px; }
 
         .crt-pay { margin-top: 6mm; }
         .crt-pay__head { font-weight: 700; margin-bottom: 2mm; }
@@ -476,12 +498,18 @@ $foot   = $CRT_FOOTER[$lang];
     <div><?php echo $intro; ?></div>
 
     <div class="crt-block crt-prop">
-        <b><?php echo crt_h($t["PROPERTY"]); ?></b>
-        <?php echo crt_h($address); ?><?php echo $propParts ? ", " . crt_h(implode(", ", $propParts)) : ""; ?>.<br>
-        <?php echo crt_h($t["PRICE"]); ?> <b><?php echo $curSymbol . " " . crt_amount($price); ?>.</b>
-        <?php if ($contractDate): ?>
-            <?php echo crt_h($t["CONTRACT"]); ?> <b><?php echo crt_h(crt_fmtDate($contractDate, $lang)); ?></b>
-        <?php endif; ?>
+<?php
+        $propLine = array();
+        foreach ($propRows as $label => $value) {
+            $propLine[] = crt_h($label) . ": <b>" . crt_h($value) . "</b>";
+        }
+        $propLine[] = crt_h(rtrim($t["PRICE"], ":")) . ": <b>" . $curSymbol . " " . crt_amount($price) . "</b>";
+        if ($contractDate) {
+            $propLine[] = crt_h($lang === "en" ? "Pre-purchase agreement date" : "ხელშეკრულების თარიღი")
+                . ": <b>" . crt_h(crt_fmtDate($contractDate, $lang)) . "</b>";
+        }
+        ?>
+        <b><?php echo crt_h($t["PROPERTY"]); ?></b> <?php echo implode(", ", $propLine); ?>.
     </div>
 
     <div class="crt-pay">
