@@ -144,7 +144,7 @@ $deal_ID = (int)$_GET["dealid"];
 $href="/crm/deal/details/$deal_ID/";
 
 // ── Invoice access: only these user IDs see the Invoice button ──
-$INVOICE_USERS = array(474, 130);
+$INVOICE_USERS = array(474, 130, 3);
 global $USER;
 $canInvoice = is_object($USER) && $USER->IsAuthorized()
     && in_array((int)$USER->GetID(), $INVOICE_USERS, true);
