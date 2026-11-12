@@ -2840,11 +2840,26 @@ function showReservationPopup() {
 
     // დადასტურებული რეზერვაციის შემდეგ სტანდარტული (უფასო) ჯავშანი აღარ შეიძლება
     if (hadConfirmedReservation) {
-        document.querySelector('#resUserSelect option[value="41"]')?.remove();
-        document.getElementById("resRepeatNote").style.display = "block";
-        document.getElementById("resUserSelect").value = "42";
-        resToggleFields();
+        restrictToNonStandard("დილს რეზერვაცია უკვე ჰქონდა - ხელახალი ჯავშანი მხოლოდ დასტურით (არასტანდარტული)");
     }
+
+    // ბინა ამ მომხმარებელს სხვა დილზე უკვე ჰქონდა დაჯავშნილი - მხოლოდ არასტანდარტული
+    // (მოწმდება სერვერზე, რადგან „შენახვის“ შემდეგ დილის ბინები შეიძლება შეცვლილი იყოს)
+    const resSelect = document.getElementById("resUserSelect");
+    resSelect.disabled = true;
+    fetch(`/rest/local/api/projects/saveReservation.php?action=checkStandard&deal_id=${dealID}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 200) console.error("Standard reservation check failed:", data.message);
+            const list = (data && data.repeatApartments) || [];
+            if (data.status === 200 && list.length > 0) {
+                const msg = `სტანდარტული რეზერვაცია მიუწვდომელია: ეს კონკრეტული უძრავი ქონება უკვე იყო თქვენს მიერ დაჯავშნილი. შესაძლებელია მხოლოდ არასტანდარტული რეზერვაცია.`;
+                restrictToNonStandard(msg);
+                alert(msg);
+            }
+        })
+        .catch(err => console.error("Standard reservation check error:", err))
+        .finally(() => { resSelect.disabled = false; });
 
     const overlay = document.getElementById("reservationOverlay");
     overlay.style.display = "flex";
@@ -2871,6 +2886,18 @@ function showReservationPopup() {
             }
         })
         .catch(err => console.error("Contact fetch error:", err));
+}
+
+// სტანდარტული ტიპის მოხსნა და არასტანდარტულზე გადართვა
+function restrictToNonStandard(noteText) {
+    document.querySelector('#resUserSelect option[value="41"]')?.remove();
+    const note = document.getElementById("resRepeatNote");
+    note.textContent   = noteText;
+    note.style.display = "block";
+    if (document.getElementById("resUserSelect").value !== "42") {
+        document.getElementById("resUserSelect").value = "42";
+        resToggleFields();
+    }
 }
 
 function closeReservationPopup() {
@@ -2970,7 +2997,11 @@ var date   = choice === "42"
     btn.style.opacity = ".6"; btn.style.pointerEvents = "none";
 
     fetch("/rest/local/api/projects/saveReservation.php", { method: "POST", body: formData })
-        .then(r => r.json())
+        .then(r => r.text())
+        .then(text => {
+            try { return JSON.parse(text); }
+            catch (e) { console.error("saveReservation non-JSON response:", text); throw e; }
+        })
         .then(data => {
             if (data.status === 200) {
                 showResMsg("success");

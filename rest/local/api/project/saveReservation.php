@@ -40,6 +40,55 @@ function dealHadConfirmedReservation($dealID) {
     ])->fetch();
 }
 
+// დილზე მიბმული ბინები, რომლებიც ამ მომხმარებელს სხვა დილზე უკვე ჰქონდა დაჯავშნილი
+// (დილი იყო რეზერვაციის ეტაპზე, როცა პასუხისმგებელი ეს მომხმარებელი იყო) - მხოლოდ არასტანდარტული ჯავშანი
+// აბრუნებს ბინების სახელებს (ცარიელი მასივი = შეზღუდვა არ არის)
+function apartmentsReservedBeforeByUser($dealID, $userID) {
+    $dealID = (int)$dealID;
+    $userID = (int)$userID;
+    if (!$dealID || !$userID) return [];
+
+    // ამ დილის ბინები
+    $names = [];
+    foreach ((array)CCrmDeal::LoadProductRows($dealID) as $row) {
+        $pid = (int)$row["PRODUCT_ID"];
+        if ($pid) $names[$pid] = $row["PRODUCT_NAME"] ?: ("ID " . $pid);
+    }
+    if (!$names) return [];
+
+    // სხვა დილები, რომლებზეც იგივე ბინა იყო მიბმული
+    $productsByDeal = [];
+    $rows = \Bitrix\Crm\ProductRowTable::getList([
+        "select" => ["OWNER_ID", "PRODUCT_ID"],
+        "filter" => [
+            "=OWNER_TYPE" => "D",
+            "@PRODUCT_ID" => array_keys($names),
+            "!=OWNER_ID"  => $dealID,
+        ],
+    ]);
+    while ($r = $rows->fetch()) {
+        $productsByDeal[(int)$r["OWNER_ID"]][] = (int)$r["PRODUCT_ID"];
+    }
+    if (!$productsByDeal) return [];
+
+    // რომელიმე მათგანი იყო თუ არა რეზერვაციის ეტაპზე ამ მომხმარებლის პასუხისმგებლობით
+    $result = [];
+    $history = \Bitrix\Crm\History\Entity\DealStageHistoryTable::getList([
+        "select" => ["OWNER_ID"],
+        "filter" => [
+            "@OWNER_ID"       => array_keys($productsByDeal),
+            "@STAGE_ID"       => ["PREPAYMENT_INVOICE", "FINAL_INVOICE"],
+            "=RESPONSIBLE_ID" => $userID,
+        ],
+    ]);
+    while ($h = $history->fetch()) {
+        foreach ($productsByDeal[(int)$h["OWNER_ID"]] ?? [] as $pid) {
+            $result[$pid] = $names[$pid];
+        }
+    }
+    return array_values($result);
+}
+
 /** Absolute public URL with encoded filename (spaces, (), etc.) */
 function buildPassportFileLink($fileId) {
     $path = CFile::GetPath($fileId);
@@ -52,6 +101,27 @@ function buildPassportFileLink($fileId) {
     }, $parts);
     $host = preg_replace('/:\d+$/', '', $_SERVER["HTTP_HOST"]);
     return "https://" . $host . implode('/', $encoded);
+}
+
+global $USER;
+$currentUserId = (is_object($USER) && $USER->IsAuthorized()) ? (int)$USER->GetID() : 0;
+
+// ── ჯავშნის ფორმის გახსნისას: შეუძლია თუ არა სტანდარტული ჯავშანი ──
+if (($_GET['action'] ?? '') === 'checkStandard') {
+    $checkDealId = (int)($_GET['deal_id'] ?? 0);
+    try {
+        $response = [
+            "status"           => 200,
+            "repeatApartments" => apartmentsReservedBeforeByUser($checkDealId, $currentUserId),
+            "hadConfirmed"     => $checkDealId ? dealHadConfirmedReservation($checkDealId) : false,
+        ];
+    } catch (\Throwable $e) {
+        $response = ["status" => 500, "message" => $e->getMessage(), "repeatApartments" => []];
+    }
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($response, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 $userSelect      = $_POST['userSelect']  ?? '';
@@ -83,6 +153,28 @@ if ($userSelect == '41' && $dealId && dealHadConfirmedReservation($dealId)) {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(["status" => 403, "message" => "სტანდარტული რეზერვაცია ამ დილზე აღარ არის ხელმისაწვდომი"], JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+// ბინა ამ მომხმარებელს უკვე ჰქონდა დაჯავშნილი სხვა დილზე - სტანდარტული ჯავშანი აღარ შეიძლება
+if ($userSelect == '41' && $dealId) {
+    try {
+        $repeatApartments = apartmentsReservedBeforeByUser($dealId, $currentUserId);
+    } catch (\Throwable $e) {
+        ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(["status" => 500, "message" => "შემოწმების შეცდომა: " . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($repeatApartments) {
+        ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            "status"  => 403,
+            "message" => "სტანდარტული რეზერვაცია მიუწვდომელია: " . implode(", ", $repeatApartments)
+                       . " უკვე იყო თქვენ მიერ დაჯავშნილი. შესაძლებელია მხოლოდ არასტანდარტული რეზერვაცია.",
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 }
 $filePath        = $passportFileId ? $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath($passportFileId) : null;
 
