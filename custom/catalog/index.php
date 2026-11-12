@@ -2777,8 +2777,9 @@ async function exportToExcel() {
     </div>
   </div>
   <div>
-  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> პირადი ნომერი / პასპორტის ნომერი</label>
+  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> პირადი ნომერი</label>
       <input type="text" id="resIdNumber" placeholder="პირადი ნომერი" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
+      <div id="resIdCheck" style="display:none;margin-top:6px;font-size:12px;border-radius:6px;padding:6px 10px;"></div>
   </div>
 </div>
 <!-- inside resPersonWrap, after idNumber div -->
@@ -2835,6 +2836,7 @@ function showReservationPopup() {
     document.getElementById("resIdNumber").value  = "";
     document.getElementById("resPhone").value     = "";
     document.getElementById("resPersonWrap").style.display = "none";
+    showResIdCheck(null);
 
     if (document.getElementById("resAmount")) document.getElementById("resAmount").value = "";
 
@@ -2883,10 +2885,50 @@ function showReservationPopup() {
                 if (c.PHONE)                  document.getElementById("resPhone").value     = c.PHONE;
                 // store contact ID for later update
                 document.getElementById("reservationOverlay").dataset.contactId = c.ID;
+                runResIdCheck();
             }
         })
         .catch(err => console.error("Contact fetch error:", err));
 }
+
+// ── პირადი ნომრის შემოწმება rs.ge-ზე (მხოლოდ მინიშნება - საბოლოო შემოწმება სერვერზეა) ──
+let resIdCheckTimer = null, resIdCheckSeq = 0;
+function showResIdCheck(kind, text) {
+    const box = document.getElementById("resIdCheck");
+    const styles = {
+        ok:   "color:#3b6d11;background:#eaf3de;border:.5px solid #97c459;",
+        bad:  "color:#993c1d;background:#faece7;border:.5px solid #f0997b;",
+        info: "color:#6b7280;background:#f4f6f8;border:.5px solid #d0d0d0;",
+    };
+    if (!kind) { box.style.display = "none"; return; }
+    box.style.cssText = "display:block;margin-top:6px;font-size:12px;border-radius:6px;padding:6px 10px;" + styles[kind];
+    box.textContent = text;
+}
+function scheduleResIdCheck() {
+    clearTimeout(resIdCheckTimer);
+    resIdCheckTimer = setTimeout(runResIdCheck, 600);
+}
+function runResIdCheck() {
+    const id    = document.getElementById("resIdNumber").value.trim();
+    const first = document.getElementById("resFirstName").value.trim();
+    const last  = document.getElementById("resLastName").value.trim();
+    if (!id) { showResIdCheck(null); return; }
+    if (!first || !last) { showResIdCheck("info", "შეიყვანეთ სახელი და გვარი გადამოწმებისთვის"); return; }
+
+    const seq = ++resIdCheckSeq;
+    showResIdCheck("info", "მოწმდება rs.ge-ზე...");
+    const qs = new URLSearchParams({ action: "checkPersonalId", id, firstName: first, lastName: last });
+    fetch(`/rest/local/api/projects/saveReservation.php?${qs}`)
+        .then(r => r.json())
+        .then(d => {
+            if (seq !== resIdCheckSeq) return;   // უფრო ახალი შემოწმება უკვე მიდის
+            if (d.ok) showResIdCheck("ok", "პირადი ნომერი დადასტურებულია ✓");
+            else      showResIdCheck("bad", d.message || "პირადი ნომერი არასწორია");
+        })
+        .catch(() => { if (seq === resIdCheckSeq) showResIdCheck("info", "rs.ge-სთან კავშირი ვერ მოხერხდა - შემოწმდება გაგზავნისას"); });
+}
+["resIdNumber", "resFirstName", "resLastName"].forEach(id =>
+    document.getElementById(id).addEventListener("input", scheduleResIdCheck));
 
 // სტანდარტული ტიპის მოხსნა და არასტანდარტულზე გადართვა
 function restrictToNonStandard(noteText) {
@@ -3000,7 +3042,12 @@ var date   = choice === "42"
         .then(r => r.text())
         .then(text => {
             try { return JSON.parse(text); }
-            catch (e) { console.error("saveReservation non-JSON response:", text); throw e; }
+            catch (e) {
+                // სერვერმა JSON-ის ნაცვლად შეცდომის ტექსტი დააბრუნა - ვაჩვენებთ რეალურ მიზეზს
+                console.error("saveReservation non-JSON response:", text);
+                const plain = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+                return { status: 500, message: "სერვერის შეცდომა: " + (plain || "ცარიელი პასუხი") };
+            }
         })
         .then(data => {
             if (data.status === 200) {
@@ -3008,13 +3055,15 @@ var date   = choice === "42"
                 launchConfetti();
                 setTimeout(closeReservationPopup, 2200);
             } else {
-                showResMsg("error", data.message);
+                const msg = data.message || "შეცდომა გაგზავნისას";
+                showResMsg("error", msg);
+                alert(msg);
                 btn.style.opacity = "1"; btn.style.pointerEvents = "";
             }
         })
         .catch(err => {
             console.error("fetch error:", err);
-            showResMsg("error");
+            showResMsg("error", "სერვერთან კავშირი ვერ მოხერხდა: " + err.message);
             btn.style.opacity = "1"; btn.style.pointerEvents = "";
         });
 }

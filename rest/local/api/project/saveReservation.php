@@ -7,6 +7,15 @@ define('DisableEventsCheck', true);
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
 CModule::IncludeModule('crm');
 
+// PHP-ის ფატალური შეცდომის შემთხვევაშიც (მაგ. timeout) პასუხი JSON უნდა იყოს, რომ ფორმამ მიზეზი აჩვენოს
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if (!$err || !in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) return;
+    while (ob_get_level() > 0) ob_end_clean();
+    if (!headers_sent()) header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => 500, "message" => "სერვერის შეცდომა: " . $err['message']], JSON_UNESCAPED_UNICODE);
+});
+
 function getCorrectDateRA($date) {
     if (!$date) return ["", ""];
     if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $date)) {
@@ -89,6 +98,93 @@ function apartmentsReservedBeforeByUser($dealID, $userID) {
     return array_values($result);
 }
 
+// ── rs.ge: პირადი ნომრით სახელის გადამოწმება ──
+const RS_SU = 'FMGSOFT:12345678910';
+const RS_SP = '123456';
+
+// აბრუნებს: სახელს (string), '' თუ ვერ მოიძებნა, null თუ სერვისი მიუწვდომელია
+function rsGetNameByPersonalId($id) {
+    $xml = '<?xml version="1.0" encoding="utf-8"?>
+        <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+          <soap:Body>
+            <get_name_from_tin xmlns="http://tempuri.org/">
+              <su>' . htmlspecialchars(RS_SU, ENT_XML1) . '</su>
+              <sp>' . htmlspecialchars(RS_SP, ENT_XML1) . '</sp>
+              <tin>' . htmlspecialchars((string)$id, ENT_XML1) . '</tin>
+            </get_name_from_tin>
+          </soap:Body>
+        </soap:Envelope>';
+
+    // Bitrix-ის HTTP კლიენტი - სერვერზე curl გაფართოება არ არის
+    $http = new \Bitrix\Main\Web\HttpClient([
+        "socketTimeout" => 5,
+        "streamTimeout" => 10,
+    ]);
+    $http->setHeader("Content-Type", "text/xml; charset=utf-8");
+    $output = $http->post("https://services.rs.ge/WayBillService/WayBillService.asmx", $xml);
+    $noResult = strpos((string)$output, 'get_name_from_tinResult') === false;
+    if ($output === false || $output === '' || ((int)$http->getStatus() >= 500 && $noResult)) {
+        return null;
+    }
+
+    $doc = new DOMDocument;
+    if (!@$doc->loadXML($output)) return null;
+    $node = $doc->getElementsByTagName('get_name_from_tinResult')->item(0);
+    return $node ? trim($node->nodeValue) : '';
+}
+
+// სიტყვებად დაშლა: პატარა ასოები, წერტილები/ტირეები -> ჰარი
+function nameWords($s) {
+    $s = mb_strtolower(trim((string)$s), 'UTF-8');
+    $s = preg_replace('/[^\p{L}\s]+/u', ' ', $s);
+    return preg_split('/\s+/u', trim($s), -1, PREG_SPLIT_NO_EMPTY);
+}
+
+// სახელის და გვარის ყველა სიტყვა უნდა დაემთხვეს rs.ge-ს პასუხს
+// (სრულად, ან ინიციალით, თუ rs.ge ინიციალს აბრუნებს: „გ. მაისურაძე“)
+function nameMatchesRs($firstName, $lastName, $rsName) {
+    $rsWords = nameWords($rsName);
+    $ourWords = array_merge(nameWords($firstName), nameWords($lastName));
+    if (!$rsWords || !$ourWords) return false;
+
+    foreach ($ourWords as $word) {
+        $found = false;
+        foreach ($rsWords as $i => $rsWord) {
+            $isInitial = mb_strlen($rsWord, 'UTF-8') === 1;
+            if ($rsWord === $word || ($isInitial && $rsWord === mb_substr($word, 0, 1, 'UTF-8'))) {
+                unset($rsWords[$i]);   // ერთი სიტყვა ორჯერ არ ითვლება
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) return false;
+    }
+    return true;
+}
+
+// ყოველთვის მოწმდება rs.ge-ზე, ნომრის სიგრძის მიუხედავად
+// აბრუნებს ['ok' => bool, 'rsName' => string, 'message' => string]
+function verifyClientIdentity($firstName, $lastName, $idNumber) {
+    $idNumber = trim((string)$idNumber);
+    if ($idNumber === '') {
+        return ["ok" => false, "rsName" => "", "message" => "პირადი ნომერი სავალდებულოა"];
+    }
+    $rsName = rsGetNameByPersonalId($idNumber);
+    if ($rsName === null) {
+        return ["ok" => false, "rsName" => "",
+                "message" => "პირადი ნომრის გადამოწმება rs.ge-ზე ვერ მოხერხდა, სცადეთ თავიდან"];
+    }
+    if ($rsName === '' || !nameWords($rsName)) {
+        return ["ok" => false, "rsName" => "",
+                "message" => "პირადი ნომერი არასწორია"];
+    }
+    if (!nameMatchesRs($firstName, $lastName, $rsName)) {
+        return ["ok" => false, "rsName" => $rsName,
+                "message" => "პირადი ნომერი არასწორია"];
+    }
+    return ["ok" => true, "rsName" => $rsName, "message" => ""];
+}
+
 /** Absolute public URL with encoded filename (spaces, (), etc.) */
 function buildPassportFileLink($fileId) {
     $path = CFile::GetPath($fileId);
@@ -117,6 +213,25 @@ if (($_GET['action'] ?? '') === 'checkStandard') {
         ];
     } catch (\Throwable $e) {
         $response = ["status" => 500, "message" => $e->getMessage(), "repeatApartments" => []];
+    }
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($response, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// ── ფორმაში პირადი ნომრის ცოცხალი შემოწმება (rs.ge) ──
+if (($_GET['action'] ?? '') === 'checkPersonalId') {
+    try {
+        $check = verifyClientIdentity(
+            $_GET['firstName'] ?? '',
+            $_GET['lastName']  ?? '',
+            trim($_GET['id']   ?? '')
+        );
+        // rs.ge-ს სახელი ბრაუზერში არ იგზავნება
+        $response = ["status" => 200, "ok" => $check["ok"], "message" => $check["message"]];
+    } catch (\Throwable $e) {
+        $response = ["status" => 200, "ok" => false, "rsName" => "", "message" => "გადამოწმების შეცდომა: " . $e->getMessage()];
     }
     ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
@@ -155,8 +270,11 @@ if ($userSelect == '41' && $dealId && dealHadConfirmedReservation($dealId)) {
     exit;
 }
 
-// ბინა ამ მომხმარებელს უკვე ჰქონდა დაჯავშნილი სხვა დილზე - სტანდარტული ჯავშანი აღარ შეიძლება
-if ($userSelect == '41' && $dealId) {
+// ბინა ამ მომხმარებელს უკვე ჰქონდა დაჯავშნილი სხვა დილზე:
+//   - სტანდარტული ჯავშანი აღარ შეიძლება
+//   - არასტანდარტული ჯავშანი მიდის BP 100-ზე (ნაცვლად BP 6-ისა)
+$repeatApartments = [];
+if ($dealId) {
     try {
         $repeatApartments = apartmentsReservedBeforeByUser($dealId, $currentUserId);
     } catch (\Throwable $e) {
@@ -165,13 +283,12 @@ if ($userSelect == '41' && $dealId) {
         echo json_encode(["status" => 500, "message" => "შემოწმების შეცდომა: " . $e->getMessage()], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    if ($repeatApartments) {
+    if ($userSelect == '41' && $repeatApartments) {
         ob_end_clean();
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             "status"  => 403,
-            "message" => "სტანდარტული რეზერვაცია მიუწვდომელია: " . implode(", ", $repeatApartments)
-                       . " უკვე იყო თქვენ მიერ დაჯავშნილი. შესაძლებელია მხოლოდ არასტანდარტული რეზერვაცია.",
+            "message" => "სტანდარტული რეზერვაცია მიუწვდომელია: მოცემული უძრავი ქონება უკვე იყო თქვენს მიერ დაჯავშნილი. შესაძლებელია მხოლოდ არასტანდარტული რეზერვაცია.",
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -183,6 +300,25 @@ $lastName   = trim($_POST['lastName']    ?? '');
 $idNumber   = trim($_POST['idNumber']    ?? '');
 $phone      = trim($_POST['phone']       ?? '');
 $contactId  = intval($_POST['contact_id'] ?? 0);
+
+// პირადი ნომერი სავალდებულოა და სახელი/გვარი უნდა ემთხვეოდეს rs.ge-ს - სანამ კონტაქტი ან დილი შეიცვლება
+if ($idNumber === '') {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => 400, "message" => "პირადი ნომერი სავალდებულოა"], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+try {
+    $identity = verifyClientIdentity($firstName, $lastName, $idNumber);
+} catch (\Throwable $e) {
+    $identity = ["ok" => false, "rsName" => "", "message" => "პირადი ნომრის გადამოწმების შეცდომა: " . $e->getMessage()];
+}
+if (!$identity["ok"]) {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => 403, "message" => $identity["message"]], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 // fallback: resolve contact from deal if not passed
 if (!$contactId && $dealId) {
@@ -286,9 +422,12 @@ $Deal = new CCrmDeal();
 $Deal->Update($dealId, $arrForAdd);
 
 // ── Start workflow ──
+// ხელახალი ჯავშანი იმავე მომხმარებლისგან (მხოლოდ არასტანდარტული) - BP 100, სხვა შემთხვევაში BP 6
+$workflowTemplateId = $repeatApartments ? 100 : 6;
+
 $arErrorsTmp = array();
 $wfId = CBPDocument::StartWorkflow(
-    6,
+    $workflowTemplateId,
     array("crm", "CCrmDocumentDeal", "DEAL_$dealId"),
     $params,
     $arErrorsTmp
@@ -297,6 +436,9 @@ $wfId = CBPDocument::StartWorkflow(
 file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/saveres_errors.txt",
     "dealId: " . $dealId . "\n" .
     "contactId: " . $contactId . "\n" .
+    "rs.ge name: " . $identity["rsName"] . "\n" .
+    "workflowTemplateId: " . $workflowTemplateId . "\n" .
+    "repeatApartments: " . implode(", ", $repeatApartments) . "\n" .
     "wfId: " . var_export($wfId, true) . "\n" .
     $contactUpdateLog .
     "params: " . print_r($params, true) . "\n" .
