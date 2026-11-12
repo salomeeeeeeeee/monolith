@@ -49,6 +49,64 @@ function dealHadConfirmedReservation($dealID) {
     ])->fetch();
 }
 
+// ── ჯავშნების ჟურნალი ──
+// დილის წაგებისას ბინა შეიძლება დილის პროდუქტებიდან მოიხსნას, ამიტომ თითოეულ ჯავშანს
+// (დილი, ბინა, პასუხისმგებელი) ცალკე ცხრილში ვინახავთ - შემოწმება მასზეც ხდება
+const RES_LOG_TABLE = 'monolith_reservation_log';
+
+function reservationLogEnsureTable() {
+    static $done = false;
+    if ($done) return;
+    \Bitrix\Main\Application::getConnection()->queryExecute(
+        "CREATE TABLE IF NOT EXISTS " . RES_LOG_TABLE . " (
+            ID         INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            DEAL_ID    INT UNSIGNED NOT NULL,
+            PRODUCT_ID INT UNSIGNED NOT NULL,
+            USER_ID    INT UNSIGNED NOT NULL,
+            CREATED_AT DATETIME     NOT NULL,
+            KEY IX_USER_PRODUCT (USER_ID, PRODUCT_ID),
+            KEY IX_DEAL (DEAL_ID)
+        )"
+    );
+    $done = true;
+}
+
+// ჯავშნის გაგზავნისას: დილის ყველა ბინა + დილის პასუხისმგებელი
+function reservationLogAdd($dealID) {
+    $dealID = (int)$dealID;
+    if (!$dealID) return;
+    $deal = CCrmDeal::GetListEx([], ["ID" => $dealID, "CHECK_PERMISSIONS" => "N"], false, false, ["ID", "ASSIGNED_BY_ID"])->Fetch();
+    $userID = (int)($deal["ASSIGNED_BY_ID"] ?? 0);
+    if (!$userID) return;
+
+    reservationLogEnsureTable();
+    $conn = \Bitrix\Main\Application::getConnection();
+    foreach ((array)CCrmDeal::LoadProductRows($dealID) as $row) {
+        $pid = (int)$row["PRODUCT_ID"];
+        if (!$pid) continue;
+        $conn->queryExecute(
+            "INSERT INTO " . RES_LOG_TABLE . " (DEAL_ID, PRODUCT_ID, USER_ID, CREATED_AT)
+             VALUES ({$dealID}, {$pid}, {$userID}, NOW())"
+        );
+    }
+}
+
+// ჟურნალიდან: რომელი ბინები ჰქონდა ამ მომხმარებელს დაჯავშნილი სხვა დილზე
+function reservationLogFind($dealID, $userID, array $productIDs) {
+    $productIDs = array_filter(array_map('intval', $productIDs));
+    if (!$productIDs || !(int)$userID) return [];
+    reservationLogEnsureTable();
+    $res = \Bitrix\Main\Application::getConnection()->query(
+        "SELECT DISTINCT PRODUCT_ID FROM " . RES_LOG_TABLE . "
+         WHERE USER_ID = " . (int)$userID . "
+           AND DEAL_ID <> " . (int)$dealID . "
+           AND PRODUCT_ID IN (" . implode(",", $productIDs) . ")"
+    );
+    $found = [];
+    while ($r = $res->fetch()) $found[] = (int)$r["PRODUCT_ID"];
+    return $found;
+}
+
 // დილზე მიბმული ბინები, რომლებიც ამ მომხმარებელს სხვა დილზე უკვე ჰქონდა დაჯავშნილი
 // (დილი იყო რეზერვაციის ეტაპზე, როცა პასუხისმგებელი ეს მომხმარებელი იყო) - მხოლოდ არასტანდარტული ჯავშანი
 // აბრუნებს ბინების სახელებს (ცარიელი მასივი = შეზღუდვა არ არის)
@@ -65,7 +123,14 @@ function apartmentsReservedBeforeByUser($dealID, $userID) {
     }
     if (!$names) return [];
 
-    // სხვა დილები, რომლებზეც იგივე ბინა იყო მიბმული
+    $result = [];
+
+    // 1. ჯავშნების ჟურნალი (მუშაობს, თუნდაც წაგებულ დილს ბინა მოხსნილი ჰქონდეს)
+    foreach (reservationLogFind($dealID, $userID, array_keys($names)) as $pid) {
+        $result[$pid] = $names[$pid];
+    }
+
+    // 2. ძველი ჯავშნები (ჟურნალამდე): სხვა დილები, რომლებზეც იგივე ბინა ჯერ კიდევ მიბმულია
     $productsByDeal = [];
     $rows = \Bitrix\Crm\ProductRowTable::getList([
         "select" => ["OWNER_ID", "PRODUCT_ID"],
@@ -78,10 +143,9 @@ function apartmentsReservedBeforeByUser($dealID, $userID) {
     while ($r = $rows->fetch()) {
         $productsByDeal[(int)$r["OWNER_ID"]][] = (int)$r["PRODUCT_ID"];
     }
-    if (!$productsByDeal) return [];
+    if (!$productsByDeal) return array_values($result);
 
     // რომელიმე მათგანი იყო თუ არა რეზერვაციის ეტაპზე ამ მომხმარებლის პასუხისმგებლობით
-    $result = [];
     $history = \Bitrix\Crm\History\Entity\DealStageHistoryTable::getList([
         "select" => ["OWNER_ID"],
         "filter" => [
@@ -298,20 +362,27 @@ $filePath        = $passportFileId ? $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath(
 $firstName  = trim($_POST['firstName']   ?? '');
 $lastName   = trim($_POST['lastName']    ?? '');
 $idNumber   = trim($_POST['idNumber']    ?? '');
+$passportNo = trim($_POST['passportNumber'] ?? '');
 $phone      = trim($_POST['phone']       ?? '');
 $contactId  = intval($_POST['contact_id'] ?? 0);
 
-// პირადი ნომერი სავალდებულოა და სახელი/გვარი უნდა ემთხვეოდეს rs.ge-ს - სანამ კონტაქტი ან დილი შეიცვლება
-if ($idNumber === '') {
+// პირადი ნომერი ან პასპორტის ნომერი - ერთი მაინც უნდა იყოს შევსებული
+if ($idNumber === '' && $passportNo === '') {
     ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => 400, "message" => "პირადი ნომერი სავალდებულოა"], JSON_UNESCAPED_UNICODE);
+    echo json_encode(["status" => 400, "message" => "შეავსეთ პირადი ნომერი ან პასპორტის ნომერი"], JSON_UNESCAPED_UNICODE);
     exit;
 }
-try {
-    $identity = verifyClientIdentity($firstName, $lastName, $idNumber);
-} catch (\Throwable $e) {
-    $identity = ["ok" => false, "rsName" => "", "message" => "პირადი ნომრის გადამოწმების შეცდომა: " . $e->getMessage()];
+
+// პირადი ნომერი თუ შეყვანილია - სახელი/გვარი უნდა ემთხვეოდეს rs.ge-ს (სანამ კონტაქტი ან დილი შეიცვლება)
+// მხოლოდ პასპორტის ნომრის შემთხვევაში rs.ge-ზე შემოწმება არ ხდება
+$identity = ["ok" => true, "rsName" => "", "message" => ""];
+if ($idNumber !== '') {
+    try {
+        $identity = verifyClientIdentity($firstName, $lastName, $idNumber);
+    } catch (\Throwable $e) {
+        $identity = ["ok" => false, "rsName" => "", "message" => "პირადი ნომრის გადამოწმების შეცდომა: " . $e->getMessage()];
+    }
 }
 if (!$identity["ok"]) {
     ob_end_clean();
@@ -336,7 +407,8 @@ $params = array(
     "comment"     => $comment,
     "firstName"   => $firstName,
     "lastName"    => $lastName,
-    "idNumber"    => $idNumber,
+    // BP-ის კომენტარებისთვის: პირადი ნომერი, ან მისი არარსებობისას პასპორტის ნომერი
+    "idNumber"    => $idNumber !== '' ? $idNumber : $passportNo,
     "passportFile"     => $filePath ? CFile::MakeFileArray($filePath) : '',
     "passportFileLink" => $passportFileId ? buildPassportFileLink($passportFileId) : '',
 );
@@ -349,6 +421,7 @@ if ($contactId > 0) {
     if ($firstName !== '') $contactFields['NAME']      = $firstName;
     if ($lastName  !== '') $contactFields['LAST_NAME'] = $lastName;
     if ($idNumber  !== '') $contactFields['UF_CRM_1781244744534'] = $idNumber;
+    if ($passportNo !== '') $contactFields['UF_CRM_1790776088']   = $passportNo;
 
     // Passport file
     if ($passportFileId && $filePath) {
@@ -433,7 +506,18 @@ $wfId = CBPDocument::StartWorkflow(
     $arErrorsTmp
 );
 
+// ჯავშანი წავიდა - ჟურნალში ჩაწერა (შეცდომამ ჯავშანი არ უნდა ჩაშალოს)
+$resLogError = "";
+if ($wfId) {
+    try {
+        reservationLogAdd($dealId);
+    } catch (\Throwable $e) {
+        $resLogError = $e->getMessage();
+    }
+}
+
 file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/saveres_errors.txt",
+    "reservationLog error: " . $resLogError . "\n" .
     "dealId: " . $dealId . "\n" .
     "contactId: " . $contactId . "\n" .
     "rs.ge name: " . $identity["rsName"] . "\n" .

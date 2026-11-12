@@ -2776,10 +2776,15 @@ async function exportToExcel() {
     <input type="text" id="resLastName" placeholder="გვარი" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
     </div>
   </div>
+  <div style="font-size:11px;color:#6b7280;margin-bottom:6px;"><span style="color:#d85a30;">*</span> შეავსეთ პირადი ნომერი ან პასპორტის ნომერი (ერთი მაინც)</div>
   <div>
-  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> პირადი ნომერი</label>
+  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;">პირადი ნომერი</label>
       <input type="text" id="resIdNumber" placeholder="პირადი ნომერი" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
       <div id="resIdCheck" style="display:none;margin-top:6px;font-size:12px;border-radius:6px;padding:6px 10px;"></div>
+  </div>
+  <div style="margin-top:8px;">
+  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;">პასპორტის ნომერი</label>
+      <input type="text" id="resPassportNumber" placeholder="პასპორტის ნომერი" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
   </div>
 </div>
 <!-- inside resPersonWrap, after idNumber div -->
@@ -2834,6 +2839,7 @@ function showReservationPopup() {
     document.getElementById("resFirstName").value = "";
     document.getElementById("resLastName").value  = "";
     document.getElementById("resIdNumber").value  = "";
+    document.getElementById("resPassportNumber").value = "";
     document.getElementById("resPhone").value     = "";
     document.getElementById("resPersonWrap").style.display = "none";
     showResIdCheck(null);
@@ -2882,6 +2888,7 @@ function showReservationPopup() {
                 if (c.NAME)                   document.getElementById("resFirstName").value = c.NAME;
                 if (c.LAST_NAME)              document.getElementById("resLastName").value  = c.LAST_NAME;
                 if (c.UF_CRM_1781244744534)   document.getElementById("resIdNumber").value  = c.UF_CRM_1781244744534;
+                if (c.UF_CRM_1790776088)      document.getElementById("resPassportNumber").value = c.UF_CRM_1790776088;
                 if (c.PHONE)                  document.getElementById("resPhone").value     = c.PHONE;
                 // store contact ID for later update
                 document.getElementById("reservationOverlay").dataset.contactId = c.ID;
@@ -3014,14 +3021,22 @@ var date   = choice === "42"
     var firstName = document.getElementById("resFirstName").value.trim();
     var lastName  = document.getElementById("resLastName").value.trim();
     var idNumber  = document.getElementById("resIdNumber").value.trim();
+    var passportNumber = document.getElementById("resPassportNumber").value.trim();
     var phone     = document.getElementById("resPhone").value.trim();
     var passportFileId = document.getElementById("resPassportInputText").value;
     var contactId = document.getElementById("reservationOverlay").dataset.contactId || "";
 
-    if (!type || !date || !firstName || !lastName || !idNumber || !phone) {
-    showResMsg("warn");
-    return;
-}
+    if (!type || !date || !firstName || !lastName || !phone) {
+        showResMsg("warn");
+        return;
+    }
+    // პირადი ნომერი ან პასპორტის ნომერი - ერთი მაინც
+    if (!idNumber && !passportNumber) {
+        const msg = "შეავსეთ პირადი ნომერი ან პასპორტის ნომერი";
+        showResMsg("error", msg);
+        alert(msg);
+        return;
+    }
 
     var formData = new FormData();
     formData.append("deal_id",     dealID);
@@ -3032,6 +3047,7 @@ var date   = choice === "42"
     formData.append("firstName",   firstName);
     formData.append("lastName",    lastName);
     formData.append("idNumber",    idNumber);
+    formData.append("passportNumber", passportNumber);
     formData.append("phone",       phone);
     formData.append("contact_id",  contactId);
 
