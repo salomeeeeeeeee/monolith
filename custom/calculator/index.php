@@ -455,9 +455,9 @@ foreach ($conditionElements as $element) {
             <label>განვადების დაწყების თარიღი</label>
             <input id="startDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
-        <div class="field" id="fieldLastPayDate">
-            <label>ბოლო შენატანის თარიღი</label>
-            <input id="lastPayDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
+        <div class="field" id="fieldEndDate">
+            <label>განვადების დასრულების თარიღი</label>
+            <input id="endDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
         <div class="field" id="fieldLastPayment">
             <label>ბოლო შენატანი ($)</label>
@@ -471,9 +471,9 @@ foreach ($conditionElements as $element) {
             <label>გადასანაწილებელი თვეების რაოდენობა</label>
             <input id="monthAmount" inputmode="numeric" placeholder="მაგ. 60" oninput="onMonthAmountChange()" onkeypress="return isNumericKey(event)">
         </div>
-        <div class="field" id="fieldEndDate">
-            <label>განვადების დასრულების თარიღი</label>
-            <input id="endDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
+        <div class="field" id="fieldLastPayDate">
+            <label>ბოლო შენატანის თარიღი</label>
+            <input id="lastPayDate" type="text" class="date-field" placeholder="dd/mm/YYYY" autocomplete="off" readonly>
         </div>
     </div>
     <div class="form-grid" style="margin-top:14px; display:none;">
