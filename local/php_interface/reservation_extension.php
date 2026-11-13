@@ -12,6 +12,9 @@
 // ვადის ამოწურვა: BP 6 / BP 99 ჯავშანს მხოლოდ მაშინ ათავისუფლებს, თუ თარიღის ველში ისევ თავდაპირველი
 // თარიღია, ამიტომ გაგრძელებული ჯავშანი არასდროს თავისუფლდებოდა. agent "monolithReservationExtensionAgent();"
 // გაგრძელებულ ჯავშანს ახალი თარიღის მომდევნო სამუშაო დღეს ათავისუფლებს (როგორც BP 6 არასტანდარტულს).
+// თუ მომდევნო სამუშაო დღე ორშაბათია - ორშაბათს 13:00-ზე (release_time.php).
+
+require_once __DIR__ . '/release_time.php';
 
 const RESERVATION_EXT_BP_ID          = 21;               // BP "update reservation"
 const RESERVATION_EXT_START_BP_IDS   = [6, 99];          // რეზერვაციის BP-ები (6 - ჯავშანი, 99 - დაშლილი დილის ვადა)
@@ -54,6 +57,12 @@ function reservationExtNextWorkDay($timestamp)
         $result = strtotime("+1 day", $result);
     }
     return $result;
+}
+
+/** ჯავშნის გათავისუფლების დრო თარიღის ველიდან: მომდევნო სამუშაო დღე 00:00, ორშაბათს - 13:00 */
+function reservationExtReleaseTime($dateTimestamp)
+{
+    return monolithReleaseTime(reservationExtNextWorkDay($dateTimestamp));
 }
 
 /** მიმდინარე რეზერვაციაში დადასტურებული გაგრძელებები: დასტურის დროები ("Y-m-d H:i:s"), ძველიდან ახლისკენ */
@@ -139,7 +148,7 @@ function reservationExtInfo($dealId)
 
 /**
  * ვადაგასული გაგრძელებული ჯავშნები: დადასტურებული რეზერვაცია, მიმდინარე რეზერვაციაში დადასტურებული
- * გაგრძელებით, და ველის თარიღის მომდევნო სამუშაო დღე დადგა. [ID, TITLE, ASSIGNED_BY_ID, DATE (ts)]
+ * გაგრძელებით, და გათავისუფლების დრო (reservationExtReleaseTime) დადგა. [ID, TITLE, ASSIGNED_BY_ID, DATE (ts)]
  */
 function reservationExtExpiredDeals($now = null)
 {
@@ -159,7 +168,7 @@ function reservationExtExpiredDeals($now = null)
     $deals = [];
     while ($row = $res->Fetch()) {
         $date = reservationExtParseDate($row["RES_DATE"]);
-        if (!$date || reservationExtNextWorkDay($date) > $now) {
+        if (!$date || reservationExtReleaseTime($date) > $now) {
             continue;
         }
         if (!reservationExtApprovedInCurrentReservation($row["ID"])) {

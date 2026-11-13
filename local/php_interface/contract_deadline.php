@@ -10,8 +10,12 @@
 // შესვლისას ისევ 5 დღე დაიწყოს. ლიმიტი არ არის - რამდენჯერაც სჭირდება, იმდენჯერ ითხოვს.
 // სანამ მოთხოვნა დასტურს ელოდება, agent-ი დილს არ აბრუნებს, ვადა გასულიც რომ იყოს; ეტაპიდან სხვა გზით
 // გასვლისას მომლოდინე მოთხოვნა უქმდება.
+//
+// კვირას / ორშაბათს 13:00-მდე მოსული ვადა ორშაბათს 13:00-ზე იწურება (release_time.php).
 
-const CONTRACT_DEADLINE_STAGE        = 'EXECUTING';     // ხელშეკრულება
+require_once __DIR__ . '/release_time.php';
+
+const CONTRACT_DEADLINE_STAGE       = 'EXECUTING';     // ხელშეკრულება
 const CONTRACT_DEADLINE_RETURN_STAGE = 'PREPARATION';   // დამუშავების პროცესში
 const CONTRACT_DEADLINE_WORK_DAYS    = 5;
 const CONTRACT_DEADLINE_BATCH        = 30;              // ერთ გაშვებაზე მაქსიმუმ ამდენი დილი
@@ -68,6 +72,8 @@ function contractDeadlineDeals($assignedById = 0, $dealId = 0)
         if ($extended && $extended > $row["DEADLINE"]) {
             $row["DEADLINE"] = $extended;
         }
+        // კვირა / ორშაბათი დილა -> ორშაბათი 13:00
+        $row["DEADLINE"] = monolithReleaseTime($row["DEADLINE"]);
         $deals[] = $row;
     }
     return $deals;

@@ -9,6 +9,9 @@ require_once __DIR__ . '/won_stage_lock.php';
 // ბინის გარეშე დილი რეზერვაციაზე / ხელშეკრულებაზე / გაყიდულზე ვერ გადადის
 require_once __DIR__ . '/apartment_stage_guard.php';
 
+// ორშაბათის გათავისუფლება 13:00-ზე: კვირა / ორშაბათი დილის ვადები -> ორშაბათი 13:00 (agent BP 6/99/100-ის პაუზებზე)
+require_once __DIR__ . '/release_time.php';
+
 // ხელშეკრულების ეტაპი: 5 სამუშაო დღე, მერე დილი ბრუნდება დამუშავებაზე (agent)
 require_once __DIR__ . '/contract_deadline.php';
 

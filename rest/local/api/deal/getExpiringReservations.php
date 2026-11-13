@@ -1,12 +1,15 @@
 <?php
 // 24 სთ-ში რეზერვაციის ვადა ეწურება: რეზერვაციის ეტაპზე მყოფი დილები, რომელთა ვადა დღეს ან ხვალ იწურება
-// (ლიდების რეპორტის Liveboard-ის "ვადა დღეს იწურება" + "ვადა ხვალ იწურება").
+// (ლიდების რეპორტის Liveboard-ის "ვადა დღეს იწურება" + "ვადა ხვალ იწურება"), და ისინიც, რომლებიც
+// 24 სთ-ში თავისუფლდება - მაგ. პარასკევის ვადიანი ჯავშანი ორშაბათს 13:00-ზე (release_time.php).
+// DEADLINE: ჯავშნის თარიღი, დადასტურებულზე + გათავისუფლების დრო ("13/11/2026 → 16/11 13:00").
 ob_start();
 define('NO_KEEP_STATISTIC', true);
 define('NO_AGENT_STATISTIC', true);
 define('NO_AGENT_CHECK', true);
 require($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/prolog_before.php");
 CModule::IncludeModule('crm');
+require_once($_SERVER["DOCUMENT_ROOT"] . "/local/php_interface/reservation_extension.php");
 
 // მოთხოვნილი რეზერვაცია, დადასტურებული რეზერვაცია
 const EXPIRING_RESERVATION_STAGES = ['PREPAYMENT_INVOICE', 'FINAL_INVOICE'];
@@ -38,6 +41,23 @@ function normalizeReservationDate($value)
     return "";
 }
 
+/**
+ * დადასტურებული ჯავშნის გათავისუფლების დრო (ts) ან false:
+ * გაგრძელებული - reservation_extension agent-ი (მომდევნო სამუშაო დღე, ორშაბათს 13:00),
+ * სხვა - BP 6 / 99 / 100-ის პაუზა (ორშაბათის წესით).
+ */
+function expiringReservationReleaseTime($deal, $dateTs, $releaseByDeal)
+{
+    if ($deal["STAGE_ID"] !== RESERVATION_EXT_STAGE || !$dateTs) {
+        return false;
+    }
+    if (reservationExtApprovedInCurrentReservation($deal["ID"])) {
+        return reservationExtReleaseTime($dateTs);
+    }
+    return $releaseByDeal[(int)$deal["ID"]] ?? false;
+}
+
+$now = time();
 $today = (new DateTime("today"))->format("d/m/Y");
 $tomorrow = (new DateTime("tomorrow"))->format("d/m/Y");
 $deals = [];
@@ -56,6 +76,8 @@ if ($USER->IsAuthorized()) {
         $arFilter["ASSIGNED_BY_ID"] = $currentUserId;
     }
 
+    $releaseByDeal = null;
+
     $res = CCrmDeal::GetListEx(
         ["ID" => "ASC"],
         $arFilter,
@@ -65,7 +87,22 @@ if ($USER->IsAuthorized()) {
     );
     while ($deal = $res->Fetch()) {
         $deadline = normalizeReservationDate($deal[EXPIRING_RESERVATION_DATE_FIELD] ?? "");
-        if ($deadline !== $today && $deadline !== $tomorrow) {
+        $dateTs = reservationExtParseDate($deadline);
+        if (!$dateTs) {
+            continue;
+        }
+
+        // ვადაგასული/ხვალამდელი თარიღი - გათავისუფლების დრო შეიძლება 24 სთ-შია (მაგ. პარასკევის ჯავშანი ორშაბათს)
+        $release = false;
+        if ($dateTs <= strtotime("tomorrow")) {
+            if ($releaseByDeal === null) {
+                $releaseByDeal = monolithReservationReleaseByDeal();
+            }
+            $release = expiringReservationReleaseTime($deal, $dateTs, $releaseByDeal);
+        }
+
+        $releaseSoon = $release && $release > $now && $release <= $now + 86400;
+        if ($deadline !== $today && $deadline !== $tomorrow && !$releaseSoon) {
             continue;
         }
 
@@ -88,16 +125,19 @@ if ($USER->IsAuthorized()) {
             "CLIENT_ID" => $clientId,
             "CLIENT_NAME" => $clientName,
             "CLIENT_TYPE" => $clientType,
-            "DEADLINE" => $deadline,
+            "DEADLINE" => $deadline . ($release && $release > $now ? " → " . date("d/m H:i", $release) : ""),
+            "SORT" => $release && $release > $now ? $release : $dateTs + 86400,
         ];
     }
 
-    // ჯერ დღეს ვადაგასულები, მერე ხვალინდელები
-    usort($deals, function ($a, $b) use ($today) {
-        $aToday = $a["DEADLINE"] === $today ? 0 : 1;
-        $bToday = $b["DEADLINE"] === $today ? 0 : 1;
-        return $aToday <=> $bToday ?: $a["ID"] <=> $b["ID"];
+    // ჯერ ის, რაც ადრე თავისუფლდება
+    usort($deals, function ($a, $b) {
+        return $a["SORT"] <=> $b["SORT"] ?: $a["ID"] <=> $b["ID"];
     });
+    foreach ($deals as &$row) {
+        unset($row["SORT"]);
+    }
+    unset($row);
 }
 
 $response = [
