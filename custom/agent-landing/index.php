@@ -354,7 +354,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
 
     .lead-status {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 10px;
       margin-bottom: 14px;
       border: none;
@@ -520,20 +520,17 @@ $apiUrl  = '/rest/public/addAgentLead.php';
           <textarea id="agencyComment" name="agency_comment" placeholder="დამატებითი ინფორმაცია კლიენტზე ან მოთხოვნაზე"></textarea>
         </div>
 
-        <div class="section-label">ლიდის სტატუსი <span class="req">*</span></div>
+        <div class="section-label">ლიდის სტატუსი</div>
 
-        <fieldset class="lead-status" id="leadStatus">
+        <p class="field-note">მონოლითის გაყიდვების მენეჯერი ყველა კლიენტს დაუკავშირდება.</p>
+
+        <div class="lead-status" id="leadStatus">
           <label class="status-option">
-            <input type="radio" name="lead_status" value="fix" required>
+            <input type="checkbox" id="leadFix" name="lead_fix" value="fix">
             <span class="status-title">Fix</span>
-            <span class="status-desc">ნომრის დაფიქსირება - კლიენტთან თავად ვმუშაობ</span>
+            <span class="status-desc">კლიენტთან მეც ვმუშაობ - დავურეკავ და დეტალურად გავაცნობ კომპანიას. თუ არ მონიშნავთ, კლიენტს სრულად გაყიდვების მენეჯერი მოემსახურება.</span>
           </label>
-          <label class="status-option">
-            <input type="radio" name="lead_status" value="contact">
-            <span class="status-title">Contact</span>
-            <span class="status-desc">მონოლითის გაყიდვების მენეჯერი დაუკავშირდება კლიენტს</span>
-          </label>
-        </fieldset>
+        </div>
 
         <button type="submit" class="btn-submit" id="submitBtn">დილის შექმნა</button>
         <div class="status" id="statusBox" role="status" aria-live="polite"></div>
@@ -966,8 +963,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         const agency = agencyInput.value.trim();
         const agent = agentInput.value.trim();
         const agencyComment = document.getElementById('agencyComment').value.trim();
-        const leadStatusInput = form.querySelector('input[name="lead_status"]:checked');
-        const leadStatus = leadStatusInput ? leadStatusInput.value : '';
+        const leadStatus = document.getElementById('leadFix').checked ? 'fix' : 'contact';
         const phoneRows = Array.from(phonesList.querySelectorAll('.phone-row'));
         const phones = phoneRows
           .map(function (row) { return rowPhone(row); })
@@ -991,12 +987,6 @@ $apiUrl  = '/rest/public/addAgentLead.php';
           showStatus('err', 'გთხოვთ მიუთითოთ სააგენტო ან აგენტი.');
           return;
         }
-        if (!leadStatus) {
-          showStatus('err', 'გთხოვთ აირჩიოთ ლიდის სტატუსი: Fix ან Contact.');
-          form.querySelector('input[name="lead_status"]').focus();
-          return;
-        }
-
         submitBtn.disabled = true;
         submitBtn.textContent = 'იგზავნება...';
 
