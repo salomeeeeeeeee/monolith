@@ -108,10 +108,11 @@ $scheduleTypeArr['allCash'] = [
 
 $instalmentPlanArr['allCash'] = 'ერთიანი გადახდა';
 
-// ნიუ დეპოზე გეგმების ფასები პროდუქტის ველებიდან (ერთიანი, 0/20/80, 60 თვიანი)
-$isNewDepo = calcCanonicalProject($projectName) === 'New Depo';
-if ($isNewDepo) {
-    $planPrice = calcProductPlanPrice($prod, 'ერთიანი გადახდა');
+// გეგმების ფასები პროდუქტის ველებიდან: ნიუ დეპო (ერთიანი, 0/20/80, 60 თვიანი),
+// დიღომი (ერთიანი, 50%-ზე მეტი, 50%-ზე ნაკლები)
+$planPriceProject = calcPlanPriceProject($projectName);
+if ($planPriceProject) {
+    $planPrice = calcProductPlanPrice($prod, 'ერთიანი გადახდა', $planPriceProject);
     if ($planPrice) {
         $scheduleTypeArr['allCash'] = calcApplyPlanPrice($scheduleTypeArr['allCash'], $planPrice, $oldPrice, $totalKVM, $startSqmPrice);
     }
@@ -123,7 +124,7 @@ foreach ($conditionElements as $element) {
         continue;
     }
 
-    $planPrice = $isNewDepo ? calcProductPlanPrice($prod, $element['NAME']) : null;
+    $planPrice = $planPriceProject ? calcProductPlanPrice($prod, $element['NAME'], $planPriceProject) : null;
     if ($planPrice === false) {
         continue; // 60 თვიანი ამ ფართზე დაშვებული არ არის
     }
@@ -170,6 +171,11 @@ foreach ($conditionElements as $element) {
     ];
     if ($planPrice) {
         $scheduleTypeArr[$element['ID']] = calcApplyPlanPrice($scheduleTypeArr[$element['ID']], $planPrice, $oldPrice, $totalKVM, $startSqmPrice);
+    }
+    // დიღომი 50%-ზე მეტი/ნაკლები: პირველადი და ბოლო % ხელით, პირველადი ზღვარში
+    $matchedPlan = $planPriceProject ? calcMatchProductPlan($element['NAME'], $planPriceProject) : null;
+    if (!empty($matchedPlan['advanceRange'])) {
+        $scheduleTypeArr[$element['ID']]['advanceRange'] = $matchedPlan['advanceRange'];
     }
 }
 ?>
@@ -709,18 +715,59 @@ function fillScheduleData(id) {
 
     // MONTH_AMOUNT (ლისტი 20) უპირატესია END_DATE-ზე
     if (!applyMonthAmountDates(monthAmount, startDate)) {
-        // ძველი ლოგიკა: დასახელებიდან ამოკითხული თვეები, შემდეგ END_DATE
-        const endDate = d.months ? dateAddMonth(calcDate, d.months) : d.endDateFixed;
-        if (lastPct > 0 && endDate) {
-            setValue('lastPayDate', endDate);
-            setValue('endDate', dateAddMonth(endDate, -1));
-        } else {
-            setValue('lastPayDate', '');
-            setValue('endDate', endDate);
-        }
+        applyPlanEndDates(d);
     }
 
     disableFields(['discountPerSqm','discountPercent','discountNum','advancePayment','advancePaymentPercent','endDate','lastPayment','lastPaymentPercent','lastPayDate','monthAmount']);
+    // დიღომი 50%-ზე მეტი/ნაკლები: ფასი პროდუქტიდანაა, პირველადი და ბოლო % ხელით შეჰყავთ
+    if (d.advanceRange) {
+        enableFields(['advancePayment','advancePaymentPercent','lastPayment','lastPaymentPercent']);
+    }
+}
+
+// დასახელებიდან ამოკითხული თვეები, შემდეგ END_DATE; ბოლო შენატანი ბოლო თარიღზე დგება, განვადება თვით ადრე მთავრდება
+function applyPlanEndDates(d) {
+    const endDate = d.months ? dateAddMonth(today(), d.months) : d.endDateFixed;
+    const hasLast = parseFormattedNumber(getValue('lastPayment')) > 0;
+    if (hasLast && endDate) {
+        setValue('lastPayDate', endDate);
+        setValue('endDate', dateAddMonth(endDate, -1));
+    } else {
+        setValue('lastPayDate', '');
+        setValue('endDate', endDate);
+    }
+}
+
+// შიდა განვადების არჩეული პირობა, თუ მასზე % ხელით შეჰყავთ (advanceRange); სხვა შემთხვევაში null
+function getRangePlan() {
+    if (getValue('paymentMode') !== 'internal') return null;
+    const d = CONFIG.scheduleTypeArr[getValue('type_select')];
+    return d && d.advanceRange ? d : null;
+}
+
+// აბრუნებს შეცდომის ტექსტს ან ''-ს
+function validateAdvanceRange() {
+    const d = getRangePlan();
+    if (!d) return '';
+    const r = d.advanceRange;
+    const adv = parseFormattedNumber(getValue('advancePaymentPercent'));
+    const last = parseFormattedNumber(getValue('lastPaymentPercent'));
+    if (adv < r.min) return `"${d.name}" პირობაზე პირველადი შენატანი უნდა იყოს მინიმუმ ${r.min}%`;
+    if (r.maxExclusive ? adv >= r.max : adv > r.max) {
+        return `"${d.name}" პირობაზე პირველადი შენატანი უნდა იყოს `
+            + (r.maxExclusive ? `${r.max}%-ზე ნაკლები` : `მაქსიმუმ ${r.max}%`);
+    }
+    if (adv + last > 100) return 'პირველადი და ბოლო შენატანი ერთად 100%-ს აღემატება';
+    return '';
+}
+
+// ხელით შეცვლილი % → ძველი გრაფიკი აღარ ვარგა, თავიდან უნდა გამოითვალოს
+function onRangePlanPctChange() {
+    const d = getRangePlan();
+    if (!d) return;
+    if (!parseInt(d.monthAmount)) applyPlanEndDates(d);
+    clearGraph();
+    showError(validateAdvanceRange());
 }
 
 function applyPriceFromDiscount(discount, skipField) {
@@ -823,6 +870,7 @@ function onAdvanceChange(type) {
         setValue('advancePayment', formatNumber(price / 100 * pct));
     }
     reapplyMonthAmount();
+    onRangePlanPctChange();
 }
 
 function onLastChange(type) {
@@ -838,6 +886,7 @@ function onLastChange(type) {
         setValue('lastPayment', formatNumber(price / 100 * pct));
     }
     reapplyMonthAmount();
+    onRangePlanPctChange();
 }
 
 async function getAndFillGraph() {
@@ -851,6 +900,9 @@ async function getAndFillGraph() {
 
     const price = parseFormattedNumber(getValue('price'));
     if (!price) { showError('ფასი არ არის შევსებული'); return; }
+
+    const rangeError = validateAdvanceRange();
+    if (rangeError) { showError(rangeError); clearGraph(); return; }
 
     const requestData = {
         dealId: CONFIG.dealID,
@@ -950,6 +1002,8 @@ async function saveGraph() {
     const table = document.getElementById('graphData');
     const tbody = table.querySelector('tbody');
     if (!tbody || !tbody.rows.length) { alert('გთხოვთ ჯერ გამოთვალოთ გრაფიკი'); return; }
+    const rangeError = validateAdvanceRange();
+    if (rangeError) { alert(rangeError); return; }
 
     const paymentPlan = Array.from(tbody.rows).map(row => ({
         payment: row.dataset.payment || row.cells[0].textContent,

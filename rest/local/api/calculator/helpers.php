@@ -422,49 +422,88 @@ if (!function_exists('calcGetInstallmentConditions')) {
     }
 }
 
+if (!function_exists('calcProductPlanPriceMap')) {
+    // პროექტები, სადაც გეგმის ფასი პროდუქტის ველშია; გეგმა ლისტი 20-ის პირობის სახელით ემთხვევა
+    function calcProductPlanPriceMap()
+    {
+        return [
+            'New Depo' => [
+                ['names' => ['ერთიანი'],              'full' => '__3OT6VA',       'sqm' => '__TTJCKI'],
+                ['names' => ['0/20/80'],              'full' => '_02080__AEC240', 'sqm' => '_02080__1D1HZL'],
+                ['names' => ['10/20/70', '10/30/60'], 'full' => '_60__WZXWF3',    'sqm' => '_60__Q44IB7', 'allowed' => 'PROP_60__RHMZW7'],
+            ],
+            // დიღომი: პირობები "50%-ზე მეტი" / "50%-ზე ნაკლები" + ერთიანი გადახდა.
+            // advanceRange: პირველადი/ბოლო % ხელით შეჰყავთ, პირველადი ამ ზღვარში უნდა იყოს
+            'Dighomi' => [
+                ['names' => ['ერთიანი'], 'full' => '__2CQSID',        'sqm' => '__8JJ6AD'],
+                ['names' => ['ნაკლები'], 'full' => 'PROP_50__9DQ1FA', 'sqm' => 'PROP_50__L423NO',
+                    'advanceRange' => ['min' => 0, 'max' => 50, 'maxExclusive' => true]],
+                ['names' => ['მეტი'],    'full' => 'PROP_50__SKI4RB', 'sqm' => 'PROP_50__IZHFLR',
+                    'advanceRange' => ['min' => 50, 'max' => 100, 'maxExclusive' => false]],
+            ],
+        ];
+    }
+}
+
+if (!function_exists('calcMatchProductPlan')) {
+    // პირველი გეგმა, რომლის სახელიც პირობის სახელში გვხვდება; არ არის → null
+    function calcMatchProductPlan($planName, $project)
+    {
+        $map = calcProductPlanPriceMap();
+        foreach ($map[$project] ?? [] as $plan) {
+            foreach ($plan['names'] as $name) {
+                if (mb_strpos((string)$planName, $name) !== false) {
+                    return $plan;
+                }
+            }
+        }
+        return null;
+    }
+}
+
+if (!function_exists('calcPlanPriceProject')) {
+    // აბრუნებს პროექტის კანონიკურ სახელს, თუ მის პროდუქტებზე გეგმის ფასები ველებშია; სხვა შემთხვევაში null
+    function calcPlanPriceProject($projectName)
+    {
+        $canonical = calcNormalizeText(calcCanonicalProject($projectName));
+        foreach (array_keys(calcProductPlanPriceMap()) as $project) {
+            if (calcNormalizeText($project) === $canonical) {
+                return $project;
+            }
+        }
+        return null;
+    }
+}
+
 if (!function_exists('calcProductPlanPrice')) {
     /**
-     * ნიუ დეპოს პროდუქტზე თითო გადახდის გეგმის ფასი ცალკე ველშია.
+     * ნიუ დეპოს / დიღმის პროდუქტზე თითო გადახდის გეგმის ფასი ცალკე ველშია.
      * აბრუნებს ['price', 'kvmPrice']-ს; false-ს, თუ გეგმა ამ ფართზე დაშვებული არ არის;
      * null-ს, თუ გეგმას პროდუქტის ველი არ შეესაბამება (ფასი ლისტი 20-დან ითვლება).
      */
-    function calcProductPlanPrice($prod, $planName)
+    function calcProductPlanPrice($prod, $planName, $project = 'New Depo')
     {
-        $plans = [
-            ['names' => ['ერთიანი'],              'full' => '__3OT6VA',       'sqm' => '__TTJCKI'],
-            ['names' => ['0/20/80'],              'full' => '_02080__AEC240', 'sqm' => '_02080__1D1HZL'],
-            ['names' => ['10/20/70', '10/30/60'], 'full' => '_60__WZXWF3',    'sqm' => '_60__Q44IB7', 'allowed' => 'PROP_60__RHMZW7'],
-        ];
+        $plan = calcMatchProductPlan($planName, $project);
+        if (!$plan) {
+            return null;
+        }
         $toNumber = function ($value) {
             $value = is_array($value) ? ($value[0] ?? '') : $value;
             return (float)preg_replace('/[^0-9.]/', '', (string)$value);
         };
-        foreach ($plans as $plan) {
-            $matched = false;
-            foreach ($plan['names'] as $name) {
-                if (mb_strpos((string)$planName, $name) !== false) {
-                    $matched = true;
-                    break;
-                }
-            }
-            if (!$matched) {
-                continue;
-            }
-            // 60 თვიანი მხოლოდ იმ ფართზე, სადაც "60 თვიანი დაშვება" = კი
-            if (!empty($plan['allowed']) && calcNormalizeText($prod[$plan['allowed']] ?? '') !== 'კი') {
-                return false;
-            }
-            $price = $toNumber($prod[$plan['full']] ?? '');
-            if ($price <= 0) {
-                return !empty($plan['allowed']) ? false : null;
-            }
-            $kvmPrice = $toNumber($prod[$plan['sqm']] ?? '');
-            if ($kvmPrice <= 0) {
-                $kvmPrice = ($prod['TOTAL_AREA'] ?? 0) > 0 ? round($price / $prod['TOTAL_AREA'], 2) : 0;
-            }
-            return ['price' => round($price, 2), 'kvmPrice' => round($kvmPrice, 2)];
+        // 60 თვიანი მხოლოდ იმ ფართზე, სადაც "60 თვიანი დაშვება" = კი
+        if (!empty($plan['allowed']) && calcNormalizeText($prod[$plan['allowed']] ?? '') !== 'კი') {
+            return false;
         }
-        return null;
+        $price = $toNumber($prod[$plan['full']] ?? '');
+        if ($price <= 0) {
+            return !empty($plan['allowed']) ? false : null;
+        }
+        $kvmPrice = $toNumber($prod[$plan['sqm']] ?? '');
+        if ($kvmPrice <= 0) {
+            $kvmPrice = ($prod['TOTAL_AREA'] ?? 0) > 0 ? round($price / $prod['TOTAL_AREA'], 2) : 0;
+        }
+        return ['price' => round($price, 2), 'kvmPrice' => round($kvmPrice, 2)];
     }
 }
 
