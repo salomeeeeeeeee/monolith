@@ -6,3 +6,6 @@ local/php_interface/site_webhook_secret.php
 
 # agents module REST webhook URL - only on the server
 custom/agents/credentials.php
+
+# Meta spend API token (rest/public/addMetaSpend.php) - only on the server
+local/php_interface/meta_spend_secret.php
