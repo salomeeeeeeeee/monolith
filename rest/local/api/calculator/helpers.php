@@ -437,7 +437,7 @@ if (!function_exists('calcProductPlanPriceMap')) {
             'Dighomi' => [
                 ['names' => ['ერთიანი'], 'full' => '__2CQSID',        'sqm' => '__8JJ6AD'],
                 ['names' => ['ნაკლები'], 'full' => 'PROP_50__9DQ1FA', 'sqm' => 'PROP_50__L423NO',
-                    'advanceRange' => ['min' => 0, 'max' => 50, 'maxExclusive' => true]],
+                    'advanceRange' => ['min' => 10, 'max' => 50, 'maxExclusive' => true]],
                 ['names' => ['მეტი'],    'full' => 'PROP_50__SKI4RB', 'sqm' => 'PROP_50__IZHFLR',
                     'advanceRange' => ['min' => 50, 'max' => 100, 'maxExclusive' => false]],
             ],
