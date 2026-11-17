@@ -23,3 +23,6 @@ require_once __DIR__ . '/payments_export_button.php';
 
 // ჯავშნის ვადის გაგრძელება: ერთ რეზერვაციაზე მხოლოდ ერთხელ + გაგრძელებული ჯავშნის ვადის ამოწურვა (agent)
 require_once __DIR__ . '/reservation_extension.php';
+
+// ზარის ჩანაწერები: ჯგუფ 26-ის თანამშრომელი მხოლოდ საკუთარ ზარს უსმენს (crm_show_file.php)
+require_once __DIR__ . '/call_record_access.php';
