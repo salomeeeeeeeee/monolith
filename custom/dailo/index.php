@@ -35,9 +35,9 @@ const DAILO_SSO_ENDPOINT = 'https://monolith.dailo.ai/bitrix/sso';
 const DAILO_SSO_ISSUER   = 'crm.monolith.ge';
 const DAILO_SSO_AUDIENCE = 'monolith.dailo.ai';
 const DAILO_SSO_TTL      = 60;
-// ვის შეუძლია გახსნა: ცარიელი = ყველა შესული თანამშრომელი (საბოლოო წვდომას Dailo-ს ანგარიში წყვეტს);
-// თუ ჯგუფებია მითითებული - მხოლოდ მათი წევრები. ადმინისტრატორი ყოველთვის.
-const DAILO_SSO_GROUP_IDS = [];
+// ვის შეუძლია გახსნა: ადმინისტრატორი + ამ ჯგუფის წევრები (ჯგუფი STRING_ID-ით, ინტერფეისიდან იმართება).
+// ჯგუფი თუ არ არსებობს ან ცარიელია - მხოლოდ ადმინისტრატორი. საბოლოო წვდომას Dailo-ს ანგარიშიც წყვეტს.
+const DAILO_SSO_GROUP_CODE = 'DAILO_SSO';
 
 if (!$USER->IsAuthorized()) {
     LocalRedirect('/auth/?backurl=' . urlencode($APPLICATION->GetCurPageParam()));
@@ -86,8 +86,20 @@ function dailoSsoPage($title, $bodyHtml)
     exit;
 }
 
-if (DAILO_SSO_GROUP_IDS && !$USER->IsAdmin()
-    && !array_intersect(array_map('intval', $USER->GetUserGroupArray()), DAILO_SSO_GROUP_IDS)) {
+function dailoSsoAllowed()
+{
+    global $USER;
+    if ($USER->IsAdmin()) {
+        return true;
+    }
+    $group = \Bitrix\Main\GroupTable::getList([
+        'select' => ['ID'],
+        'filter' => ['=STRING_ID' => DAILO_SSO_GROUP_CODE, '=ACTIVE' => 'Y'],
+    ])->fetch();
+    return $group && in_array((int)$group['ID'], array_map('intval', $USER->GetUserGroupArray()), true);
+}
+
+if (!dailoSsoAllowed()) {
     dailoSsoPage('წვდომა არ გაქვთ', '<p>ზარების ანალიტიკაზე წვდომისთვის მიმართეთ ადმინისტრატორს.</p><p><a href="/">უკან</a></p>');
 }
 
