@@ -748,6 +748,8 @@ $apiUrl  = '/rest/public/addAgentLead.php';
         if (!row) return;
         if (row.dataset.country !== iso) {
           setRowCountry(row, iso);
+          // სხვა ქვეყნიდან საქართველოზე გადართვისას ზედმეტი ციფრები მოიჭრება
+          normalizePhoneInput(row);
           row.dataset.checked = '';
           setPhoneState(row, '', '');
           checkPhone(row);
@@ -834,12 +836,7 @@ $apiUrl  = '/rest/public/addAgentLead.php';
 
         input.addEventListener('input', function () {
           // მხოლოდ ციფრები - აკრეფისას და ჩასმისას (paste) სხვა სიმბოლოები იშლება
-          const digits = onlyDigits(input.value);
-          if (digits !== input.value) {
-            const caret = onlyDigits(input.value.slice(0, input.selectionStart || 0)).length;
-            input.value = digits;
-            input.setSelectionRange(caret, caret);
-          }
+          normalizePhoneInput(row);
           row.dataset.checked = '';
           setPhoneState(row, '', '');
         });
@@ -861,6 +858,42 @@ $apiUrl  = '/rest/public/addAgentLead.php';
 
       function onlyDigits(value) {
         return String(value || '').replace(/\D+/g, '');
+      }
+
+      // საქართველოს ნომერი 9 ციფრია - მეტის ჩაწერა არ შეიძლება (სხვა ქვეყნებში ლიმიტი არაა)
+      function maxLocalLength(row) {
+        return rowCountry(row).iso === 'GE' ? 9 : 0;
+      }
+
+      // ველში რჩება მხოლოდ ციფრები და, საქართველოს ნომერზე, მაქსიმუმ 9 ციფრი
+      function normalizePhoneInput(row) {
+        const input = row.querySelector('input[type="tel"]');
+        const prev = input.dataset.prev || '';
+        const max = maxLocalLength(row);
+        let digits = onlyDigits(input.value);
+        let caret = onlyDigits(input.value.slice(0, input.selectionStart || 0)).length;
+
+        if (max && digits.length > max) {
+          const code = rowCountry(row).code;
+          if (digits.indexOf(code) === 0 && digits.length - code.length <= max) {
+            // ინდექსიანი ნომერი ჩასვეს/აკრიფეს (+995 555 12 34 56) - ინდექსი იშლება
+            digits = digits.slice(code.length);
+            caret = Math.max(0, caret - code.length);
+          } else if (prev.length === max) {
+            // ველი უკვე სავსეა - ზედმეტი ციფრი არ ჩაიწერება, ძველი მნიშვნელობა რჩება
+            caret = Math.max(0, caret - (digits.length - prev.length));
+            digits = prev;
+          } else {
+            digits = digits.slice(0, max);
+          }
+        }
+        caret = Math.min(caret, digits.length);
+
+        if (digits !== input.value) {
+          input.value = digits;
+          if (document.activeElement === input) input.setSelectionRange(caret, caret);
+        }
+        input.dataset.prev = digits;
       }
 
       // ველში ინდექსიც თუ ჩაწერეს (995555123456), ორჯერ არ დაემატოს
