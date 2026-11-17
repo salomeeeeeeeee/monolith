@@ -9,3 +9,6 @@ custom/agents/credentials.php
 
 # Meta spend API token (rest/public/addMetaSpend.php) - only on the server
 local/php_interface/meta_spend_secret.php
+
+# Dailo SSO shared secret (custom/dailo/index.php) - only on the server
+custom/dailo/sso_secret.php
