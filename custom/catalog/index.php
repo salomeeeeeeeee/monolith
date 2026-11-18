@@ -19,7 +19,7 @@ define('F_TYPE',       '__X1GCRZ');
 define('F_PRICE_USD',  'PRICE');
 define('F_KVM_USD',    '__6ZWTER');
 define('F_SALE',       '_UQIM2I');
-// define('F_CADASTRAL',  '__51MODL');
+define('F_CADASTRAL',  '__51MODL');
 define('F_SECTOR',     '_3BU0JH');
 
 
@@ -854,7 +854,7 @@ const F_TYPE       = '__X1GCRZ';
 const F_PRICE_USD  = 'PRICE';
 const F_KVM_USD    = '__6ZWTER';
 const F_SALE       = '_UQIM2I';
-// const F_CADASTRAL  = '__51MODL';
+const F_CADASTRAL  = '__51MODL';
 const F_SECTOR     = '_3BU0JH';
 const F_NFS_COMMENT = 'NFScomment';
 
@@ -879,7 +879,7 @@ let propertyMap = {
     "_FTRIDL":   { name: "სართული",                    type: "S" },
     "FLOOR":     { name: "სართული",                    type: "S" },
     "_D599QA":   { name: "სადარბაზო",                  type: "S" },
-    // "__51MODL":  { name: "საკადასტრო კოდი",             type: "S" },
+    "__51MODL":  { name: "საკადასტრო კოდი",             type: "S" },
     "__VO9RG4":  { name: "პროექტის დასახელება",        type: "S" },
     // "__6ZWTER":  { name: "კვ/მ ღირებულება $",          type: "S" },
     "__9YCWGZ":  { name: "ჯამური ღირებულება $",        type: "S" },
@@ -1110,7 +1110,7 @@ projectSelect.addEventListener("change", function() {
                 "__X1GCRZ":  "უძრავი ქონების ტიპი",
                 "_D599QA":   "სადარბაზო",
                 "_FTRIDL":   "სართული",
-                // "__51MODL":  "საკადასტრო კოდი",
+                "__51MODL":  "საკადასტრო კოდი",
                 "_3BU0JH":   "სექტორი",
                 "__6KWOWZ":  "უძრავი ქონების №",
                 "__173JA5":  "სრული ფართი",
@@ -2171,6 +2171,9 @@ function renderBlockSections(apt) {
     // ── 1. Price (top) ────────────────────────────────────────────────
     appendPriceSection(container, apt);
 
+    // ── 1b. Cadastral code (right under the prices) ───────────────────
+    appendCadastralRow(container, apt);
+
     // ── NFS reason (set in the products module together with the status) ──
     if (apt["_P64GYD"] === "NFS" && apt[F_NFS_COMMENT]) appendNfsSection(container, apt);
 
@@ -2303,6 +2306,22 @@ function renderBlockSections(apt) {
         restFields.forEach(f => bf.appendChild(buildFieldRow(f, apt, "")));
         linkRows.forEach(row => bf.appendChild(row));
     }
+}
+
+// საკადასტრო კოდი - ფასების ბლოკის ქვემოთ (ცარიელის შემთხვევაში არ ჩანს)
+function appendCadastralRow(container, apt) {
+    let code = apt[F_CADASTRAL];
+    if (Array.isArray(code)) code = code.filter(Boolean).join(", ");
+    code = String(code ?? "").trim();
+    if (!code) return;
+
+    const row = document.createElement("div");
+    row.className = "field-row is-main";
+    row.style.cssText = "margin-top:6px;align-items:flex-start;";
+    row.innerHTML = `
+        <span class="field-label" style="flex-shrink:0;white-space:nowrap;padding-top:3px;">საკადასტრო კოდი</span>
+        <span class="field-value" style="flex:1 1 auto;min-width:0;white-space:normal;word-break:break-all;text-align:right;">${code}</span>`;
+    container.appendChild(row);
 }
 
 // value comes HTML-escaped from the server (GetProperties VALUE)
