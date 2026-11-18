@@ -552,12 +552,25 @@ if ($existingDeal) {
         }
     }
 
+    // Dailo იმავე საუბარს თავიდან აგზავნის სრული, გაზრდილი მიმოწერით - ყოველ ჯერზე ვანახლებთ.
+    // უფრო მოკლე ტექსტით არ ვცვლით, რომ ძველი შეტყობინებები არ დაიკარგოს.
+    $existingMessages = (string)($existingDeal[F_MESSAGES] ?? '');
+    if ($messages !== ''
+        && $messages !== $existingMessages
+        && mb_strlen($messages) >= mb_strlen($existingMessages)
+    ) {
+        $dealUpdate[F_MESSAGES] = $messages;
+    }
+
     if (leadIsEmptyValue($existingDeal['SOURCE_ID'] ?? '')) {
         $dealUpdate['SOURCE_ID'] = $sourceId;
     }
 
-    if (empty($existingDeal['CONTACT_ID']) && $contactId > 0) {
-        $dealUpdate['CONTACT_ID'] = $contactId;
+    // ამ მოთხოვნის ნომრის კონტაქტი (ახალი ან ნომრით ნაპოვნი) დილზე მთავარ კონტაქტად ებმება,
+    // დილზე უკვე მიბმული კონტაქტები რჩება.
+    $dealContactIds = array_map('intval', \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($dealId));
+    if ($contactId > 0 && !in_array((int)$contactId, $dealContactIds, true)) {
+        $dealUpdate['CONTACT_IDS'] = array_merge([(int)$contactId], $dealContactIds);
     }
 
     if (!empty($dealUpdate)) {
