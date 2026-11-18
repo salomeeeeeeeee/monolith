@@ -272,7 +272,8 @@ if(pathname[1] == "crm"){
             let allbutton = document.querySelectorAll(".menu-item-block");
             if(allbutton){
                 for(let btn of allbutton){
-                    let allowList = ["bx_left_menu_786740379"];
+                    // მთავარი გვერდი + ზარების ანალიტიკა (Dailo; თავად პუნქტი მხოლოდ ჯგუფ DAILO_SSO-ს წევრებს აქვს)
+                    let allowList = ["bx_left_menu_786740379", "bx_left_menu_menu_dailo_calls"];
                     if(!allowList.includes(btn.getAttribute("id"))){
                         btn.style.display = "none";
                     } else {
