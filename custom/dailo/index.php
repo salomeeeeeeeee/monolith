@@ -154,7 +154,7 @@ function dailoSsoMessage($title, $text)
     if (DAILO_SSO_IN_TAB) {
         dailoSsoStandalone($title, $html . '<p><a href="/">ბიტრიქსში დაბრუნება</a></p>');
     }
-    require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_after.php');
+    require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/header.php'); // პორტალის საერთო header (მენიუს წესები და სხვ.)
     $APPLICATION->SetTitle(DAILO_SSO_TITLE);
     echo '<div style="max-width:520px;margin:40px auto;background:#fff;border-radius:8px;padding:28px 24px;text-align:center">'
         . '<h2 style="font-size:18px;margin:0 0 10px">' . htmlspecialcharsbx($title) . '</h2>' . $html . '</div>';
@@ -205,7 +205,7 @@ if (DAILO_SSO_IN_TAB) {
 }
 
 // ჩარჩოს რეჟიმი: Bitrix-ის შაბლონი (მენიუ, ჰედერი) + Dailo-ს დეშბორდი iframe-ში
-require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_after.php');
+require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/header.php'); // პორტალის საერთო header (მენიუს წესები და სხვ.)
 $APPLICATION->SetTitle(DAILO_SSO_TITLE);
 ?>
 <style>

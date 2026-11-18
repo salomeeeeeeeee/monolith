@@ -265,7 +265,8 @@ if (pathname[2] == "deal") {
     }, 500);
 }
 
-if(pathname[1] == "crm"){
+// გაყიდვების ჯგუფს (17) მარცხენა მენიუში მხოლოდ allowList ჩანს - CRM-ში და ზარების ანალიტიკის გვერდზე
+if(pathname[1] == "crm" || (pathname[1] == "custom" && pathname[2] == "dailo")){
 
     if(userGroups.includes(17)){
         setInterval(()=>{
