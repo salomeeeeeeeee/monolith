@@ -2895,6 +2895,18 @@ if (!in_array((int)$userID, [1, 3], true)):
 <?php endif; ?>
 
 <?php
+// tab_lists_37 — hidden for user 475 (tab button in the bar + its content, in case it is opened from the "More" menu)
+if ((int)$userID === 475):
+?>
+<style>
+#crm_scope_detail_c_deal__tab_lists_37,
+#container_lists_attached_crm_37 {
+    display: none !important;
+}
+</style>
+<?php endif; ?>
+
+<?php
 // Deal list grid (Deals tab on contact/company card) - stage bar frozen for everyone except users 1 and 3
 $canChangeStageFromGrid = in_array((int)$userID, [1, 3], true);
 if (!$canChangeStageFromGrid):
