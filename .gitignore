@@ -12,3 +12,6 @@ local/php_interface/meta_spend_secret.php
 
 # Dailo SSO shared secret (custom/dailo/index.php) - only on the server
 custom/dailo/sso_secret.php
+
+# site lead API token (rest/public/addSiteLead.php) - only on the server
+local/php_interface/site_lead_secret.php
