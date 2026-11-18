@@ -106,6 +106,46 @@ function dailoSsoStandalone($title, $bodyHtml)
     exit;
 }
 
+/**
+ * „ახლა“ Dailo-ს საათით (unix time).
+ *
+ * დროებითი: 2026-11-18-ს სერვერის საათი ~1ს52წთ-ით წინ იყო (chrony: "System clock synchronized: no";
+ * გამოსწორება root-ით: sudo chronyc makestep). Dailo საშვის iat/exp-ს თავისი საათით ამოწმებს,
+ * ამიტომ სხვაობას მისი სერვერის Date სათაურიდან ვითვლით და 5 წუთით ვინახავთ ქეშში.
+ * საათი როცა გასწორდება, სხვაობა 0 გახდება; საათის უკან გადაწევისას ქეში თავისით უქმდება.
+ * ვერ დაუკავშირდა - სერვერის საკუთარი დრო.
+ */
+function dailoSsoNow()
+{
+    $now = time();
+    $cache = \Bitrix\Main\Data\Cache::createInstance();
+    $cacheId = 'clock_offset';
+    $cacheDir = '/dailo_sso';
+    if ($cache->initCache(300, $cacheId, $cacheDir)) {
+        $data = $cache->getVars();
+        if (is_array($data) && $now >= (int)$data['at']) {
+            return $now + (int)$data['offset'];
+        }
+        $cache->clean($cacheId, $cacheDir);
+    }
+
+    $url = parse_url(DAILO_SSO_ENDPOINT, PHP_URL_SCHEME) . '://' . parse_url(DAILO_SSO_ENDPOINT, PHP_URL_HOST) . '/';
+    $http = new \Bitrix\Main\Web\HttpClient(['socketTimeout' => 3, 'streamTimeout' => 3, 'redirect' => false]);
+    $http->head($url);
+    $remote = strtotime((string)$http->getHeaders()->get('Date'));
+    if (!$remote) {
+        return $now;
+    }
+    $offset = $remote - time();
+    if (abs($offset) < 3) {
+        $offset = 0;
+    }
+    if ($cache->startDataCache(300, $cacheId, $cacheDir)) {
+        $cache->endDataCache(['at' => time(), 'offset' => $offset]);
+    }
+    return time() + $offset;
+}
+
 /** შეცდომის/შეტყობინების ჩვენება - ჩანართში მარტივი გვერდით, ჩარჩოს რეჟიმში Bitrix-ის შაბლონში. */
 function dailoSsoMessage($title, $text)
 {
@@ -131,7 +171,7 @@ if (strlen($secret) < 32) {
     dailoSsoMessage('ჯერ არ არის გამართული', 'Dailo-სთან კავშირი ჯერ არ არის კონფიგურირებული.');
 }
 
-$now = time();
+$now = dailoSsoNow();
 $token = dailoSsoToken([
     'iss'   => DAILO_SSO_ISSUER,
     'aud'   => DAILO_SSO_AUDIENCE,
