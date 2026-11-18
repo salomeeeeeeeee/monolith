@@ -1481,11 +1481,13 @@ if (moreBtn) {
         }
 
         // user_irhcfh47 (permission-gated field) — locked for everyone except admin (1, 3), on every stage
+        // Exception: UF_CRM_1782206163787 stays editable for everyone
         var ih = document.querySelector("[data-cid='user_irhcfh47']");
         if (ih) {
             ih.style.display = '';
 
             var isAdmin = (userID == 1 || userID == 3);
+            var ihEditableFields = ['UF_CRM_1782206163787'];
 
             if (isAdmin) {
                 // Admin: fully unlock everything
@@ -1507,6 +1509,12 @@ if (moreBtn) {
                 ih.style.opacity = '';
 
                 ih.querySelectorAll('[data-cid]').forEach(function(field) {
+                    if (ihEditableFields.indexOf(field.getAttribute('data-cid')) !== -1) {
+                        field.style.pointerEvents = '';
+                        field.style.userSelect = '';
+                        field.style.opacity = '';
+                        return;
+                    }
                     field.style.pointerEvents = 'none';
                     field.style.userSelect = 'none';
                     field.style.opacity = '0.7';
@@ -2858,12 +2866,30 @@ $canChangeStageAlways = $dealId <= 0 || in_array((int)$userID, $stageEditorUsers
 
 <?php
 // user_irhcfh47 — hide the section "Edit" link for everyone except users 1 and 3
+// and keep its fields frozen (CSS survives editor re-renders), except UF_CRM_1782206163787
 if (!in_array((int)$userID, [1, 3], true)):
 ?>
 <style>
 [data-cid="user_irhcfh47"] .ui-entity-editor-header-actions,
 [data-cid="user_irhcfh47"] .ui-entity-editor-header-edit-lnk {
     display: none !important;
+}
+
+[data-cid="user_irhcfh47"] [data-cid]:not([data-cid="UF_CRM_1782206163787"]) {
+    pointer-events: none !important;
+    user-select: none !important;
+    opacity: 0.7;
+}
+
+[data-cid="user_irhcfh47"] [data-cid]:not([data-cid="UF_CRM_1782206163787"]) .ui-entity-editor-field-edit,
+[data-cid="user_irhcfh47"] [data-cid]:not([data-cid="UF_CRM_1782206163787"]) .ui-entity-editor-field-edit-button {
+    display: none !important;
+}
+
+[data-cid="user_irhcfh47"] [data-cid="UF_CRM_1782206163787"] {
+    pointer-events: auto !important;
+    user-select: auto !important;
+    opacity: 1 !important;
 }
 </style>
 <?php endif; ?>
