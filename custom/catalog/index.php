@@ -913,6 +913,9 @@ let propertyMap = {
     "PROP_50__9DQ1FA":  { name: "50%-ზე ნაკლები სრული $",                    type: "S" },
     "__8JJ6AD":         { name: "ერთიანი გადახდით $/მ²",                     type: "S" },
     "__2CQSID":         { name: "ერთიანი გადახდით სრული $",                  type: "S" },
+    // ── პროექტი 154 ──
+    "PROP_9__NSM3X2":   { name: "9 თვიანი ერთიანი გადახდით",                 type: "S" },
+    "PROP_19__EVZO71":  { name: "19 თვიანი ერთიანი გადახდით",                type: "S" },
 };
 
 
@@ -935,6 +938,7 @@ const SKIP_CODES = new Set([
     "__51MODL","__6ZWTER", "OWNER_PERSONAL_CONTACT", "DEAL_RESPONSIBLE", "OWNER_DEAL", "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
     "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","_101080_7L7QZC","_101080_QACVJ6",
         "PROP_50__IZHFLR","PROP_50__SKI4RB","PROP_50__L423NO","PROP_50__9DQ1FA","__8JJ6AD","__2CQSID",
+        "PROP_9__NSM3X2","PROP_19__EVZO71",
         F_NFS_COMMENT,
 ]);
 const MAIN_CODES = ["_P64GYD","Number","__X1GCRZ","_L24CUB","_3BU0JH","FLOOR","TOTAL_AREA"];
@@ -1137,6 +1141,8 @@ projectSelect.addEventListener("change", function() {
                 "PROP_50__9DQ1FA": "50%-ზე ნაკლები სრული $",
                 "__8JJ6AD":        "ერთიანი გადახდით $/მ²",
                 "__2CQSID":        "ერთიანი გადახდით სრული $",
+                "PROP_9__NSM3X2":  "9 თვიანი ერთიანი გადახდით",
+                "PROP_19__EVZO71": "19 თვიანი ერთიანი გადახდით",
             };
             propertyMap = {};
             Object.entries(FIELD_NAMES).forEach(([code, name]) => {
@@ -2154,6 +2160,7 @@ function renderBlockSections(apt) {
         "threedrender","floorplan","mtavari_foto","ownerDeal","ownerContact","OWNER_DEAL_TITLE",
         "PROP_60__RHMZW7","_60__WZXWF3","_60__Q44IB7","_02080__AEC240","_02080__1D1HZL","_101080_7L7QZC","_101080_QACVJ6",
         "PROP_50__IZHFLR","PROP_50__SKI4RB","PROP_50__L423NO","PROP_50__9DQ1FA","__8JJ6AD","__2CQSID",
+        "PROP_9__NSM3X2","PROP_19__EVZO71",
         F_NFS_COMMENT,
     ]);
 
@@ -2428,8 +2435,14 @@ function appendPriceSection(container, apt) {
     const planSingleFull  = isProject150 ? num("__2CQSID")        : 0;
     const planSingleKvm   = isProject150 ? num("__8JJ6AD")        : 0;
 
+    // ── Payment-plan fields (პროექტი 154) ──────────────────────────
+    const isProject154    = String(apt["IBLOCK_SECTION_ID"] || projectSelect.value) === "154";
+    const plan9Single     = isProject154 ? num("PROP_9__NSM3X2")  : 0;
+    const plan19Single    = isProject154 ? num("PROP_19__EVZO71") : 0;
+
     const hasPlans = !!(plan60Down || plan60Full || plan60Kvm || plan02080Full || plan02080Kvm || plan101080Full || plan101080Kvm
-        || planOver50Full || planOver50Kvm || planUnder50Full || planUnder50Kvm || planSingleFull || planSingleKvm);
+        || planOver50Full || planOver50Kvm || planUnder50Full || planUnder50Kvm || planSingleFull || planSingleKvm
+        || plan9Single || plan19Single);
 
     if (!price && !priceGel && !kvmUsd && !hasPlans) return;
 
@@ -2477,7 +2490,9 @@ function appendPriceSection(container, apt) {
             ${planRow("0/20/80 (მონოლითი)", plan02080Full, plan02080Kvm, "")}
             ${planRow("50%-ზე მეტი", planOver50Full, planOver50Kvm, "")}
             ${planRow("50%-ზე ნაკლები", planUnder50Full, planUnder50Kvm, "")}
-            ${planRow("ერთიანი გადახდით", planSingleFull, planSingleKvm, "")} </div>`;
+            ${planRow("ერთიანი გადახდით", planSingleFull, planSingleKvm, "")}
+            ${planRow("9 თვიანი ერთიანი გადახდით", plan9Single, 0, "")}
+            ${planRow("19 თვიანი ერთიანი გადახდით", plan19Single, 0, "")} </div>`;
     container.appendChild(sec);
 }
 
