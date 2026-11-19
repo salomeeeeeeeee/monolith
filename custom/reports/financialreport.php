@@ -143,11 +143,16 @@ function sortByDate($a, $b) {
 $deal_ID = (int)$_GET["dealid"];
 $href="/crm/deal/details/$deal_ID/";
 
-// ── Invoice access: only these user IDs see the Invoice button ──
-$INVOICE_USERS = array(474, 130, 3);
+// ── Invoice access: these user IDs + members of these groups see the Invoice button ──
+$INVOICE_USERS  = array(474, 130, 3);
+$INVOICE_GROUPS = array(17);
 global $USER;
-$canInvoice = is_object($USER) && $USER->IsAuthorized()
-    && in_array((int)$USER->GetID(), $INVOICE_USERS, true);
+$canInvoice = false;
+if (is_object($USER) && $USER->IsAuthorized()) {
+    $userGroups = array_map('intval', (array)$USER->GetUserGroupArray());
+    $canInvoice = in_array((int)$USER->GetID(), $INVOICE_USERS, true)
+        || count(array_intersect($userGroups, $INVOICE_GROUPS)) > 0;
+}
 
 $dealData = getDealInfoByID($deal_ID, array("ID", "TITLE", "UF_CRM_1702019032102"));
 

@@ -45,10 +45,13 @@ $INV_CFG = array(
 
     "ASSETS"            => "/crm/deal/invoice_assets",
 
-    // Only these user IDs may open invoices
+    // These user IDs may open invoices WITH their signature
     "ALLOWED_USERS"     => array(474, 130),
 
-    // Signature per user (files inside ASSETS folder)
+    // Members of these groups may open invoices WITHOUT a signature
+    "ALLOWED_GROUPS"    => array(17),
+
+    // Signature per user (files inside ASSETS folder) — used only for ALLOWED_USERS
     "SIGNATURES"        => array(
         130 => "signature_130.png",
         474 => "signature_474.png",
@@ -171,15 +174,27 @@ function inv_getRows($iblockId, $dealId) {
 /* ────────────────────────────── ACCESS ────────────────────────────── */
 
 global $USER;
-if (!is_object($USER) || !$USER->IsAuthorized()
-    || !in_array((int)$USER->GetID(), $INV_CFG["ALLOWED_USERS"], true)) {
+if (!is_object($USER) || !$USER->IsAuthorized()) {
     http_response_code(403);
     die("წვდომა აკრძალულია");
 }
 
-// Signature of the user who generates the invoice
 $currentUserID = (int)$USER->GetID();
-$signatureFile = isset($INV_CFG["SIGNATURES"][$currentUserID]) ? $INV_CFG["SIGNATURES"][$currentUserID] : "";
+$userGroups    = array_map('intval', (array)$USER->GetUserGroupArray());
+
+$isSignUser  = in_array($currentUserID, $INV_CFG["ALLOWED_USERS"], true);              // full access + signature
+$isGroupUser = count(array_intersect($userGroups, $INV_CFG["ALLOWED_GROUPS"])) > 0;    // access, no signature
+
+if (!$isSignUser && !$isGroupUser) {
+    http_response_code(403);
+    die("წვდომა აკრძალულია");
+}
+
+// Signature only for ALLOWED_USERS; group users get the page without it
+$signatureFile = "";
+if ($isSignUser && isset($INV_CFG["SIGNATURES"][$currentUserID])) {
+    $signatureFile = $INV_CFG["SIGNATURES"][$currentUserID];
+}
 if ($signatureFile !== "" && !file_exists($_SERVER["DOCUMENT_ROOT"] . $INV_CFG["ASSETS"] . "/" . $signatureFile)) {
     $signatureFile = "";   // file not uploaded yet → no image instead of a broken icon
 }
