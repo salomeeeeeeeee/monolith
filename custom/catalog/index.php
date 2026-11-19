@@ -2452,6 +2452,10 @@ function appendPriceSection(container, apt) {
             </div>`;
     }
 
+    // პროექტი 155 — ზოგად ფასების ბლოკში "სრული ფასი"-ს ნაცვლად "ერთიანი გადახდა"
+    const isProject155 = String(apt["IBLOCK_SECTION_ID"] || projectSelect.value) === "155";
+    const mainPriceLabel = isProject155 ? "ერთიანი გადახდა" : "სრული ფასი";
+
     const sec = document.createElement("div"); sec.className = "block-section";
     sec.innerHTML = `
         <div class="block-header">
@@ -2460,11 +2464,11 @@ function appendPriceSection(container, apt) {
         </div>
         <div style="background:linear-gradient(135deg,#f0fdf9,#e6fff8);border:1px solid #a7f3d0;border-radius:8px;padding:7px 9px;display:flex;flex-direction:column;gap:4px;margin-top:6px;">
             ${(price || kvmUsd) ? `<div style="display:flex;gap:4px;">
-                ${planBox("სრული ფასი $", price, false)}
+                ${planBox(mainPriceLabel + " $", price, false)}
                 ${planBox("მ² ფასი $", kvmUsd, false)}
             </div>` : ""}
             ${(priceGel || kvmGel) ? `<div style="display:flex;gap:4px;">
-                ${planBox("სრული ფასი ₾", priceGel, true)}
+                ${planBox(mainPriceLabel + " ₾", priceGel, true)}
                 ${planBox("მ² ფასი ₾", kvmGel, true)}
             </div>` : ""}
             <div style="text-align:right;font-size:8px;color:#6b7280;padding-top:2px;border-top:1px solid #d1fae5;">NBG კურსი: <span style="font-weight:700;color:#047857;">${nbg} ₾</span></div>
