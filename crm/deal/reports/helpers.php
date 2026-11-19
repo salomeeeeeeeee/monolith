@@ -678,14 +678,7 @@ function reportIsFirstTranchePaid(array $scheduleRows, $paidAmount)
  */
 function reportFirstTranchePaidDeals(array $dealIds)
 {
-    $schedules = [];
-    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds) as $row) {
-        $schedules[$row['_DEAL_ID']][] = [
-            'type' => trim((string)($row['PLAN_TYPE'] ?? '')),
-            'date' => reportParseDate($row['TARIGI'] ?? ''),
-            'amount' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
-        ];
-    }
+    $schedules = reportLoadDealSchedules($dealIds);
     $paid = [];
     foreach (reportLoadIblockRowsForDeals(REPORT_PAYMENT_IBLOCK, $dealIds) as $row) {
         if (($row['refund'] ?? '') === '') {
@@ -698,6 +691,36 @@ function reportFirstTranchePaidDeals(array $dealIds)
         if (reportIsFirstTranchePaid($schedules[$dealId] ?? [], $amount)) {
             $result[$dealId] = true;
         }
+    }
+    return $result;
+}
+
+/**
+ * Deal ID => schedule rows (list 22) in reportSplitSchedule() form. Deals without a schedule are absent.
+ */
+function reportLoadDealSchedules(array $dealIds)
+{
+    $schedules = [];
+    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds) as $row) {
+        $schedules[$row['_DEAL_ID']][] = [
+            'type' => trim((string)($row['PLAN_TYPE'] ?? '')),
+            'date' => reportParseDate($row['TARIGI'] ?? ''),
+            'amount' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
+        ];
+    }
+    return $schedules;
+}
+
+/**
+ * Deal ID => first payment amount of its schedule (the Excel column "პირველადი შენატანის თანხა"),
+ * 0 when the schedule has no first payment. Deals without a schedule are absent.
+ */
+function reportDealFirstPayments(array $dealIds)
+{
+    $result = [];
+    foreach (reportLoadDealSchedules($dealIds) as $dealId => $rows) {
+        list($first) = reportSplitSchedule($rows);
+        $result[$dealId] = $first ? $first['amount'] : 0;
     }
     return $result;
 }
@@ -891,14 +914,7 @@ function reportEnrichSoldExport(array $products, $lang = 'ge')
         }
     }
 
-    $schedules = [];
-    foreach (reportLoadIblockRowsForDeals(REPORT_SCHEDULE_IBLOCK, $dealIds) as $row) {
-        $schedules[$row['_DEAL_ID']][] = [
-            'type' => trim((string)($row['PLAN_TYPE'] ?? '')),
-            'date' => reportParseDate($row['TARIGI'] ?? ''),
-            'amount' => reportParseAmount($row['TANXA'] ?? ($row['TANXA_NUMBR'] ?? 0)),
-        ];
-    }
+    $schedules = reportLoadDealSchedules($dealIds);
     $payments = [];
     $paidCovering = [];
     foreach (reportLoadIblockRowsForDeals(REPORT_PAYMENT_IBLOCK, $dealIds) as $row) {

@@ -59,6 +59,10 @@ $SOURCE_NAME_ENUM_MAP = [
 ];
 const SOURCE_NAME_ENUM_OTHER = 482;
 
+// ამ სტადიებზე კონტაქტი მყიდველია (ხელშეკრულება, გადახდები) - განმეორებითი მოთხოვნა კონტაქტს არ ცვლის, მხოლოდ მიმოწერას:
+// მოთხოვნილი / დადასტურებული რეზერვაცია, ხელშეკრულება, დადასტურებული ხელშეკრულება, მოთხოვნილი გაყიდვა, გაყიდული, გაუქმებული ხელშეკრულება
+const BUYER_CONTACT_STAGES = ['PREPAYMENT_INVOICE', 'FINAL_INVOICE', 'EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON', 'LOSE'];
+
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function leadReadInput()
@@ -279,6 +283,7 @@ function leadFindDealByConversationId($conversationId)
         [
             'ID',
             'TITLE',
+            'STAGE_ID',
             'SOURCE_ID',
             'CONTACT_ID',
             F_SOURCE_NAME,
@@ -567,9 +572,10 @@ if ($existingDeal) {
     }
 
     // ამ მოთხოვნის ნომრის კონტაქტი (ახალი ან ნომრით ნაპოვნი) დილზე მთავარ კონტაქტად ებმება,
-    // დილზე უკვე მიბმული კონტაქტები რჩება.
+    // დილზე უკვე მიბმული კონტაქტები რჩება. რეზერვაციის, ხელშეკრულების და გაყიდულ დილზე კონტაქტს არ ვეხებით.
+    $buyerStage = in_array((string)($existingDeal['STAGE_ID'] ?? ''), BUYER_CONTACT_STAGES, true);
     $dealContactIds = array_map('intval', \Bitrix\Crm\Binding\DealContactTable::getDealContactIDs($dealId));
-    if ($contactId > 0 && !in_array((int)$contactId, $dealContactIds, true)) {
+    if (!$buyerStage && $contactId > 0 && !in_array((int)$contactId, $dealContactIds, true)) {
         $dealUpdate['CONTACT_IDS'] = array_merge([(int)$contactId], $dealContactIds);
     }
 

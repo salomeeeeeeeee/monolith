@@ -15,3 +15,6 @@ custom/dailo/sso_secret.php
 
 # site lead API token (rest/public/addSiteLead.php) - only on the server
 local/php_interface/site_lead_secret.php
+
+# Inex SMS token (local/php_interface/inex_sms.php) - only on the server
+local/php_interface/inex_sms_secret.php

@@ -24,6 +24,21 @@ $t = array_merge($t, [
     'col_deal_avg' => $lang === 'eng' ? 'Sale Average Price ($)' : 'გაყიდვის საშუალო ფასი ($)',
     'col_prod_avg' => $lang === 'eng' ? 'Stock Average Price ($)' : 'Stock საშუალო ფასი ($)',
     'col_diff_avg' => $lang === 'eng' ? 'Diff % (Average)' : 'სხვაობა % (საშუალო)',
+    'h2_by_project' => $lang === 'eng' ? 'Sales by Project' : 'გაყიდვები პროექტების მიხედვით',
+    'col_project_type' => $lang === 'eng' ? 'Project / Property Type' : 'პროექტი / ქონების ტიპი',
+    'col_sale_value' => $lang === 'eng' ? 'Sale Value ($)' : 'გაყიდვის ღირებულება ($)',
+    'col_avg_price' => $lang === 'eng' ? 'Average Price ($)' : 'საშუალო ფასი ($)',
+    'col_avg_price_tip' => $lang === 'eng'
+        ? 'Flats and other areas: average price of 1 m² = sale value / total area. Parking: average price of 1 space = sale value / count. Units without a price or an area are left out of the average.'
+        : 'ბინა და სხვა ფართები: 1 m²-ის საშუალო ფასი = გაყიდვის ღირებულება / ჯამური ფართი. ავტოსადგომი: 1 ადგილის საშუალო ფასი = ღირებულება / რაოდენობა. ფასის ან ფართის გარეშე ერთეულები საშუალოში არ ითვლება.',
+    'col_first_pay' => $lang === 'eng' ? 'First Payment ($)' : 'პირველადი შენატანი ($)',
+    'col_first_pay_tip' => $lang === 'eng'
+        ? 'Sum of the first payments from the deals\' payment schedules (same as the Excel column "First Payment Amount"). A deal without a schedule has no known first payment and is not in the sum; the next column counts such units.'
+        : 'დილების გადახდის გრაფიკების პირველადი შენატანების ჯამი (იგივე, რაც Excel-ის სვეტი „პირველადი შენატანის თანხა“). თუ დილს გრაფიკი არ აქვს, პირველადი შენატანი უცნობია და ჯამში არ შედის - ასეთი ერთეულების რაოდენობა მომდევნო სვეტშია.',
+    'col_no_schedule' => $lang === 'eng' ? 'Without Schedule (units)' : 'გრაფიკის გარეშე (ცალი)',
+    'unit_sqm' => '/ m²',
+    'unit_space' => $lang === 'eng' ? '/ space' : '/ ადგილი',
+    'no_project' => $lang === 'eng' ? 'No project' : 'პროექტის გარეშე',
     'xls_sheet_all' => $lang === 'eng' ? 'All Sales' : 'ყველა გაყიდვა',
     'xls_no_resp' => $lang === 'eng' ? 'No Responsible' : 'პასუხისმგებლის გარეშე',
     'xls_loading' => $lang === 'eng' ? 'Loading...' : 'იტვირთება...',
@@ -139,7 +154,104 @@ function soldDiffCell($percent)
     return '<span class="diff ' . $class . '">' . $sign . number_format($percent, 2) . '%</span>';
 }
 
+/** Parking is priced per space, everything else per m². */
+const SOLD_PARKING_TYPES = ['შიდა ავტოსადგომი', 'გარე ავტოსადგომი'];
+
+// Deal ID => number of sold units on it. A deal with several units splits its value evenly between them,
+// so the summaries count the deal's amount once.
+$dealUnits = [];
+foreach ($products as $product) {
+    $dealId = reportExtractProductOwnerDealId($product);
+    if ($dealId !== '') {
+        $dealUnits[$dealId] = ($dealUnits[$dealId] ?? 0) + 1;
+    }
+}
+
+/** The unit's share of its deal's value (DEAL_PRICE is the whole deal amount). */
+function soldUnitValue(array $product, array $dealUnits)
+{
+    $units = $dealUnits[reportExtractProductOwnerDealId($product)] ?? 1;
+    return (float)($product['DEAL_PRICE'] ?? 0) / max(1, $units);
+}
+
+/**
+ * Project => ['total' => bucket, 'types' => [type => bucket]] of the sold units.
+ * avg_value / avg_base give the average price: per m² (units with a price and an area), for parking per space.
+ * A deal's first payment is counted once; units whose deal has no schedule are counted in no_schedule.
+ */
+function soldProjectSummary(array $products, array $firstPayments, array $dealUnits, $noProjectLabel)
+{
+    $empty = ['num' => 0, 'area' => 0, 'value' => 0, 'avg_value' => 0, 'avg_base' => 0, 'first' => 0, 'no_schedule' => 0];
+    $projects = [];
+    $countedDeals = [];
+    foreach ($products as $product) {
+        $project = reportFilterLabel($product[F_PROJECT] ?? '');
+        $project = $project !== '' ? $project : $noProjectLabel;
+        $type = reportResolveProductType($product);
+        $area = (float)($product[F_TOTAL_AREA] ?? 0);
+        $value = soldUnitValue($product, $dealUnits);
+        $isParking = in_array($type, SOLD_PARKING_TYPES, true);
+
+        $dealId = reportExtractProductOwnerDealId($product);
+        $hasSchedule = $dealId !== '' && isset($firstPayments[$dealId]);
+        $first = 0;
+        if ($hasSchedule && !isset($countedDeals[$dealId])) {
+            $first = $firstPayments[$dealId];
+            $countedDeals[$dealId] = true;
+        }
+
+        if (!isset($projects[$project])) {
+            $projects[$project] = ['total' => $empty, 'types' => []];
+        }
+        if (!isset($projects[$project]['types'][$type])) {
+            $projects[$project]['types'][$type] = $empty;
+        }
+        $add = static function (array &$bucket) use ($area, $value, $isParking, $hasSchedule, $first) {
+            $bucket['num']++;
+            $bucket['area'] += $area;
+            $bucket['value'] += $value;
+            if ($value > 0 && ($isParking || $area > 0)) {
+                $bucket['avg_value'] += $value;
+                $bucket['avg_base'] += $isParking ? 1 : $area;
+            }
+            $bucket['first'] += $first;
+            $bucket['no_schedule'] += $hasSchedule ? 0 : 1;
+        };
+        $add($projects[$project]['total']);
+        $add($projects[$project]['types'][$type]);
+    }
+
+    foreach ($projects as &$project) {
+        $project['types'] = reportSortProductTypes($project['types']);
+    }
+    unset($project);
+    uksort($projects, static function ($a, $b) use ($noProjectLabel) {
+        if (($a === $noProjectLabel) !== ($b === $noProjectLabel)) {
+            return $a === $noProjectLabel ? 1 : -1;
+        }
+        return strcasecmp($a, $b);
+    });
+    return $projects;
+}
+
+function soldAvgPriceCell(array $bucket, $isParking, array $t)
+{
+    if ($bucket['avg_base'] <= 0) {
+        return '-';
+    }
+    return '$' . number_format($bucket['avg_value'] / $bucket['avg_base'], 2)
+        . ' <span class="unit-note">' . ($isParking ? $t['unit_space'] : $t['unit_sqm']) . '</span>';
+}
+
 $firstPaidDeals = reportFirstTranchePaidDeals(array_map('reportExtractProductOwnerDealId', $filteredProducts));
+$firstPayments = reportDealFirstPayments(array_map('reportExtractProductOwnerDealId', $filteredProducts));
+$projectSummary = soldProjectSummary($filteredProducts, $firstPayments, $dealUnits, $t['no_project']);
+$projectTotal = ['num' => 0, 'area' => 0, 'value' => 0, 'first' => 0, 'no_schedule' => 0];
+foreach ($projectSummary as $project) {
+    foreach (array_keys($projectTotal) as $key) {
+        $projectTotal[$key] += $project['total'][$key];
+    }
+}
 
 $emptyBucket = [
     'num' => 0,
@@ -169,7 +281,7 @@ foreach ($filteredProducts as $product) {
         $resArray[$bucket]['total_area'] += (float)($product[F_TOTAL_AREA] ?? 0);
         $resArray[$bucket]['price'] += (float)($product['PRICE'] ?? 0);
         $resArray[$bucket]['KVM_PRICE'] += (float)($product['KVM_PRICE'] ?? 0);
-        $resArray[$bucket]['deal_price'] += (float)($product['DEAL_PRICE'] ?? 0);
+        $resArray[$bucket]['deal_price'] += soldUnitValue($product, $dealUnits);
         $resArray[$bucket]['deal_kvm_price'] += (float)($product['DEAL_KVM_PRICE'] ?? 0);
     }
 }
@@ -238,8 +350,99 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
         box-shadow: 0 8px 24px rgba(20, 40, 60, 0.14);
     }
     .th-help-pop[hidden] { display: none; }
+    .report-table--projects { min-width: 1000px; }
+    .project-row td { background: #f3f7fa !important; font-weight: 600; }
+    .unit-note { color: #6b7a8a; font-size: 12px; font-weight: 500; }
+    .sold-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 4px;
+        background: var(--rp-surface, #fff);
+        border: 1px solid var(--rp-border, #dde2e8);
+        border-radius: 4px;
+        box-shadow: var(--rp-shadow);
+    }
+    .sold-tab {
+        flex: 0 1 auto;
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: var(--rp-muted, #6b7a8a);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .sold-tab:hover { background: var(--rp-surface-2, #f0f2f5); color: var(--rp-primary, #00335b); }
+    .sold-tab[aria-selected="true"] { background: var(--rp-primary, #00335b); color: #fff; }
+    .sold-tab:focus-visible { outline: 2px solid var(--rp-accent, #72c4b1); outline-offset: 2px; }
+    .sold-panel { min-width: 0; }
+    .sold-panel .report-block__head { display: none; }
+    /* The table scrolls inside its own box (at most the window height), so the sticky header row stays in view. */
+    .sold-panel .table-wrap { max-height: calc(100vh - 24px); padding-top: 0; }
+    @media (max-width: 640px) { .sold-tab { flex: 1 1 100%; } }
 </style>
 
+<div class="sold-tabs" role="tablist">
+    <button type="button" class="sold-tab" role="tab" data-tab="summary" aria-selected="true"><?= $t['h2_summary'] ?></button>
+    <button type="button" class="sold-tab" role="tab" data-tab="projects" aria-selected="false"><?= $t['h2_by_project'] ?></button>
+</div>
+
+<div class="sold-panel" role="tabpanel" data-panel="projects" hidden>
+<?php reportBlockOpen($t['h2_by_project'], 'report-table--projects'); ?>
+    <thead>
+        <tr>
+            <th><?= $t['col_project_type'] ?></th>
+            <th><?= $t['col_count'] ?></th>
+            <th><?= $t['col_area'] ?></th>
+            <th><?= $t['col_sale_value'] ?></th>
+            <th class="th-help" data-tip="<?= htmlspecialchars($t['col_avg_price_tip'], ENT_QUOTES, 'UTF-8') ?>"><?= $t['col_avg_price'] ?></th>
+            <th class="th-help" data-tip="<?= htmlspecialchars($t['col_first_pay_tip'], ENT_QUOTES, 'UTF-8') ?>"><?= $t['col_first_pay'] ?></th>
+            <th><?= $t['col_no_schedule'] ?></th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php foreach ($projectSummary as $projectName => $project): ?>
+        <tr class="project-row">
+            <td><span class="row-main"><?= htmlspecialchars($projectName) ?></span></td>
+            <td><?= $project['total']['num'] ?></td>
+            <td><?= number_format($project['total']['area'], 2) ?></td>
+            <td>$<?= number_format($project['total']['value'], 2) ?></td>
+            <td>-</td>
+            <td>$<?= number_format($project['total']['first'], 2) ?></td>
+            <td><?= $project['total']['no_schedule'] ?></td>
+        </tr>
+            <?php foreach ($project['types'] as $prodType => $infos): ?>
+        <tr class="sub-row">
+            <td><?= reportSubTypeCell($prodType, $t, true) ?></td>
+            <td><?= $infos['num'] ?></td>
+            <td><?= number_format($infos['area'], 2) ?></td>
+            <td>$<?= number_format($infos['value'], 2) ?></td>
+            <td><?= soldAvgPriceCell($infos, in_array($prodType, SOLD_PARKING_TYPES, true), $t) ?></td>
+            <td>$<?= number_format($infos['first'], 2) ?></td>
+            <td><?= $infos['no_schedule'] ?></td>
+        </tr>
+            <?php endforeach; ?>
+        <?php endforeach; ?>
+        <tr class="total-row">
+            <td><?= $t['col_total'] ?></td>
+            <td><?= $projectTotal['num'] ?></td>
+            <td><?= number_format($projectTotal['area'], 2) ?></td>
+            <td>$<?= number_format($projectTotal['value'], 2) ?></td>
+            <td>-</td>
+            <td>$<?= number_format($projectTotal['first'], 2) ?></td>
+            <td><?= $projectTotal['no_schedule'] ?></td>
+        </tr>
+    </tbody>
+<?php reportBlockClose(); ?>
+</div>
+
+<div class="sold-panel" role="tabpanel" data-panel="summary">
 <?php reportBlockOpen($t['h2_summary'], 'report-table--compare'); ?>
     <thead>
         <tr>
@@ -286,6 +489,37 @@ reportRenderFilterForm($filters, $filterOptions, $t, $lang);
         </tr>
     </tbody>
 <?php reportBlockClose(); ?>
+</div>
+
+<script>
+// Tabs: one table at a time, "Sales Summary" by default. The chosen tab is kept for this browser tab's
+// session only, so filter reloads stay on it and a newly opened report starts on the summary again.
+(function () {
+    const tabs = document.querySelectorAll('.sold-tab');
+    const panels = document.querySelectorAll('.sold-panel');
+    function show(name) {
+        if (!document.querySelector('.sold-panel[data-panel="' + name + '"]')) {
+            name = 'summary';
+        }
+        tabs.forEach(function (tab) {
+            tab.setAttribute('aria-selected', tab.getAttribute('data-tab') === name ? 'true' : 'false');
+        });
+        panels.forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-panel') !== name;
+        });
+    }
+    let saved = null;
+    try { saved = window.sessionStorage.getItem('soldReportTab'); } catch (e) {}
+    show(saved || 'summary');
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            const name = tab.getAttribute('data-tab');
+            show(name);
+            try { window.sessionStorage.setItem('soldReportTab', name); } catch (e) {}
+        });
+    });
+})();
+</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
