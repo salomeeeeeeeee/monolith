@@ -64,8 +64,8 @@ $deals = [];
 
 if ($USER->IsAuthorized()) {
     $currentUserId = (int)$USER->GetID();
-    // 9 - ნუკი პაიჭაძე (სეილს ჰედი): ყველა დილს ხედავს, როგორც ადმინი
-    $showAllDeals = in_array($currentUserId, [1, 9], true) || $USER->IsAdmin();
+    // 9 - ნუკი პაიჭაძე (სეილს ჰედი), 12 - ლევან არქანია (დირექტორი): ყველა დილს ხედავენ, როგორც ადმინი
+    $showAllDeals = in_array($currentUserId, [1, 9, 12], true) || $USER->IsAdmin();
 
     $arFilter = [
         "CHECK_PERMISSIONS" => "N",
