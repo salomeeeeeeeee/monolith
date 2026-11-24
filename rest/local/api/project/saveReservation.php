@@ -364,7 +364,16 @@ $lastName   = trim($_POST['lastName']    ?? '');
 $idNumber   = trim($_POST['idNumber']    ?? '');
 $passportNo = trim($_POST['passportNumber'] ?? '');
 $phone      = trim($_POST['phone']       ?? '');
+$commLang   = intval($_POST['commLanguage'] ?? 0);   // საკომუნიკაციო ენა - სიის მნიშვნელობის ID
 $contactId  = intval($_POST['contact_id'] ?? 0);
+
+// საკომუნიკაციო ენა სავალდებულოა
+if (!$commLang) {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => 400, "message" => "აირჩიეთ საკომუნიკაციო ენა"], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 // პირადი ნომერი ან პასპორტის ნომერი - ერთი მაინც უნდა იყოს შევსებული
 if ($idNumber === '' && $passportNo === '') {
@@ -413,7 +422,7 @@ $params = array(
     "passportFileLink" => $passportFileId ? buildPassportFileLink($passportFileId) : '',
 );
 
-// ── Update contact: NAME, LAST_NAME, ID number, PHONE, passport file ──
+// ── Update contact: NAME, LAST_NAME, ID number, PHONE, communication language, passport file ──
 $contactUpdateLog = "no contact update\n";
 if ($contactId > 0) {
     $contactFields = [];
@@ -422,6 +431,7 @@ if ($contactId > 0) {
     if ($lastName  !== '') $contactFields['LAST_NAME'] = $lastName;
     if ($idNumber  !== '') $contactFields['UF_CRM_1781244744534'] = $idNumber;
     if ($passportNo !== '') $contactFields['UF_CRM_1790776088']   = $passportNo;
+    if ($commLang)          $contactFields['UF_CRM_1795509844']   = $commLang;   // საკომუნიკაციო ენა (სია)
 
     // Passport file
     if ($passportFileId && $filePath) {
@@ -459,6 +469,7 @@ if ($contactId > 0) {
         $contactObj = new CCrmContact(false);
         $updateResult = $contactObj->Update($contactId, $contactFields);
         $contactUpdateLog = "contact update result: " . var_export($updateResult, true) . "\n"
+            . ($updateResult ? "" : "contact update error: " . $contactObj->LAST_ERROR . "\n")
             . "fields: " . print_r($contactFields, true) . "\n";
     }
 }

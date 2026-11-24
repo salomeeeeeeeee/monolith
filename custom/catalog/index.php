@@ -22,6 +22,9 @@ define('F_SALE',       '_UQIM2I');
 define('F_CADASTRAL',  '__51MODL');
 define('F_SECTOR',     '_3BU0JH');
 
+// კონტაქტის ველი: საკომუნიკაციო ენა (სია)
+define('F_CONTACT_COMM_LANG', 'UF_CRM_1795509844');
+
 
 // ------------------------------ FUNCTIONS ------------------------------
 function getNBG($date) {
@@ -122,6 +125,18 @@ function dealHadConfirmedReservation($dealID) {
     ])->fetch();
 }
 
+// სია-ტიპის (enumeration) მომხმარებლის ველის მნიშვნელობები
+function getUserFieldEnumOptions($entityId, $fieldName) {
+    $field = CUserTypeEntity::GetList([], ["ENTITY_ID" => $entityId, "FIELD_NAME" => $fieldName])->Fetch();
+    if (!$field) return [];
+    $options = [];
+    $res = CUserFieldEnum::GetList(["SORT" => "ASC"], ["USER_FIELD_ID" => $field["ID"]]);
+    while ($e = $res->Fetch()) {
+        $options[] = ["ID" => $e["ID"], "VALUE" => $e["VALUE"], "DEF" => $e["DEF"]];
+    }
+    return $options;
+}
+
 function getProjects() {
     $res = CIBlockSection::GetList(
         ["SORT" => "ASC"],
@@ -145,6 +160,7 @@ $hadConfirmedReservation = $dealID ? dealHadConfirmedReservation($dealID) : fals
 $projects = getProjects();
 usort($projects, fn($a,$b) => strnatcasecmp($a['NAME'], $b['NAME']));
 $nbg = getNBG(date("Y-m-d"));
+$commLangOptions = getUserFieldEnumOptions("CRM_CONTACT", F_CONTACT_COMM_LANG);
 
 ob_end_clean();
 ?>
@@ -844,6 +860,7 @@ productsIds = productsIds.map(id => String(id));
 let nbg         = <?php echo json_encode($nbg); ?>;
 let projects    = <?php echo json_encode($projects); ?>;
 let hadConfirmedReservation = <?php echo json_encode($hadConfirmedReservation); ?>;
+let commLangOptions = <?php echo json_encode($commLangOptions ?? []); ?>;
 
 // ── Field code constants (mirror PHP defines) ──
 const F_BLOCK      = '_L24CUB';
@@ -2798,10 +2815,10 @@ async function exportToExcel() {
 
 <!-- ═══ RESERVATION POPUP ═══ -->
 <div id="reservationOverlay" style="display:none;position:fixed;inset:0;background:rgba(10,12,20,.55);backdrop-filter:blur(6px);z-index:4000;justify-content:center;align-items:center;">
-<div id="reservationPopup" style="position:relative;width:520px;max-width:95vw;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.22);border:.5px solid #d0d0d0;font-family:'Noto Sans Georgian',sans-serif;">
+<div id="reservationPopup" style="position:relative;width:520px;max-width:95vw;max-height:92vh;background:#fff;border-radius:14px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;box-shadow:0 12px 48px rgba(0,0,0,.22);border:.5px solid #d0d0d0;font-family:'Noto Sans Georgian',sans-serif;">
 
   <!-- header -->
-  <div style="background:#7db84a;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;">
+  <div style="background:#7db84a;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:2;">
     <span style="font-size:14px;font-weight:600;color:#fff;letter-spacing:.01em;">რეზერვაცია</span>
     <span onclick="closeReservationPopup()" style="cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.85;">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><line x1="2" y1="2" x2="12" y2="12" stroke="#fff" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="2" x2="2" y2="12" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
@@ -2860,6 +2877,14 @@ async function exportToExcel() {
   <input type="text" id="resPhone" placeholder="+995..." style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
 </div>
 
+<!-- communication language (contact list field UF_CRM_1795509844) -->
+<div style="margin-top:8px;margin-bottom:14px;">
+<label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> საკომუნიკაციო ენა</label>
+  <select id="resCommLang" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;background:#fff;color:#333;font-family:'Noto Sans Georgian',sans-serif;">
+    <option value="">აირჩიეთ ენა</option>
+  </select>
+</div>
+
   <!-- comment -->
 <div id="resCommentWrap" style="margin-bottom:14px;display:none;">
   <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;">კომენტარი</label>
@@ -2882,7 +2907,7 @@ async function exportToExcel() {
   </div>
 
   <!-- footer buttons -->
-  <div id="resFooter" style="display:none;padding:10px 18px;background:#fff;border-top:.5px solid #e0e0e0;justify-content:flex-end;gap:8px;align-items:center;">
+  <div id="resFooter" style="display:none;position:sticky;bottom:0;z-index:2;padding:10px 18px;background:#fff;border-top:.5px solid #e0e0e0;justify-content:flex-end;gap:8px;align-items:center;">
     <span onclick="closeReservationPopup()" style="cursor:pointer;font-size:12px;padding:5px 14px;border-radius:6px;border:1px solid #f0997b;color:#f1361b;line-height:22px;">გაუქმება</span>
     <span id="sendButton" style="cursor:pointer;font-size:12px;padding:5px 14px;border-radius:6px;background:#7db84a;color:#fff;font-weight:500;line-height:22px;border:none;">გაგზავნა</span>
   </div>
@@ -2893,6 +2918,30 @@ async function exportToExcel() {
 
 <script>
 // ── Reservation popup helpers ──
+
+// საკომუნიკაციო ენის სია (კონტაქტის ველი UF_CRM_1795509844)
+(function fillCommLangOptions() {
+    const sel = document.getElementById("resCommLang");
+    (commLangOptions || []).forEach(o => {
+        const opt = document.createElement("option");
+        opt.value = o.ID;
+        opt.textContent = o.VALUE;
+        sel.appendChild(opt);
+    });
+})();
+
+function setCommLangValue(val) {
+    if (Array.isArray(val)) val = val[0];          // მრავალჯერადი ველის შემთხვევაში
+    val = String(val ?? "").trim();
+    if (!val) return;
+    const sel = document.getElementById("resCommLang");
+    // ID-ით ან ტექსტით (თუ API მნიშვნელობას აბრუნებს)
+    const byId   = [...sel.options].find(o => o.value === val);
+    const byText = [...sel.options].find(o => o.textContent.trim() === val);
+    if (byId)        sel.value = byId.value;
+    else if (byText) sel.value = byText.value;
+}
+
 function showReservationPopup() {
     document.getElementById("resUserSelect").value = "";
     document.getElementById("resDateWrap").style.display    = "none";
@@ -2908,6 +2957,7 @@ function showReservationPopup() {
     document.getElementById("resIdNumber").value  = "";
     document.getElementById("resPassportNumber").value = "";
     document.getElementById("resPhone").value     = "";
+    document.getElementById("resCommLang").value  = "";
     document.getElementById("resPersonWrap").style.display = "none";
     showResIdCheck(null);
 
@@ -2957,6 +3007,7 @@ function showReservationPopup() {
                 if (c.UF_CRM_1781244744534)   document.getElementById("resIdNumber").value  = c.UF_CRM_1781244744534;
                 if (c.UF_CRM_1790776088)      document.getElementById("resPassportNumber").value = c.UF_CRM_1790776088;
                 if (c.PHONE)                  document.getElementById("resPhone").value     = c.PHONE;
+                if (c.UF_CRM_1795509844)      setCommLangValue(c.UF_CRM_1795509844);
                 // store contact ID for later update
                 document.getElementById("reservationOverlay").dataset.contactId = c.ID;
                 runResIdCheck();
@@ -3090,10 +3141,11 @@ var date   = choice === "42"
     var idNumber  = document.getElementById("resIdNumber").value.trim();
     var passportNumber = document.getElementById("resPassportNumber").value.trim();
     var phone     = document.getElementById("resPhone").value.trim();
+    var commLang  = document.getElementById("resCommLang").value;
     var passportFileId = document.getElementById("resPassportInputText").value;
     var contactId = document.getElementById("reservationOverlay").dataset.contactId || "";
 
-    if (!type || !date || !firstName || !lastName || !phone) {
+    if (!type || !date || !firstName || !lastName || !phone || !commLang) {
         showResMsg("warn");
         return;
     }
@@ -3116,6 +3168,7 @@ var date   = choice === "42"
     formData.append("idNumber",    idNumber);
     formData.append("passportNumber", passportNumber);
     formData.append("phone",       phone);
+    formData.append("commLanguage", commLang);   // enum ID → კონტაქტის UF_CRM_1795509844
     formData.append("contact_id",  contactId);
 
     var btn = document.getElementById("sendButton");
