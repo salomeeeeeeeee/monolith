@@ -11,7 +11,9 @@ define('DisableEventsCheck', true);
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_before.php');
 require_once __DIR__ . '/config.php';
 
+use Bitrix\Crm\DealTable;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\HttpClient;
 
@@ -36,6 +38,8 @@ const AGENTS_MODULE_READ_IBLOCKS  = [23, 24, 25];
 const AGENTS_MODULE_WRITE_IBLOCKS = [24];
 // პროექტების სია ყველა მომხმარებლისთვის საერთოა და b_option-ში ინახება (ადრე თითო ბრაუზრის localStorage-ში იყო)
 const AGENTS_MODULE_PROJECTS_OPTION = 'agents_module_projects';
+// დილის ველი რეპორტის კომენტარისთვის
+const AGENTS_MODULE_COMMENT_FIELD = 'UF_CRM_AGT_COMMENT';
 
 function agentsModuleRespond(array $payload, $httpCode = 200)
 {
@@ -137,6 +141,29 @@ if ($method === 'agents.users.names') {
         }
     }
     agentsModuleRespond(['result' => $names]);
+}
+
+// რეპორტის კომენტარი: {dealId, comment}. მხოლოდ ამ ველში იწერება, დილის განახლების გარეშე,
+// რომ კომენტარმა დილის ბიზნეს-პროცესები და ეტაპის შემოწმებები არ გაუშვას
+if ($method === 'agents.comment.save') {
+    $dealId = (int)($params['dealId'] ?? 0);
+    $comment = is_scalar($params['comment'] ?? null) ? trim((string)$params['comment']) : '';
+    if (!Loader::includeModule('crm')) {
+        agentsModuleError('CRM_NOT_AVAILABLE', 'CRM მოდული მიუწვდომელია', 500);
+    }
+    if ($dealId <= 0 || !DealTable::getList(['select' => ['ID'], 'filter' => ['=ID' => $dealId]])->fetch()) {
+        agentsModuleError('DEAL_NOT_FOUND', 'დილი ვერ მოიძებნა', 404);
+    }
+    global $USER_FIELD_MANAGER;
+    $USER_FIELD_MANAGER->Update('CRM_DEAL', $dealId, [AGENTS_MODULE_COMMENT_FIELD => $comment]);
+    $saved = DealTable::getList([
+        'select' => [AGENTS_MODULE_COMMENT_FIELD],
+        'filter' => ['=ID' => $dealId],
+    ])->fetch();
+    if ((string)($saved[AGENTS_MODULE_COMMENT_FIELD] ?? '') !== $comment) {
+        agentsModuleError('NOT_SAVED', 'კომენტარი არ შეინახა', 500);
+    }
+    agentsModuleRespond(['result' => ['dealId' => (string)$dealId, 'comment' => $comment]]);
 }
 
 if (!in_array($method, AGENTS_MODULE_METHODS, true)) {

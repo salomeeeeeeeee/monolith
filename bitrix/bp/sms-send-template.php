@@ -5,15 +5,19 @@
  * CBPWorkflowTemplateLoader::Add($fields, true) გამოიძახება (systemImport - PHP კოდის აქტივობის გამო).
  *
  * დილზე ხელით გაშვება: პარამეტრები ნომერი + ტექსტი
- *   1) PHP კოდი: monolithSendSms() (local/php_interface/inex_sms.php, Inex, გამგზავნი MONOLITH)
+ *   1) PHP კოდი: monolithSmsSendLogged() (local/php_interface/sms_log.php, Inex, გამგზავნი MONOLITH; ლოგი - სია "SMS ისტორია")
  *   2) timeline კომენტარი გამშვების სახელით: გაიგზავნა / ვერ გაიგზავნა + მიზეზი, ნომერი, ტექსტი
  */
 
 $code = <<<'PHP'
-require_once \Bitrix\Main\Application::getDocumentRoot() . '/local/php_interface/inex_sms.php';
+require_once \Bitrix\Main\Application::getDocumentRoot() . '/local/php_interface/sms_log.php';
 $root = $this->GetRootActivity();
 $phone = (string)$root->nomeri;
-$sms = monolithSendSms($phone, (string)$root->teksti);
+$documentId = $this->GetDocumentId();
+$sms = monolithSmsSendLogged($phone, (string)$root->teksti, [
+    'dealId' => (int)preg_replace('/\D+/', '', (string)($documentId[2] ?? '')),
+    'type'   => 'ხელით გაგზავნილი',
+]);
 $root->SetVariable('smsNomeri', $sms['phone'] !== '' ? $sms['phone'] : $phone);
 $root->SetVariable('smsShedegi', $sms['ok'] ? 'გაიგზავნა' : 'ვერ გაიგზავნა - ' . $sms['error']);
 $this->WriteToTrackingService('Inex: ' . ($sms['ok'] ? 'OK ' . $sms['id'] : $sms['error']));

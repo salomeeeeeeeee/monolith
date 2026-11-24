@@ -6,7 +6,8 @@
  * (git-ში არ ინახება, რეპო საჯაროა; ნიმუში - inex_sms_secret.example.php).
  * სერვერზე curl არ არის, ამიტომ HttpClient.
  *
- * იყენებს: BP "SMS-ის გაგზავნა" (დილზე ხელით გაშვება: ნომერი + ტექსტი), იხ. bitrix/bp/sms-send-template.php
+ * აქ მხოლოდ Inex-თან კავშირია. პორტალის კოდი SMS-ს sms_log.php-ის monolithSmsSendLogged()-ით აგზავნის
+ * (სია "SMS ისტორია", დილზე მიბმული; იწერება Inex-ის ორივე პასუხი - გაგზავნა და მიწოდება).
  */
 
 use Bitrix\Main\Web\HttpClient;
@@ -30,11 +31,22 @@ if (!function_exists('monolithSmsPhone')) {
     }
 }
 
-if (!function_exists('monolithSendSms')) {
-    // ბრუნდება: ok, phone (995...), httpCode, id (Inex-ის ID), error
-    function monolithSendSms($phone, $text)
+if (!function_exists('monolithSmsSecret')) {
+    /** ['token' => ..., 'subject' => ...] ან null, თუ სერვერზე inex_sms_secret.php არ არის */
+    function monolithSmsSecret()
     {
-        $result = ['ok' => false, 'phone' => monolithSmsPhone($phone), 'httpCode' => 0, 'id' => '', 'error' => null];
+        $secretFile = __DIR__ . '/inex_sms_secret.php';
+        $secret = is_file($secretFile) ? require $secretFile : null;
+        return is_array($secret) && !empty($secret['token']) ? $secret : null;
+    }
+}
+
+if (!function_exists('monolithSendSms')) {
+    // $callbackUrl - მისამართი, რომელსაც Inex მიწოდებისას იძახებს
+    // ბრუნდება: ok, phone (995...), httpCode, id (Inex-ის ID), error, response (Inex-ის პასუხი ტექსტად)
+    function monolithSendSms($phone, $text, $callbackUrl = '')
+    {
+        $result = ['ok' => false, 'phone' => monolithSmsPhone($phone), 'httpCode' => 0, 'id' => '', 'error' => null, 'response' => ''];
         $text = trim((string)$text);
 
         if ($result['phone'] === '') {
@@ -46,9 +58,8 @@ if (!function_exists('monolithSendSms')) {
             return $result;
         }
 
-        $secretFile = __DIR__ . '/inex_sms_secret.php';
-        $secret = is_file($secretFile) ? require $secretFile : null;
-        if (!is_array($secret) || empty($secret['token'])) {
+        $secret = monolithSmsSecret();
+        if (!$secret) {
             $result['error'] = 'Inex-ის ტოკენი სერვერზე არ არის (inex_sms_secret.php)';
             return $result;
         }
@@ -57,14 +68,19 @@ if (!function_exists('monolithSendSms')) {
         $http->setHeader('Accept', 'application/json');
         $http->setHeader('Authorization', 'Bearer ' . $secret['token']);
         $http->setHeader('Content-Type', 'application/json');
-        $response = $http->post('https://smsservice.inexphone.ge/api/v1/sms/one', json_encode([
+        $payload = [
             'phone'            => $result['phone'],
             'subject'          => !empty($secret['subject']) ? $secret['subject'] : 'MONOLITH',
             'message'          => $text,
             'ignore_blacklist' => true,
-        ], JSON_UNESCAPED_UNICODE));
+        ];
+        if ($callbackUrl !== '') {
+            $payload['delivery_callback_url'] = $callbackUrl;
+        }
+        $response = $http->post('https://smsservice.inexphone.ge/api/v1/sms/one', json_encode($payload, JSON_UNESCAPED_UNICODE));
 
         $result['httpCode'] = (int)$http->getStatus();
+        $result['response'] = is_string($response) ? $response : '';
         $body = is_string($response) ? json_decode($response, true) : null;
         $result['id'] = (string)($body['data']['id'] ?? '');
 
@@ -74,6 +90,37 @@ if (!function_exists('monolithSendSms')) {
             $result['error'] = 'HTTP ' . $result['httpCode'] . ': ' . mb_substr((string)$response, 0, 300);
         } else {
             $result['ok'] = true;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('monolithSmsStatus')) {
+    // SMS-ის სტატუსი Inex-ში: ok, httpCode, deliveryStatus (რიცხვი ან null), response (ტექსტად), error
+    function monolithSmsStatus($inexId)
+    {
+        $result = ['ok' => false, 'httpCode' => 0, 'deliveryStatus' => null, 'response' => '', 'error' => null];
+        $inexId = trim((string)$inexId);
+        $secret = monolithSmsSecret();
+        if ($inexId === '' || !$secret) {
+            $result['error'] = $inexId === '' ? 'Inex-ის ID ცარიელია' : 'Inex-ის ტოკენი სერვერზე არ არის (inex_sms_secret.php)';
+            return $result;
+        }
+
+        $http = new HttpClient(['socketTimeout' => 10, 'streamTimeout' => 20]);
+        $http->setHeader('Accept', 'application/json');
+        $http->setHeader('Authorization', 'Bearer ' . $secret['token']);
+        $response = $http->get('https://smsservice.inexphone.ge/api/v1/sms/' . rawurlencode($inexId));
+
+        $result['httpCode'] = (int)$http->getStatus();
+        $result['response'] = is_string($response) ? $response : '';
+        $body = is_string($response) ? json_decode($response, true) : null;
+        if (isset($body['data']['attributes']['deliveryStatus'])) {
+            $result['deliveryStatus'] = (int)$body['data']['attributes']['deliveryStatus'];
+        }
+        $result['ok'] = $result['httpCode'] >= 200 && $result['httpCode'] < 300;
+        if (!$result['ok']) {
+            $result['error'] = $result['httpCode'] ? 'HTTP ' . $result['httpCode'] : 'Inex-თან დაკავშირება ვერ მოხერხდა';
         }
         return $result;
     }

@@ -26,3 +26,6 @@ require_once __DIR__ . '/reservation_extension.php';
 
 // ზარის ჩანაწერები: ჯგუფ 26-ის თანამშრომელი მხოლოდ საკუთარ ზარს უსმენს (crm_show_file.php)
 require_once __DIR__ . '/call_record_access.php';
+
+// ავტომატური SMS-ები კლიენტებს (New Depo): ჯავშანი, გადახდები, ვადაგადაცილება (agent)
+require_once __DIR__ . '/sms_notifications.php';

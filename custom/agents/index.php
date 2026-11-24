@@ -653,13 +653,48 @@ if (!agentsModuleCanAccess()) {
     .report-table .col-r-paidc { width: 5.5%; white-space: nowrap; }
     .report-table .col-r-diff { width: 5%; white-space: nowrap; }
     .report-table .col-r-comment {
-      min-width: 12rem;
+      min-width: 16rem;
       width: auto;
       font-size: 0.78rem;
       color: var(--text);
       padding: 6px 10px;
       vertical-align: top;
     }
+    .report-comment-text { white-space: pre-line; }
+    .report-comment-text + .report-comment-text { margin-top: 4px; }
+    .report-comment-btn {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: #214767;
+      font: inherit;
+      font-size: 0.72rem;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .report-comment-btn:hover { color: #2f574e; }
+    .report-comment-text + .report-comment-btn { display: block; margin-top: 4px; }
+    .report-comment-input {
+      display: block;
+      width: 100%;
+      min-height: 3.6rem;
+      padding: 5px 7px;
+      border: 1px solid #a8bbc8;
+      border-radius: 6px;
+      background: #fffdfe;
+      color: var(--text);
+      font: inherit;
+      font-size: 0.78rem;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .report-comment-text + .report-comment-input { margin-top: 5px; }
+    .report-comment-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 5px;
+    }
+    .report-comment-actions .btn-sm { padding: 3px 9px; font-size: 0.72rem; }
     .report-table thead th.col-r-comment {
       font-size: 0.7rem;
       color: #fffdfe;
@@ -2167,6 +2202,7 @@ if (!agentsModuleCanAccess()) {
         clientName: '', // ცარიელი = დილზე მიბმული Contact / Company სახელი
         // გადახდილი/დახურული — საერთო ყველა იუზერისთვის (ავტომატურად იქმნება თუ ცარიელია)
         commissionSettled: '',
+        comment: 'UF_CRM_AGT_COMMENT', // რეპორტის კომენტარი (იწერება api.php-ით: agents.comment.save)
       },
       select: [
         'ID', 'OPPORTUNITY', 'CONTACT_ID', 'COMPANY_ID', 'STAGE_ID', 'SOURCE_ID', 'COMMENTS', 'ASSIGNED_BY_ID',
@@ -2176,6 +2212,7 @@ if (!agentsModuleCanAccess()) {
         'UF_CRM_1779278774084',
         'UF_CRM_1785491867',
         'UF_CRM_1790340288',
+        'UF_CRM_AGT_COMMENT',
       ],
     };
 
@@ -3666,7 +3703,8 @@ if (!agentsModuleCanAccess()) {
         paidCommission: amounts.paidCommission,
         difference,
         commissionSettled,
-        commissionComment: agentPayment.comment || '',
+        paymentComment: agentPayment.comment || '',
+        dealComment: String(unwrapCrmValue(deal[F.comment]) || '').trim(),
         agentBitrixId: String(unwrapCrmValue(deal[F.agentLink]) || ''),
       };
     }
@@ -4175,6 +4213,7 @@ if (!agentsModuleCanAccess()) {
 
     function getReportSortValue(d, key) {
       if (key === 'creditPct') return getDealCreditPct(d);
+      if (key === 'commissionComment') return getReportComment(d);
       return d[key];
     }
 
@@ -4310,10 +4349,91 @@ if (!agentsModuleCanAccess()) {
             <div class="detail-item"><span class="lbl">გადახ. საკ. $</span><span class="val">${formatMoney(d.paidCommission)}</span></div>
             <div class="detail-item"><span class="lbl">სხვაობა $</span><span class="val">${formatMoney(d.difference)}</span></div>
             <div class="detail-item"><span class="lbl">გადახდილი / დახურული</span><span class="val">${d.commissionSettled ? 'დიახ' : 'არა'}</span></div>
-            <div class="detail-item full"><span class="lbl">კომენტარი</span><span class="val">${d.commissionComment ? esc(d.commissionComment) : '—'}</span></div>
+            <div class="detail-item full"><span class="lbl">კომენტარი</span><span class="val report-comment-text">${esc(getReportComment(d) || '-')}</span></div>
           </div>
         </div>
       `;
+    }
+
+    // ჯერ შეუნახავი კომენტარები (dealId -> {text, saving}): ცხრილის თავიდან დახატვისას ტექსტი არ იკარგება
+    const reportCommentDrafts = new Map();
+
+    /** საკომისიოს გადახდის კომენტარი (სია 25) + რეპორტში დაწერილი კომენტარი. */
+    function getReportComment(d) {
+      return [d.paymentComment, d.dealComment].filter(Boolean).join('\n');
+    }
+
+    function renderReportCommentCell(d) {
+      const id = esc(d.leadId);
+      const payment = d.paymentComment
+        ? `<div class="report-comment-text">${esc(d.paymentComment)}</div>`
+        : '';
+      const draft = reportCommentDrafts.get(String(d.leadId));
+      if (draft) {
+        const disabled = draft.saving ? 'disabled' : '';
+        return `${payment}<textarea class="report-comment-input" rows="3" data-comment-input="${id}" placeholder="კომენტარი" ${disabled}>${esc(draft.text)}</textarea>
+          <div class="report-comment-actions">
+            <button type="button" class="btn btn-primary btn-sm" data-comment-save="${id}" ${disabled}>${draft.saving ? 'ინახება...' : 'შენახვა'}</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-comment-cancel="${id}" ${disabled}>გაუქმება</button>
+          </div>`;
+      }
+      const own = d.dealComment ? `<div class="report-comment-text">${esc(d.dealComment)}</div>` : '';
+      return `${payment}${own}<button type="button" class="report-comment-btn" data-comment-edit="${id}">${d.dealComment ? 'შეცვლა' : '+ კომენტარი'}</button>`;
+    }
+
+    function refreshReportCommentCell(dealId) {
+      const cell = document.querySelector(`#report-table [data-comment-cell="${dealId}"]`);
+      const deal = getReportDealById(dealId);
+      if (cell && deal) cell.innerHTML = renderReportCommentCell(deal);
+      return cell;
+    }
+
+    function openReportComment(dealId) {
+      const deal = getReportDealById(dealId);
+      if (!deal) return;
+      reportCommentDrafts.set(String(dealId), { text: deal.dealComment || '', saving: false });
+      const input = refreshReportCommentCell(dealId)?.querySelector('textarea');
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+
+    function cancelReportComment(dealId) {
+      reportCommentDrafts.delete(String(dealId));
+      refreshReportCommentCell(dealId);
+    }
+
+    async function saveReportComment(dealId) {
+      const draft = reportCommentDrafts.get(String(dealId));
+      if (!draft || draft.saving) return;
+      draft.saving = true;
+      refreshReportCommentCell(dealId);
+      try {
+        const saved = await bitrixCall('agents.comment.save', { dealId, comment: draft.text });
+        const deal = getReportDealById(dealId);
+        if (deal) deal.dealComment = saved.comment;
+        reportCommentDrafts.delete(String(dealId));
+        toast('კომენტარი შენახულია');
+      } catch (error) {
+        draft.saving = false;
+        toast(`კომენტარი ვერ შეინახა: ${error.message}`, 'error');
+      }
+      refreshReportCommentCell(dealId);
+    }
+
+    function initReportComments() {
+      const tbody = $('report-table');
+      tbody.addEventListener('click', e => {
+        const btn = e.target.closest('[data-comment-edit], [data-comment-save], [data-comment-cancel]');
+        if (!btn) return;
+        if (btn.dataset.commentEdit) openReportComment(btn.dataset.commentEdit);
+        else if (btn.dataset.commentSave) saveReportComment(btn.dataset.commentSave);
+        else cancelReportComment(btn.dataset.commentCancel);
+      });
+      tbody.addEventListener('input', e => {
+        const draft = reportCommentDrafts.get(e.target.dataset.commentInput || '');
+        if (draft) draft.text = e.target.value;
+      });
     }
 
     function renderReportTable() {
@@ -4363,7 +4483,7 @@ if (!agentsModuleCanAccess()) {
               <span>დახურული</span>
             </label>
           </td>
-          <td class="col-r-comment">${d.commissionComment ? esc(d.commissionComment) : '—'}</td>
+          <td class="col-r-comment" data-comment-cell="${esc(d.leadId)}">${renderReportCommentCell(d)}</td>
         </tr>
       `;
       }).join('');
@@ -4456,7 +4576,7 @@ ${dataRows}
       const rows = sortReportRows(getReportFiltered()).map((d, index) => [
         index + 1, d.leadId, d.client, d.responsible || '', formatDate(d.signedDate), d.project, d.propertyType, d.propertyNo,
         d.propertyValue, d.propertyValueNoVat, d.paidUsd, d.paidPct, d.agency, d.formAgency || '', formatCommissionLabel(d, d.commissionType), getDealCreditPct(d),
-        d.payable, d.paidCommission, d.difference, d.commissionSettled ? 'დიახ' : 'არა', d.commissionComment || '',
+        d.payable, d.paidCommission, d.difference, d.commissionSettled ? 'დიახ' : 'არა', getReportComment(d).replace(/\s*\n\s*/g, ' '),
       ]);
       downloadExcel(`agents-report-${new Date().toISOString().slice(0, 10)}.xls`, headers, rows, [8, 9, 10, 11, 15, 16, 17, 18]);
       toast('Excel ფაილი ჩამოიტვირთა');
@@ -5681,6 +5801,7 @@ ${dataRows}
     $('report-reload').addEventListener('click', () => reloadReportDeals());
     $('report-export').addEventListener('click', exportReportExcel);
     initReportRowHighlight();
+    initReportComments();
     initReportSort();
     initReportClientSuggest();
     $('report-table').addEventListener('change', async e => {
