@@ -346,6 +346,10 @@ $regNumber2  = trim((string)($deal2[$regNumberField2] ?? ""));
         if (isWon) {
             div.dataset.rendered = "1";
             div.insertAdjacentHTML("beforeend", financialBtnHtml);
+            // დოკუმენტები — WON ეტაპზეც
+            div.insertAdjacentHTML("beforeend",
+                '<div onclick="openDocsGenerationPopup();" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;margin-left:8px;background:linear-gradient(135deg,#e67700,#f08c00);color:#fff;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(230,119,0,.35);letter-spacing:.3px;transition:all .2s;font-family:\'Noto Sans Georgian\',sans-serif;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 18px rgba(230,119,0,.45)\';" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 2px 8px rgba(230,119,0,.35)\';"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="#fff" stroke-width="1.4"/><line x1="4.5" y1="5" x2="11.5" y2="5" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/><line x1="4.5" y1="7.5" x2="11.5" y2="7.5" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/><line x1="4.5" y1="10" x2="8.5" y2="10" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/></svg>დოკუმენტები</div>'
+            );
         }
     }
 
