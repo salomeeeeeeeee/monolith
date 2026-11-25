@@ -20,7 +20,7 @@
  *
  * რეჟიმი და პარამეტრები ბაზაშია (COption, მოდული monolith.sms):
  *   mode         off / test / live. test - ყველაფერი test_phone-ზე მიდის, კლიენტთან არაფერი. ცარიელი = off
- *   test_phone   სატესტო ნომერი
+ *   test_phone   სატესტო ნომერი ან რამდენიმე, მძიმით: ყველა SMS ყველა ამ ნომერზე მიდის (თითო ნომერი - ცალკე ჩანაწერი ლოგში)
  *   bank_tbc / bank_bog - ანგარიშები ტექსტში;  last_history_id, last_payment_id, daily_date - სად შეჩერდა
  */
 
@@ -618,13 +618,26 @@ function monolithSmsCollectDaily($now)
 
 // ── გაგზავნა ────────────────────────────────────────────────────────────
 
+/** სატესტო ნომრები: test_phone, მძიმით გამოყოფილი */
+function monolithSmsTestPhones()
+{
+    $phones = [];
+    foreach (explode(',', monolithSmsOption('test_phone')) as $value) {
+        $phone = monolithSmsPhone($value);
+        if ($phone !== '' && !in_array($phone, $phones, true)) {
+            $phones[] = $phone;
+        }
+    }
+    return $phones;
+}
+
 function monolithSmsSendQueue($now, $mode)
 {
     $hour = (int)date('G', $now);
     if ($hour < MONOLITH_SMS_HOUR_FROM || $hour >= MONOLITH_SMS_HOUR_TO || (int)monolithSmsOption('pause_until', '0') > $now) {
         return;
     }
-    $testPhone = monolithSmsPhone(monolithSmsOption('test_phone'));
+    $testPhones = monolithSmsTestPhones();
     $failures = 0;
 
     foreach (monolithSmsLogList(['=PROPERTY_STATUS' => MONOLITH_SMS_ST_QUEUED], MONOLITH_SMS_BATCH) as $log) {
@@ -634,19 +647,32 @@ function monolithSmsSendQueue($now, $mode)
         }
 
         if ($mode === 'live') {
-            $phone = $log['CLIENT_PHONE'];
+            $phones = [$log['CLIENT_PHONE']];
             $label = 'კლიენტი';
         } else {
-            $phone = $testPhone;
+            $phones = $testPhones;
             $label = 'ტესტი';
-            if ($phone === '') {
+            if (!$phones) {
                 monolithSmsLogUpdate($log['ID'], ['STATUS' => MONOLITH_SMS_ST_SKIPPED, 'SMS_MODE' => $label, 'NOTE' => 'სატესტო ნომერი არ არის']);
                 continue;
             }
         }
 
-        $sms = monolithSmsLogSend($log['ID'], $phone, $log['SMS_TEXT'], $label);
-        $failures = !$sms['ok'] && $sms['httpCode'] === 0 ? $failures + 1 : 0;
+        foreach ($phones as $i => $phone) {
+            // მეორე და შემდეგ ნომერს თავისი ჩანაწერი აქვს: Inex-ის პასუხები ცალკეა
+            $logId = $i === 0 ? $log['ID'] : monolithSmsLogAdd([
+                'dealId'      => (int)preg_replace('/\D/', '', $log['DEAL']),
+                'type'        => $log['SMS_TYPE'],
+                'lang'        => $log['SMS_LANG'],
+                'clientPhone' => $log['CLIENT_PHONE'],
+                'phone'       => $phone,
+                'text'        => $log['SMS_TEXT'],
+                'mode'        => $label,
+                'status'      => MONOLITH_SMS_ST_SENDING,
+            ]);
+            $sms = monolithSmsLogSend($logId, $phone, $log['SMS_TEXT'], $label);
+            $failures = !$sms['ok'] && $sms['httpCode'] === 0 ? $failures + 1 : 0;
+        }
         if ($failures >= 3) {
             // Inex არ პასუხობს - ნახევარი საათით ვჩერდებით, რიგი ადგილზე რჩება
             monolithSmsSetOption('pause_until', $now + 1800);
