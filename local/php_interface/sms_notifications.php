@@ -20,7 +20,8 @@
  *
  * რეჟიმი და პარამეტრები ბაზაშია (COption, მოდული monolith.sms):
  *   mode         off / test / live. test - ყველაფერი test_phone-ზე მიდის, კლიენტთან არაფერი. ცარიელი = off
- *   test_phone   სატესტო ნომერი ან რამდენიმე, მძიმით: ყველა SMS ყველა ამ ნომერზე მიდის (თითო ნომერი - ცალკე ჩანაწერი ლოგში)
+ *   test_phone       სატესტო ნომერი ან რამდენიმე, მძიმით: SMS ყველა ამ ნომერზე მიდის (თითო ნომერი - ცალკე ჩანაწერი ლოგში)
+ *   test_phone_debt  იგივე, მხოლოდ ფინანსური SMS-ებისთვის (პირველი გადახდა, გადახდის შეხსენება, ვადაგადაცილება); ცარიელი = test_phone
  *   bank_tbc / bank_bog - ანგარიშები ტექსტში;  last_history_id, last_payment_id, daily_date - სად შეჩერდა
  */
 
@@ -37,6 +38,8 @@ const MONOLITH_SMS_WEEKLY_DAYS  = [7, 14, 21, 28];
 const MONOLITH_SMS_PAY_DAYS     = 7;        // ყოველკვირეულ SMS-ში "დაფაროთ XX/XX/XXXX" = გაგზავნიდან ამდენი დღე
 const MONOLITH_SMS_PAID_STAGES  = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON'];   // პირველი გადახდა
 const MONOLITH_SMS_DEBT_STAGES  = ['UC_NJ7A78', 'WON'];                              // გადახდის შეხსენება და ვალი
+
+const MONOLITH_SMS_FINANCE_TYPES = ['first_payment', 'reminder', 'overdue', 'overdue_weekly'];   // ტესტში ცალკე ნომრებზე მიდის (test_phone_debt)
 
 const MONOLITH_SMS_SCHEDULE_IBLOCK = 22;
 const MONOLITH_SMS_PAYMENT_IBLOCK  = 23;
@@ -618,11 +621,13 @@ function monolithSmsCollectDaily($now)
 
 // ── გაგზავნა ────────────────────────────────────────────────────────────
 
-/** სატესტო ნომრები: test_phone, მძიმით გამოყოფილი */
-function monolithSmsTestPhones()
+/** სატესტო ნომრები ამ ტიპის SMS-ზე ($typeLabel - დასახელება ლოგში) */
+function monolithSmsTestPhones($typeLabel)
 {
+    $type = array_search($typeLabel, monolithSmsTypes(), true);
+    $list = in_array($type, MONOLITH_SMS_FINANCE_TYPES, true) ? monolithSmsOption('test_phone_debt') : '';
     $phones = [];
-    foreach (explode(',', monolithSmsOption('test_phone')) as $value) {
+    foreach (explode(',', $list !== '' ? $list : monolithSmsOption('test_phone')) as $value) {
         $phone = monolithSmsPhone($value);
         if ($phone !== '' && !in_array($phone, $phones, true)) {
             $phones[] = $phone;
@@ -637,7 +642,6 @@ function monolithSmsSendQueue($now, $mode)
     if ($hour < MONOLITH_SMS_HOUR_FROM || $hour >= MONOLITH_SMS_HOUR_TO || (int)monolithSmsOption('pause_until', '0') > $now) {
         return;
     }
-    $testPhones = monolithSmsTestPhones();
     $failures = 0;
 
     foreach (monolithSmsLogList(['=PROPERTY_STATUS' => MONOLITH_SMS_ST_QUEUED], MONOLITH_SMS_BATCH) as $log) {
@@ -650,7 +654,7 @@ function monolithSmsSendQueue($now, $mode)
             $phones = [$log['CLIENT_PHONE']];
             $label = 'კლიენტი';
         } else {
-            $phones = $testPhones;
+            $phones = monolithSmsTestPhones($log['SMS_TYPE']);
             $label = 'ტესტი';
             if (!$phones) {
                 monolithSmsLogUpdate($log['ID'], ['STATUS' => MONOLITH_SMS_ST_SKIPPED, 'SMS_MODE' => $label, 'NOTE' => 'სატესტო ნომერი არ არის']);
