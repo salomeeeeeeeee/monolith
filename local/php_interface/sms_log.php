@@ -132,11 +132,17 @@ function monolithSmsCallbackKey($logId)
 /** არსებული ჩანაწერის გაგზავნა: Inex-ის პასუხი ჩანაწერში იწერება. ბრუნდება monolithSendSms()-ის შედეგი */
 function monolithSmsLogSend($logId, $phone, $text, $modeLabel = '')
 {
+    $sentPhone = monolithSmsPhone($phone) ?: $phone;
     monolithSmsLogUpdate($logId, [
         'STATUS'   => MONOLITH_SMS_ST_SENDING,
-        'PHONE'    => monolithSmsPhone($phone) ?: $phone,
+        'PHONE'    => $sentPhone,
         'SMS_MODE' => $modeLabel,
     ]);
+    // ჩანაწერის სახელში ის ნომერია, სადაც SMS რეალურად წავიდა (სიაში ძებნა სახელით ხდება)
+    $rows = $logId ? monolithSmsLogList(['ID' => (int)$logId], 1) : [];
+    if ($rows) {
+        (new CIBlockElement())->Update((int)$logId, ['NAME' => trim($rows[0]['SMS_TYPE'] . ' - ' . $sentPhone, ' -')]);
+    }
 
     $callback = $logId ? MONOLITH_SMS_CALLBACK_URL . '?id=' . (int)$logId . '&k=' . monolithSmsCallbackKey($logId) : '';
     $sms = monolithSendSms($phone, $text, $callback);
