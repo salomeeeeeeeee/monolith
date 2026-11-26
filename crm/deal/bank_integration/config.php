@@ -88,6 +88,7 @@ function bankBogAccounts()
         ['NEW_DEPOT', 'New Depot', 'GE55BG0000000482087201', 'GEL', 'New Depot'],
         ['NEW_DEPOT', 'New Depot', 'GE82BG0000000482087200', 'GEL', 'New Depot'],
         ['NEW_DEPOT', 'New Depot', 'GE82BG0000000482087200', 'USD', 'New Depot'],
+        ['NEW_DEPOT', 'New Depot', 'GE82BG0000000482087200', 'EUR', 'New Depot'],
     ];
 
     $accounts = [];
