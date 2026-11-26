@@ -13,7 +13,9 @@
  *
  * ვალი = დღემდე დამდგარი გადახდები (სია 22) - გადახდილი (სია 23), სრული თანხა.
  * ენა: 1) კონტაქტის "საკომუნიკაციო ენა (მონოლითი)";  2) ცარიელია - დილის საკომუნიკაციო ენის ველი;
- *      3) ესეც ცარიელია - კლიენტის ნომრით: +995 ქართული, უცხოური ინგლისური. რუსული მხოლოდ მაშინ, თუ ველშია მითითებული.
+ *      3) ესეც ცარიელია - კლიენტის ნომრით: +995 ქართული, უცხოური ინგლისური.
+ *      იგზავნება მხოლოდ MONOLITH_SMS_LANGS-ის ენებზე (ახლა ქართული და ინგლისური); სხვა ენა (რუსული) - ინგლისურად.
+ *      რუსული ტექსტები დარჩა: ჩასართავად MONOLITH_SMS_LANGS-ში 'ru' დაამატეთ.
  *
  * agent "monolithSmsAgent();" (ყოველ 5 წუთში, cron): მოვლენებს პოულობს და სია "SMS ისტორიაში" (sms_log.php) რიგში სვამს,
  * რიგს კი სამუშაო საათებში აგზავნის. დღიური SMS-ები (ვადები, გადახდები) დღეში ერთხელ გროვდება.
@@ -40,6 +42,8 @@ const MONOLITH_SMS_PAID_STAGES  = ['EXECUTING', 'UC_NSTB3H', 'UC_NJ7A78', 'WON']
 const MONOLITH_SMS_DEBT_STAGES  = ['UC_NJ7A78', 'WON'];                              // გადახდის შეხსენება და ვალი
 
 const MONOLITH_SMS_FINANCE_TYPES = ['first_payment', 'reminder', 'overdue', 'overdue_weekly'];   // ტესტში ცალკე ნომრებზე მიდის (test_phone_debt)
+const MONOLITH_SMS_LANGS        = ['ge', 'en'];   // გასაგზავნი ენები; რუსული 2026-11-26-დან გამორთულია (ჩასართავად - 'ru')
+const MONOLITH_SMS_LANG_DEFAULT = 'en';           // სხვა ენის ნაცვლად
 
 const MONOLITH_SMS_SCHEDULE_IBLOCK = 22;
 const MONOLITH_SMS_PAYMENT_IBLOCK  = 23;
@@ -452,6 +456,7 @@ function monolithSmsQueue($type, array $deal, $eventKey, array $extra = [])
 
     $phone = monolithSmsClientPhone($deal['CONTACT_ID']);
     $lang = $deal['LANG'] !== '' ? $deal['LANG'] : monolithSmsLangByPhone($phone);
+    $lang = in_array($lang, MONOLITH_SMS_LANGS, true) ? $lang : MONOLITH_SMS_LANG_DEFAULT;
     $text = monolithSmsText($type, $lang, monolithSmsVars($deal, $lang, $extra));
 
     $status = MONOLITH_SMS_ST_QUEUED;
