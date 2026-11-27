@@ -42,8 +42,9 @@ function pmCfg() {
             "PRICE_TOTAL" => "__9YCWGZ",
         ),
 
-        // only products that currently have these statuses can be changed // SYNC
-        "VISIBLE_STATUSES" => array("თავისუფალი", "NFS"),
+        // only products that currently have these statuses can be changed
+        // SYNC with VISIBLE_STATUSES in the dashboard page (status-change.php keeps free / NFS only)
+        "VISIBLE_STATUSES" => array("თავისუფალი", "NFS", "დაჯავშნილი"),
 
         // change types and the price they work on: key => label for the log // SYNC (keys)
         "CHANGE_TYPES" => array(

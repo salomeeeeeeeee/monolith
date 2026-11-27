@@ -34,8 +34,13 @@ function pmCfg() {
             "NFS_COMMENT" => "NFScomment",
         ),
 
-        // ONLY products with these statuses are loaded (empty array = all) // SYNC
-        "VISIBLE_STATUSES" => array("თავისუფალი", "NFS"),
+        // ONLY products with these statuses are loaded and get price changes (empty array = all)
+        // SYNC with VISIBLE_STATUSES in price-change.php
+        "VISIBLE_STATUSES" => array("თავისუფალი", "NFS", "დაჯავშნილი"),
+
+        // of the loaded ones, only these get status / promotion changes (a reserved product keeps its status)
+        // SYNC with VISIBLE_STATUSES in status-change.php
+        "STATUS_EDIT_STATUSES" => array("თავისუფალი", "NFS"),
 
         // setting this status requires a reason, saved to NFS_COMMENT // SYNC
         "COMMENT_STATUS"     => "NFS",
@@ -142,15 +147,22 @@ function pv($p, $key) {
     return scalarPropertyValue(isset($p[$code]) ? $p[$code] : "");
 }
 
-/** Is the product's status one of VISIBLE_STATUSES (case/space-insensitive) */
-function isVisibleStatus($p) {
-    $allowed = pmCfg()["VISIBLE_STATUSES"];
+/** Is the product's status one of $allowed (case/space-insensitive); empty list = any status */
+function hasStatusIn($p, $allowed) {
     if (empty($allowed)) return true;
     $st = mb_strtolower(pv($p, "STATUS"));
     foreach ($allowed as $a) {
         if ($st === mb_strtolower(trim($a))) return true;
     }
     return false;
+}
+
+function isVisibleStatus($p) {
+    return hasStatusIn($p, pmCfg()["VISIBLE_STATUSES"]);
+}
+
+function isStatusEditable($p) {
+    return hasStatusIn($p, pmCfg()["STATUS_EDIT_STATUSES"]);
 }
 
 function isPromoYes($p) {
@@ -564,7 +576,7 @@ $filterInfo = implode(" | ", $filterInfoParts);
             <label for="status-comment"><?= htmlspecialchars($CFG["COMMENT_STATUS"]) ?> კომენტარი <span class="required-star">*</span></label>
             <textarea id="status-comment" rows="3" maxlength="<?= (int)$CFG["COMMENT_MAX_LENGTH"] ?>" placeholder="რა მიზეზით / რის გამო ეცვლება სტატუსი <?= htmlspecialchars($CFG["COMMENT_STATUS"]) ?>-ზე"></textarea>
         </div>
-        <p style="margin: 12px 0 0; font-size: 12px; color: #555;">აირჩიეთ მინიმუმ ერთი ველი (სტატუსი ან აქცია); დანარჩენი უცვლელი დარჩება. <?= htmlspecialchars($CFG["COMMENT_STATUS"]) ?>-ზე გადაყვანისას კომენტარი სავალდებულოა.</p>
+        <p style="margin: 12px 0 0; font-size: 12px; color: #555;">აირჩიეთ მინიმუმ ერთი ველი (სტატუსი ან აქცია); დანარჩენი უცვლელი დარჩება. <?= htmlspecialchars($CFG["COMMENT_STATUS"]) ?>-ზე გადაყვანისას კომენტარი სავალდებულოა. დაჯავშნილ პროდუქტებს სტატუსი და აქცია არ ეცვლებათ, მხოლოდ ფასი.</p>
         <div class="loading-msg" id="status-loading">⏳ მიმდინარეობს მონაცემების დამუშავება...</div>
         <div class="success-msg" id="status-success">✅ დასრულებულია მონაცემების დამუშავება</div>
         <div class="error-msg"   id="status-error">❌ შეცდომა მონაცემების დამუშავებისას</div>
@@ -600,6 +612,8 @@ $filterInfo = implode(" | ", $filterInfoParts);
 
     <script>
     const filteredIds = <?= json_encode(array_column($filtered, "ID")) ?>;
+    // status / promotion go only to these; reserved products of the filter get price changes only
+    const statusIds   = <?= json_encode(array_column(array_values(array_filter($filtered, "isStatusEditable")), "ID")) ?>;
     const API_STATUS  = <?= json_encode($CFG["API_STATUS"]) ?>;
     const API_PRICE   = <?= json_encode($CFG["API_PRICE"]) ?>;
     const filterInfo  = <?= json_encode($filterInfo, JSON_UNESCAPED_UNICODE) ?>;
@@ -760,6 +774,8 @@ $filterInfo = implode(" | ", $filterInfoParts);
             return;
         }
         if (!filteredIds.length) { alert("ფილტრის შედეგი ცარიელია"); return; }
+        if (!statusIds.length) { alert("ფილტრში მხოლოდ დაჯავშნილი პროდუქტებია - მათ სტატუსი და აქცია არ ეცვლებათ"); return; }
+        const skipped = filteredIds.length - statusIds.length;
 
         const needsComment = status === COMMENT_STATUS;
         const comment      = document.getElementById("status-comment").value.trim();
@@ -769,7 +785,7 @@ $filterInfo = implode(" | ", $filterInfoParts);
             return;
         }
 
-        const payload = { ids: filteredIds, filter_info: filterInfo };
+        const payload = { ids: statusIds, filter_info: filterInfo };
         if (hasStatus)    payload.status = status;
         if (hasPromo)     payload.promotion = promotion;
         if (needsComment) payload.status_comment = comment;
@@ -782,7 +798,8 @@ $filterInfo = implode(" | ", $filterInfoParts);
 
             if (res.ok) {
                 document.getElementById("status-success").innerText =
-                    "✅ დასრულებულია — განახლდა " + data.updated + " პროდუქტი";
+                    "✅ დასრულებულია - განახლდა " + data.updated + " პროდუქტი"
+                    + (skipped ? "\nგამოტოვდა " + skipped + " დაჯავშნილი პროდუქტი (სტატუსი და აქცია არ ეცვლება)" : "");
                 setMsg("status", "success");
             } else {
                 document.getElementById("status-error").innerText =
