@@ -162,93 +162,6 @@ function apartmentsReservedBeforeByUser($dealID, $userID) {
     return array_values($result);
 }
 
-// ── rs.ge: პირადი ნომრით სახელის გადამოწმება ──
-const RS_SU = 'FMGSOFT:12345678910';
-const RS_SP = '123456';
-
-// აბრუნებს: სახელს (string), '' თუ ვერ მოიძებნა, null თუ სერვისი მიუწვდომელია
-function rsGetNameByPersonalId($id) {
-    $xml = '<?xml version="1.0" encoding="utf-8"?>
-        <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-          <soap:Body>
-            <get_name_from_tin xmlns="http://tempuri.org/">
-              <su>' . htmlspecialchars(RS_SU, ENT_XML1) . '</su>
-              <sp>' . htmlspecialchars(RS_SP, ENT_XML1) . '</sp>
-              <tin>' . htmlspecialchars((string)$id, ENT_XML1) . '</tin>
-            </get_name_from_tin>
-          </soap:Body>
-        </soap:Envelope>';
-
-    // Bitrix-ის HTTP კლიენტი - სერვერზე curl გაფართოება არ არის
-    $http = new \Bitrix\Main\Web\HttpClient([
-        "socketTimeout" => 5,
-        "streamTimeout" => 10,
-    ]);
-    $http->setHeader("Content-Type", "text/xml; charset=utf-8");
-    $output = $http->post("https://services.rs.ge/WayBillService/WayBillService.asmx", $xml);
-    $noResult = strpos((string)$output, 'get_name_from_tinResult') === false;
-    if ($output === false || $output === '' || ((int)$http->getStatus() >= 500 && $noResult)) {
-        return null;
-    }
-
-    $doc = new DOMDocument;
-    if (!@$doc->loadXML($output)) return null;
-    $node = $doc->getElementsByTagName('get_name_from_tinResult')->item(0);
-    return $node ? trim($node->nodeValue) : '';
-}
-
-// სიტყვებად დაშლა: პატარა ასოები, წერტილები/ტირეები -> ჰარი
-function nameWords($s) {
-    $s = mb_strtolower(trim((string)$s), 'UTF-8');
-    $s = preg_replace('/[^\p{L}\s]+/u', ' ', $s);
-    return preg_split('/\s+/u', trim($s), -1, PREG_SPLIT_NO_EMPTY);
-}
-
-// სახელის და გვარის ყველა სიტყვა უნდა დაემთხვეს rs.ge-ს პასუხს
-// (სრულად, ან ინიციალით, თუ rs.ge ინიციალს აბრუნებს: „გ. მაისურაძე“)
-function nameMatchesRs($firstName, $lastName, $rsName) {
-    $rsWords = nameWords($rsName);
-    $ourWords = array_merge(nameWords($firstName), nameWords($lastName));
-    if (!$rsWords || !$ourWords) return false;
-
-    foreach ($ourWords as $word) {
-        $found = false;
-        foreach ($rsWords as $i => $rsWord) {
-            $isInitial = mb_strlen($rsWord, 'UTF-8') === 1;
-            if ($rsWord === $word || ($isInitial && $rsWord === mb_substr($word, 0, 1, 'UTF-8'))) {
-                unset($rsWords[$i]);   // ერთი სიტყვა ორჯერ არ ითვლება
-                $found = true;
-                break;
-            }
-        }
-        if (!$found) return false;
-    }
-    return true;
-}
-
-// ყოველთვის მოწმდება rs.ge-ზე, ნომრის სიგრძის მიუხედავად
-// აბრუნებს ['ok' => bool, 'rsName' => string, 'message' => string]
-function verifyClientIdentity($firstName, $lastName, $idNumber) {
-    $idNumber = trim((string)$idNumber);
-    if ($idNumber === '') {
-        return ["ok" => false, "rsName" => "", "message" => "პირადი ნომერი სავალდებულოა"];
-    }
-    $rsName = rsGetNameByPersonalId($idNumber);
-    if ($rsName === null) {
-        return ["ok" => false, "rsName" => "",
-                "message" => "პირადი ნომრის გადამოწმება rs.ge-ზე ვერ მოხერხდა, სცადეთ თავიდან"];
-    }
-    if ($rsName === '' || !nameWords($rsName)) {
-        return ["ok" => false, "rsName" => "",
-                "message" => "პირადი ნომერი არასწორია"];
-    }
-    if (!nameMatchesRs($firstName, $lastName, $rsName)) {
-        return ["ok" => false, "rsName" => $rsName,
-                "message" => "პირადი ნომერი არასწორია"];
-    }
-    return ["ok" => true, "rsName" => $rsName, "message" => ""];
-}
-
 /** Absolute public URL with encoded filename (spaces, (), etc.) */
 function buildPassportFileLink($fileId) {
     $path = CFile::GetPath($fileId);
@@ -277,25 +190,6 @@ if (($_GET['action'] ?? '') === 'checkStandard') {
         ];
     } catch (\Throwable $e) {
         $response = ["status" => 500, "message" => $e->getMessage(), "repeatApartments" => []];
-    }
-    ob_end_clean();
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($response, JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-// ── ფორმაში პირადი ნომრის ცოცხალი შემოწმება (rs.ge) ──
-if (($_GET['action'] ?? '') === 'checkPersonalId') {
-    try {
-        $check = verifyClientIdentity(
-            $_GET['firstName'] ?? '',
-            $_GET['lastName']  ?? '',
-            trim($_GET['id']   ?? '')
-        );
-        // rs.ge-ს სახელი ბრაუზერში არ იგზავნება
-        $response = ["status" => 200, "ok" => $check["ok"], "message" => $check["message"]];
-    } catch (\Throwable $e) {
-        $response = ["status" => 200, "ok" => false, "rsName" => "", "message" => "გადამოწმების შეცდომა: " . $e->getMessage()];
     }
     ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
@@ -361,8 +255,6 @@ $filePath        = $passportFileId ? $_SERVER["DOCUMENT_ROOT"] . CFile::GetPath(
 
 $firstName  = trim($_POST['firstName']   ?? '');
 $lastName   = trim($_POST['lastName']    ?? '');
-$idNumber   = trim($_POST['idNumber']    ?? '');
-$passportNo = trim($_POST['passportNumber'] ?? '');
 $phone      = trim($_POST['phone']       ?? '');
 $commLang   = intval($_POST['commLanguage'] ?? 0);   // საკომუნიკაციო ენა - სიის მნიშვნელობის ID
 $contactId  = intval($_POST['contact_id'] ?? 0);
@@ -372,31 +264,6 @@ if (!$commLang) {
     ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(["status" => 400, "message" => "აირჩიეთ საკომუნიკაციო ენა"], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-// პირადი ნომერი ან პასპორტის ნომერი - ერთი მაინც უნდა იყოს შევსებული
-if ($idNumber === '' && $passportNo === '') {
-    ob_end_clean();
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => 400, "message" => "შეავსეთ პირადი ნომერი ან პასპორტის ნომერი"], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-// პირადი ნომერი თუ შეყვანილია - სახელი/გვარი უნდა ემთხვეოდეს rs.ge-ს (სანამ კონტაქტი ან დილი შეიცვლება)
-// მხოლოდ პასპორტის ნომრის შემთხვევაში rs.ge-ზე შემოწმება არ ხდება
-$identity = ["ok" => true, "rsName" => "", "message" => ""];
-if ($idNumber !== '') {
-    try {
-        $identity = verifyClientIdentity($firstName, $lastName, $idNumber);
-    } catch (\Throwable $e) {
-        $identity = ["ok" => false, "rsName" => "", "message" => "პირადი ნომრის გადამოწმების შეცდომა: " . $e->getMessage()];
-    }
-}
-if (!$identity["ok"]) {
-    ob_end_clean();
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => 403, "message" => $identity["message"]], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -416,21 +283,17 @@ $params = array(
     "comment"     => $comment,
     "firstName"   => $firstName,
     "lastName"    => $lastName,
-    // BP-ის კომენტარებისთვის: პირადი ნომერი, ან მისი არარსებობისას პასპორტის ნომერი
-    "idNumber"    => $idNumber !== '' ? $idNumber : $passportNo,
     "passportFile"     => $filePath ? CFile::MakeFileArray($filePath) : '',
     "passportFileLink" => $passportFileId ? buildPassportFileLink($passportFileId) : '',
 );
 
-// ── Update contact: NAME, LAST_NAME, ID number, PHONE, communication language, passport file ──
+// ── Update contact: NAME, LAST_NAME, PHONE, communication language, passport file ──
 $contactUpdateLog = "no contact update\n";
 if ($contactId > 0) {
     $contactFields = [];
 
     if ($firstName !== '') $contactFields['NAME']      = $firstName;
     if ($lastName  !== '') $contactFields['LAST_NAME'] = $lastName;
-    if ($idNumber  !== '') $contactFields['UF_CRM_1781244744534'] = $idNumber;
-    if ($passportNo !== '') $contactFields['UF_CRM_1790776088']   = $passportNo;
     if ($commLang)          $contactFields['UF_CRM_1795509844']   = $commLang;   // საკომუნიკაციო ენა (სია)
 
     // Passport file
@@ -531,7 +394,6 @@ file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/saveres_errors.txt",
     "reservationLog error: " . $resLogError . "\n" .
     "dealId: " . $dealId . "\n" .
     "contactId: " . $contactId . "\n" .
-    "rs.ge name: " . $identity["rsName"] . "\n" .
     "workflowTemplateId: " . $workflowTemplateId . "\n" .
     "repeatApartments: " . implode(", ", $repeatApartments) . "\n" .
     "wfId: " . var_export($wfId, true) . "\n" .

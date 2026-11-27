@@ -2860,18 +2860,7 @@ async function exportToExcel() {
     <input type="text" id="resLastName" placeholder="გვარი" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
     </div>
   </div>
-  <div style="font-size:11px;color:#6b7280;margin-bottom:6px;"><span style="color:#d85a30;">*</span> შეავსეთ პირადი ნომერი ან პასპორტის ნომერი (ერთი მაინც)</div>
-  <div>
-  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;">პირადი ნომერი</label>
-      <input type="text" id="resIdNumber" placeholder="პირადი ნომერი" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
-      <div id="resIdCheck" style="display:none;margin-top:6px;font-size:12px;border-radius:6px;padding:6px 10px;"></div>
-  </div>
-  <div style="margin-top:8px;">
-  <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;">პასპორტის ნომერი</label>
-      <input type="text" id="resPassportNumber" placeholder="პასპორტის ნომერი" style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
-  </div>
 </div>
-<!-- inside resPersonWrap, after idNumber div -->
 <div style="margin-top:8px;">
 <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:5px;"><span style="color:#d85a30;">*</span> ტელეფონი</label>
   <input type="text" id="resPhone" placeholder="+995..." style="width:100%;height:34px;border-radius:6px;border:1px solid #d0d0d0;padding:0 10px;font-size:13px;font-family:'Noto Sans Georgian',sans-serif;" />
@@ -2954,12 +2943,9 @@ function showReservationPopup() {
     document.getElementById("resPassportInput").value       = "";
     document.getElementById("resFirstName").value = "";
     document.getElementById("resLastName").value  = "";
-    document.getElementById("resIdNumber").value  = "";
-    document.getElementById("resPassportNumber").value = "";
     document.getElementById("resPhone").value     = "";
     document.getElementById("resCommLang").value  = "";
     document.getElementById("resPersonWrap").style.display = "none";
-    showResIdCheck(null);
 
     if (document.getElementById("resAmount")) document.getElementById("resAmount").value = "";
 
@@ -3004,56 +2990,14 @@ function showReservationPopup() {
                 const c = data.contact;
                 if (c.NAME)                   document.getElementById("resFirstName").value = c.NAME;
                 if (c.LAST_NAME)              document.getElementById("resLastName").value  = c.LAST_NAME;
-                if (c.UF_CRM_1781244744534)   document.getElementById("resIdNumber").value  = c.UF_CRM_1781244744534;
-                if (c.UF_CRM_1790776088)      document.getElementById("resPassportNumber").value = c.UF_CRM_1790776088;
                 if (c.PHONE)                  document.getElementById("resPhone").value     = c.PHONE;
                 if (c.UF_CRM_1795509844)      setCommLangValue(c.UF_CRM_1795509844);
                 // store contact ID for later update
                 document.getElementById("reservationOverlay").dataset.contactId = c.ID;
-                runResIdCheck();
             }
         })
         .catch(err => console.error("Contact fetch error:", err));
 }
-
-// ── პირადი ნომრის შემოწმება rs.ge-ზე (მხოლოდ მინიშნება - საბოლოო შემოწმება სერვერზეა) ──
-let resIdCheckTimer = null, resIdCheckSeq = 0;
-function showResIdCheck(kind, text) {
-    const box = document.getElementById("resIdCheck");
-    const styles = {
-        ok:   "color:#3b6d11;background:#eaf3de;border:.5px solid #97c459;",
-        bad:  "color:#993c1d;background:#faece7;border:.5px solid #f0997b;",
-        info: "color:#6b7280;background:#f4f6f8;border:.5px solid #d0d0d0;",
-    };
-    if (!kind) { box.style.display = "none"; return; }
-    box.style.cssText = "display:block;margin-top:6px;font-size:12px;border-radius:6px;padding:6px 10px;" + styles[kind];
-    box.textContent = text;
-}
-function scheduleResIdCheck() {
-    clearTimeout(resIdCheckTimer);
-    resIdCheckTimer = setTimeout(runResIdCheck, 600);
-}
-function runResIdCheck() {
-    const id    = document.getElementById("resIdNumber").value.trim();
-    const first = document.getElementById("resFirstName").value.trim();
-    const last  = document.getElementById("resLastName").value.trim();
-    if (!id) { showResIdCheck(null); return; }
-    if (!first || !last) { showResIdCheck("info", "შეიყვანეთ სახელი და გვარი გადამოწმებისთვის"); return; }
-
-    const seq = ++resIdCheckSeq;
-    showResIdCheck("info", "მოწმდება rs.ge-ზე...");
-    const qs = new URLSearchParams({ action: "checkPersonalId", id, firstName: first, lastName: last });
-    fetch(`/rest/local/api/projects/saveReservation.php?${qs}`)
-        .then(r => r.json())
-        .then(d => {
-            if (seq !== resIdCheckSeq) return;   // უფრო ახალი შემოწმება უკვე მიდის
-            if (d.ok) showResIdCheck("ok", "პირადი ნომერი დადასტურებულია ✓");
-            else      showResIdCheck("bad", d.message || "პირადი ნომერი არასწორია");
-        })
-        .catch(() => { if (seq === resIdCheckSeq) showResIdCheck("info", "rs.ge-სთან კავშირი ვერ მოხერხდა - შემოწმდება გაგზავნისას"); });
-}
-["resIdNumber", "resFirstName", "resLastName"].forEach(id =>
-    document.getElementById(id).addEventListener("input", scheduleResIdCheck));
 
 // სტანდარტული ტიპის მოხსნა და არასტანდარტულზე გადართვა
 function restrictToNonStandard(noteText) {
@@ -3138,8 +3082,6 @@ var date   = choice === "42"
     var comment   = document.getElementById("resComment")?.value || "";
     var firstName = document.getElementById("resFirstName").value.trim();
     var lastName  = document.getElementById("resLastName").value.trim();
-    var idNumber  = document.getElementById("resIdNumber").value.trim();
-    var passportNumber = document.getElementById("resPassportNumber").value.trim();
     var phone     = document.getElementById("resPhone").value.trim();
     var commLang  = document.getElementById("resCommLang").value;
     var passportFileId = document.getElementById("resPassportInputText").value;
@@ -3147,13 +3089,6 @@ var date   = choice === "42"
 
     if (!type || !date || !firstName || !lastName || !phone || !commLang) {
         showResMsg("warn");
-        return;
-    }
-    // პირადი ნომერი ან პასპორტის ნომერი - ერთი მაინც
-    if (!idNumber && !passportNumber) {
-        const msg = "შეავსეთ პირადი ნომერი ან პასპორტის ნომერი";
-        showResMsg("error", msg);
-        alert(msg);
         return;
     }
 
@@ -3165,8 +3100,6 @@ var date   = choice === "42"
     formData.append("passport",    passportFileId);
     formData.append("firstName",   firstName);
     formData.append("lastName",    lastName);
-    formData.append("idNumber",    idNumber);
-    formData.append("passportNumber", passportNumber);
     formData.append("phone",       phone);
     formData.append("commLanguage", commLang);   // enum ID → კონტაქტის UF_CRM_1795509844
     formData.append("contact_id",  contactId);
